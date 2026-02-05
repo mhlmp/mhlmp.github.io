@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Link Manager Pro - Search Fix</title>
+    <title>מנהל הקישורים Pro - Category Sort Fix</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
@@ -340,7 +340,7 @@
 <body class="dark-mode">
 
     <header>
-        <h1>Link Manager Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Fixed)</span></h1>
+        <h1>מנהל הקישורים Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Ultimate V5)</span></h1>
         <div id="itemCount">טוען נתונים...</div>
     </header>
 
@@ -463,7 +463,7 @@
             measurementId: "G-NVN4E8TDGE"
         };
 
-        const STORAGE_KEY = 'LinkManager_Pro_V4';
+        const STORAGE_KEY = 'LinkManager_Pro_V5';
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
         
         const state = {
@@ -677,8 +677,6 @@
             sortedFullList.sort(baseSort);
 
             // Assign "Visual ID" based on this sort
-            // If sorting date-new: top item is #Total, bottom is #1
-            // If sorting name: top item is #1, bottom is #Total
             const total = sortedFullList.length;
             sortedFullList.forEach((item, index) => {
                 if (sort === 'date-new') item.visualIndex = total - index;
@@ -750,7 +748,22 @@
                 if(!groups[i.category]) groups[i.category] = [];
                 groups[i.category].push(i);
             });
-            const sortedCategories = Object.keys(groups).sort();
+
+            // === CRITICAL FIX: Sort Categories by NEWEST ITEM ===
+            // Instead of sorting alphabetically, we sort by the date of the FIRST item in the group
+            // (Since items are already sorted by date-new, the first item is the newest in that category)
+            const sortedCategories = Object.keys(groups).sort((catA, catB) => {
+                if (sort === 'date-new') {
+                    // Get the top item from each group
+                    const itemA = groups[catA][0];
+                    const itemB = groups[catB][0];
+                    // Compare their dates (descending)
+                    return itemB.date.localeCompare(itemA.date);
+                } else {
+                    // Fallback to alphabetical for name sort
+                    return catA.localeCompare(catB);
+                }
+            });
 
             sortedCategories.forEach(cat => {
                 const groupItems = groups[cat];
@@ -812,7 +825,6 @@
             const content = document.getElementById('itemContent').value.trim();
             if (!content) return;
             
-            // Note: Date.now() increases, so sorting by date-new (desc) puts this first.
             const newItem = {
                 id: Date.now(),
                 content,
