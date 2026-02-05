@@ -3,48 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>מנהל הקישורים Pro - Glass Sync</title>
+    <title>מנהל הקישורים Pro - Stable Glass</title>
     <style>
         :root {
-            /* גרדיאנט נעים ורגוע */
+            /* רקע כללי נקי */
             --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
             
-            /* זכוכית בהירה */
-            --glass-bg: rgba(255, 255, 255, 0.85);
-            --glass-border: rgba(255, 255, 255, 0.6);
-            --glass-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-            --glass-blur: blur(10px);
+            /* זכוכית */
+            --glass-bg: rgba(255, 255, 255, 0.9);
+            --glass-border: rgba(255, 255, 255, 0.8);
+            --glass-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
             
             /* צבעים */
             --text-primary: #1a1a1a;
             --text-secondary: #555555;
             --primary-color: #0066cc;
-            --primary-glow: rgba(0, 102, 204, 0.2);
-            
             --radius: 12px;
             --accent-green: #00a651;
             --accent-red: #d93025;
             --accent-gold: #f59e0b;
-            --gold-glow: 0 0 10px rgba(245, 158, 11, 0.4);
-            
-            --note-bg: rgba(255, 248, 220, 0.9);
+            --gold-glow: 0 0 12px rgba(245, 158, 11, 0.5);
+            --note-bg: rgba(255, 248, 220, 0.95);
             --google-btn: #4285F4;
         }
 
         body.dark-mode {
             /* מצב לילה */
             --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            
-            --glass-bg: rgba(30, 41, 59, 0.85); 
-            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-bg: rgba(30, 41, 59, 0.9); 
+            --glass-border: rgba(255, 255, 255, 0.1);
             --glass-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-            
             --text-primary: #f1f5f9;
             --text-secondary: #cbd5e1;
             --primary-color: #60a5fa;
-            --primary-glow: rgba(96, 165, 250, 0.2);
-            
-            --note-bg: rgba(60, 50, 30, 0.8);
+            --note-bg: rgba(60, 50, 30, 0.9);
         }
 
         * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
@@ -64,16 +56,16 @@
         /* --- Glass Container Utility --- */
         .glass-panel {
             background: var(--glass-bg);
-            backdrop-filter: var(--glass-blur);
-            -webkit-backdrop-filter: var(--glass-blur);
             border: 1px solid var(--glass-border);
             box-shadow: var(--glass-shadow);
             border-radius: var(--radius);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
         }
 
         /* === Header === */
         header { text-align: center; margin-bottom: 25px; }
-        h1 { margin: 5px 0; font-size: 1.8rem; color: var(--text-primary); font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        h1 { margin: 5px 0; font-size: 1.8rem; color: var(--text-primary); font-weight: 800; }
         
         #itemCount {
             display: inline-block; 
@@ -93,7 +85,7 @@
         .user-name { font-weight: 700; font-size: 1rem; }
         .cloud-status { font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; font-weight: 500; }
         
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; display: inline-block; transition: 0.3s; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; display: inline-block; }
         .status-dot.online { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
         .status-dot.syncing { background: #ffbb00; animation: pulse 1s infinite; }
         .status-dot.error { background: var(--accent-red); }
@@ -121,10 +113,10 @@
         .search-container input {
             width: 100%; padding: 12px 16px; font-size: 16px;
             border: 1px solid var(--glass-border); border-radius: var(--radius);
-            background: rgba(127,127,127,0.1); color: var(--text-primary);
+            background: rgba(127,127,127,0.08); color: var(--text-primary);
             transition: 0.2s;
         }
-        .search-container input:focus { border-color: var(--primary-color); background: rgba(127,127,127,0.15); box-shadow: 0 0 0 2px var(--primary-glow); }
+        .search-container input:focus { border-color: var(--primary-color); background: rgba(127,127,127,0.12); }
 
         .filters-container { display: flex; gap: 10px; flex-wrap: wrap; }
         .filters-container select {
@@ -134,7 +126,7 @@
             color: var(--text-primary);
             border: 1px solid var(--glass-border); border-radius: var(--radius);
             cursor: pointer;
-            background-color: rgba(127,127,127,0.1); 
+            background-color: rgba(127,127,127,0.08); 
         }
         .filters-container select option { background: #1e293b; color: white; }
         body:not(.dark-mode) .filters-container select option { background: #ffffff; color: black; }
@@ -147,9 +139,9 @@
             width: 100%; height: 44px; padding: 0 12px; font-size: 14px; font-weight: 600;
             color: white; border: none; border-radius: var(--radius); cursor: pointer;
             display: flex; align-items: center; justify-content: center; gap: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: transform 0.1s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: opacity 0.2s;
         }
-        .action-btn:active { transform: scale(0.98); }
+        .action-btn:hover { opacity: 0.9; }
         
         .btn-json { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
         .btn-txt { background: linear-gradient(135deg, #06b6d4, #0891b2); }
@@ -225,21 +217,26 @@
         .card {
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
-            border-radius: var(--radius); position: relative; display: flex; flex-direction: column;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border-radius: var(--radius); 
+            position: relative; 
+            display: flex; flex-direction: column;
+            /* שינוי: רק הצללה וצבע מסגרת משתנים, ללא תזוזה */
+            transition: box-shadow 0.3s ease, border-color 0.3s ease;
             box-shadow: var(--glass-shadow);
         }
         
-        .card:not(.menu-open):hover { 
-            transform: translateY(-4px); 
-            box-shadow: 0 12px 25px rgba(0,0,0,0.15); 
-            border-color: rgba(255,255,255,0.4);
+        /* HOVER STABLE: No translateY */
+        .card:hover { 
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2); 
+            border-color: rgba(255,255,255,0.5);
+            z-index: 10;
         }
         
+        /* Menu Open State: Locked visual */
         .card.menu-open {
-            z-index: 100;
-            transform: none !important;
+            z-index: 100 !important;
             box-shadow: 0 0 0 2px var(--primary-color) !important;
+            border-color: var(--primary-color) !important;
         }
 
         .card.pinned {
@@ -296,18 +293,17 @@
         .pin-btn.active { color: var(--accent-gold); transform: rotate(45deg); }
         .pin-btn:hover { color: var(--accent-gold); }
 
-        /* --- Popover Menu --- */
+        /* --- Popover Menu Stable --- */
         .card-menu-popover {
             display: none; position: absolute; 
-            background: var(--bg-card); 
             background: var(--glass-bg);
             backdrop-filter: blur(20px);
             border: 1px solid var(--glass-border); 
-            box-shadow: 0 10px 40px rgba(0,0,0,0.4); z-index: 2000;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5); z-index: 200;
             left: 10px; bottom: 50px;
             border-radius: 12px; min-width: 150px;
             overflow: hidden;
-            animation: popIn 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            animation: fadeIn 0.1s ease-out;
         }
         
         .card-menu-popover.show { display: block; }
@@ -335,7 +331,6 @@
         #toast button { background: none; border: none; color: var(--accent-green); font-weight: bold; cursor: pointer; font-size: 15px; }
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes popIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
     </style>
 </head>
 <body class="dark-mode">
@@ -575,7 +570,7 @@
     </script>
 
     <script>
-        const STORAGE_KEY = 'LinkManager_Glass_V2';
+        const STORAGE_KEY = 'LinkManager_Glass_Stable_V3';
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
         
         const rawData = `
@@ -595,7 +590,6 @@
         });
 
         function setupEventListeners() {
-            // General dropdowns
             document.querySelectorAll('.drop-trigger').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -610,15 +604,12 @@
                 });
             });
 
-            // Global click to close all menus and clear card lock
+            // Global click handler to close menus
             window.addEventListener('click', (e) => {
-                const target = e.target;
-                
-                // If click is INSIDE a dropdown content or popover, do nothing
-                if (target.closest('.dropdown-content') || target.closest('.card-menu-popover')) {
+                // If click is inside a menu or popover, don't close
+                if (e.target.closest('.dropdown-content') || e.target.closest('.card-menu-popover')) {
                     return;
                 }
-
                 closeAllMenus();
             });
 
@@ -653,11 +644,8 @@
         }
 
         function closeAllMenus() {
-            // Close header dropdowns
             document.querySelectorAll('.dropdown-content').forEach(m => m.classList.remove('show'));
             document.querySelectorAll('.drop-trigger').forEach(b => b.classList.remove('active'));
-            
-            // Close card menus and unlock cards
             document.querySelectorAll('.card-menu-popover').forEach(m => m.classList.remove('show'));
             document.querySelectorAll('.card').forEach(c => c.classList.remove('menu-open'));
         }
@@ -813,11 +801,11 @@
                 const menu = div.querySelector('.card-menu-popover');
                 const wasOpen = menu.classList.contains('show');
                 
-                closeAllMenus(); // Close other menus
+                closeAllMenus(); // Close other open menus
                 
                 if (!wasOpen) {
                     menu.classList.add('show');
-                    div.classList.add('menu-open'); // Lock this card
+                    div.classList.add('menu-open'); // LOCK the card style
                 }
             };
             
@@ -995,7 +983,7 @@
             document.body.classList.toggle('dark-mode'); 
             const isDark = document.body.classList.contains('dark-mode');
             localStorage.setItem(STORAGE_KEY + '_theme', isDark ? 'dark' : 'light');
-            document.getElementById('toggleDarkModeBtn').textContent = '🌙';
+            document.getElementById('toggleDarkModeBtn').textContent = isDark ? '☀️' : '🌙';
         }
         
         function toggleDuplicates() { showDuplicates = !showDuplicates; document.getElementById('toggleDuplicatesBtn').style.opacity=showDuplicates?'1':'0.5'; renderList(); }
