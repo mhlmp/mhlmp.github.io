@@ -3,709 +3,1065 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>מנהל הקישורים Pro - Exact Design</title>
+    <title>מנהל הקישורים Pro - Ultimate Stable</title>
     <style>
         :root {
-            /* צבעים מתוך התמונה ששלחת */
-            --bg-body: #0f172a;      /* כחול עמוק מאוד */
-            --bg-card: #1e293b;      /* צבע הכרטיסים והפאנלים */
-            --border-color: #334155; /* גבולות */
+            --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+            --glass-bg: rgba(255, 255, 255, 0.85);
+            --glass-border: rgba(255, 255, 255, 0.6);
+            --glass-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            --glass-blur: blur(10px);
             
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
+            --text-primary: #1a1a1a;
+            --text-secondary: #555555;
+            --primary-color: #0066cc;
+            --primary-glow: rgba(0, 102, 204, 0.2);
             
-            /* כפתורים מהתמונה */
-            --btn-purple: #4f46e5;
-            --btn-teal: #0d9488;
-            --btn-blue: #2563eb;
-            
-            --accent-green: #10b981;
-            --accent-red: #ef4444;
+            --radius: 12px;
+            --accent-green: #00a651;
+            --accent-red: #d93025;
             --accent-gold: #f59e0b;
+            --gold-glow: 0 0 10px rgba(245, 158, 11, 0.4);
             
-            --radius: 8px;
+            --note-bg: rgba(255, 248, 220, 0.9);
+            --google-btn: #4285F4;
+        }
+
+        body.dark-mode {
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            --glass-bg: rgba(30, 41, 59, 0.85); 
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --primary-color: #60a5fa;
+            --primary-glow: rgba(96, 165, 250, 0.2);
+            --note-bg: rgba(60, 50, 30, 0.8);
         }
 
         * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-body);
-            color: var(--text-main);
+            background: var(--bg-gradient);
+            background-attachment: fixed;
+            color: var(--text-primary);
             margin: 0;
-            padding: 20px;
-            padding-bottom: 100px;
+            padding: 15px;
+            padding-bottom: 80px;
             min-height: 100vh;
+            transition: color 0.3s;
         }
 
-        /* --- Header --- */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+            border-radius: var(--radius);
+        }
+
         header { text-align: center; margin-bottom: 25px; }
-        h1 { margin: 0 0 10px 0; font-size: 2rem; font-weight: 800; color: white; }
+        h1 { margin: 5px 0; font-size: 1.8rem; color: var(--text-primary); font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 10px; }
         
         #itemCount {
-            display: inline-block; padding: 4px 16px; border-radius: 20px; 
-            font-size: 0.9rem; background: #1e293b; border: 1px solid var(--border-color); color: var(--text-muted);
+            display: inline-block; 
+            background: rgba(127, 127, 127, 0.1); 
+            padding: 4px 15px;
+            border-radius: 20px; font-size: 0.9rem; color: var(--text-secondary);
+            border: 1px solid var(--glass-border); font-weight: 600;
         }
 
-        /* --- Google Login Button (Centered like image) --- */
-        #userSection { display: flex; justify-content: center; margin-bottom: 25px; gap: 10px; }
-        .btn-google {
-            background: #2563eb; color: white; border: none; padding: 10px 30px; 
-            border-radius: 30px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 10px;
-            font-size: 1rem; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        #userSection {
+            padding: 12px; margin-bottom: 20px;
+            display: flex; justify-content: space-between; align-items: center;
         }
-        .user-info-display { display: flex; align-items: center; gap: 10px; background: var(--bg-card); padding: 5px 15px; border-radius: 30px; border: 1px solid var(--border-color); }
-        .avatar { width: 32px; height: 32px; border-radius: 50%; }
-
-        /* --- Controls Container (The Image Layout) --- */
-        .controls-wrapper {
-            background: var(--bg-card); border: 1px solid var(--border-color);
-            border-radius: var(--radius); padding: 20px; margin-bottom: 20px;
-            display: flex; flex-direction: column; gap: 15px;
-        }
-
-        /* Search */
-        .search-row input {
-            width: 100%; padding: 12px 15px; background: #0f172a;
-            border: 1px solid var(--border-color); border-radius: 6px;
-            color: white; font-size: 16px;
-        }
-
-        /* Filters Row */
-        .filters-row { display: flex; gap: 10px; }
-        .filters-row select {
-            flex: 1; padding: 10px; background: #0f172a; color: white;
-            border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;
-        }
-
-        /* Buttons Row - Colored Buttons */
-        .buttons-row { display: flex; gap: 10px; align-items: stretch; }
+        .user-info { display: flex; align-items: center; gap: 12px; }
+        .user-avatar { width: 42px; height: 42px; border-radius: 50%; border: 2px solid var(--glass-border); object-fit: cover; }
+        .user-name { font-weight: 700; font-size: 1rem; }
+        .cloud-status { font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; font-weight: 500; }
         
-        .icon-btn-small {
-            width: 48px; border-radius: 6px; border: none; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
-            background: #0f172a; color: #fbbf24; border: 1px solid var(--border-color); transition: 0.2s;
-        }
-        .icon-btn-small:hover { background: #334155; }
-
-        .manager-group { flex: 1; display: flex; gap: 10px; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; display: inline-block; transition: 0.3s; }
+        .status-dot.online { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+        .status-dot.syncing { background: #ffbb00; animation: pulse 1s infinite; }
+        .status-dot.error { background: var(--accent-red); }
         
-        .manager-btn {
-            flex: 1; border: none; padding: 12px; border-radius: 6px;
-            color: white; font-weight: bold; cursor: pointer; position: relative;
+        .btn-login { background: var(--google-btn); color: white; border: none; padding: 10px 24px; border-radius: 30px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 0.95rem; transition: 0.2s; box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3); }
+        .btn-login:hover { transform: scale(1.02); }
+        
+        .btn-logout, .btn-switch { 
+            background: rgba(127,127,127,0.1); 
+            border: 1px solid var(--glass-border); 
+            color: var(--text-primary); 
+            padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; margin-left: 5px; transition: 0.2s;
+        }
+        .btn-switch:hover, .btn-logout:hover { background: rgba(127,127,127,0.2); }
+
+        #controlsArea {
+            padding: 16px; margin-bottom: 25px;
+            display: flex; flex-direction: column; gap: 14px;
+            position: relative; z-index: 100;
+        }
+
+        .search-container input {
+            width: 100%; padding: 12px 16px; font-size: 16px;
+            border: 1px solid var(--glass-border); border-radius: var(--radius);
+            background: rgba(127,127,127,0.1); color: var(--text-primary);
+            transition: 0.2s;
+        }
+        .search-container input:focus { border-color: var(--primary-color); background: rgba(127,127,127,0.15); box-shadow: 0 0 0 2px var(--primary-glow); }
+
+        .filters-container { display: flex; gap: 10px; flex-wrap: wrap; }
+        .filters-container select {
+            flex: 1; min-width: 140px; height: 44px; padding: 0 12px;
+            font-size: 15px; 
+            background: var(--bg-body); 
+            color: var(--text-primary);
+            border: 1px solid var(--glass-border); border-radius: var(--radius);
+            cursor: pointer;
+            background-color: rgba(127,127,127,0.1); 
+        }
+        .filters-container select option { background: #1e293b; color: white; }
+        body:not(.dark-mode) .filters-container select option { background: #ffffff; color: black; }
+
+        .actions-container { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+        .dropdown { position: relative; display: inline-block; flex-grow: 1; }
+        
+        .action-btn {
+            width: 100%; height: 44px; padding: 0 12px; font-size: 14px; font-weight: 600;
+            color: white; border: none; border-radius: var(--radius); cursor: pointer;
             display: flex; align-items: center; justify-content: center; gap: 8px;
-            transition: opacity 0.2s; font-size: 0.95rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: transform 0.1s;
         }
-        .manager-btn:hover { opacity: 0.9; }
+        .action-btn:active { transform: scale(0.98); }
         
-        .btn-purple { background-color: var(--btn-purple); }
-        .btn-teal { background-color: var(--btn-teal); }
-        .btn-blue { background-color: var(--btn-blue); }
+        .btn-json { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+        .btn-txt { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+        .btn-site { background: linear-gradient(135deg, #6366f1, #4f46e5); } 
+        .btn-toggle { 
+            background: rgba(127,127,127,0.1); 
+            color: var(--text-primary); 
+            border: 1px solid var(--glass-border); 
+            flex-grow: 0 !important; width: 44px; font-size: 1.2rem; box-shadow: none;
+        }
 
-        /* Dropdowns for Manager Buttons */
-        .dropdown-menu {
-            display: none; position: absolute; top: 100%; left: 0; width: 100%;
-            background: #1e293b; border: 1px solid var(--border-color);
-            border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-            z-index: 100; margin-top: 5px; overflow: hidden;
+        .dropdown-content {
+            display: none; position: absolute; 
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            min-width: 240px; box-shadow: 0 15px 40px rgba(0,0,0,0.3); border-radius: var(--radius);
+            border: 1px solid var(--glass-border); z-index: 2000; right: 0; top: calc(100% + 8px);
+            padding: 8px 0; animation: fadeIn 0.2s ease;
         }
-        .dropdown-menu.show { display: block; animation: fadeIn 0.2s; }
-        .dropdown-menu button, .dropdown-menu label {
-            display: block; width: 100%; padding: 12px; text-align: right;
-            background: none; border: none; color: white; cursor: pointer;
-            font-size: 0.9rem; transition: background 0.2s; border-bottom: 1px solid #334155;
+        .dropdown-content.show { display: block; }
+        .dropdown-content button, .dropdown-content label {
+            color: var(--text-primary); padding: 12px 20px; text-decoration: none;
+            display: block; background: none; border: none; width: 100%; text-align: right;
+            cursor: pointer; font-size: 14px; font-weight: 500;
+            transition: background 0.2s;
         }
-        .dropdown-menu button:last-child { border-bottom: none; }
-        .dropdown-menu button:hover { background: #334155; }
+        .dropdown-content button:hover { background-color: rgba(127,127,127,0.1); color: var(--primary-color); }
+        .dropdown-divider { border-top: 1px solid var(--glass-border); margin: 6px 0; }
 
-        /* --- Add Item Bar --- */
-        .add-bar-wrapper { margin-bottom: 25px; }
-        .btn-add-bar {
-            width: 100%; background: #1e293b; border: 1px solid #334155; color: #60a5fa;
-            padding: 15px; font-weight: bold; border-radius: 8px; cursor: pointer;
-            transition: background 0.2s; text-align: center;
+        details { margin-bottom: 25px; transition: 0.3s; }
+        summary { 
+            padding: 16px; cursor: pointer; font-weight: 700; 
+            color: var(--primary-color);
+            background: rgba(127,127,127,0.05);
+            border-bottom: 1px solid transparent;
+            list-style: none; display: flex; align-items: center; justify-content: center;
         }
-        .btn-add-bar:hover { background: #334155; }
+        summary::after { content: " ⬇️"; margin-right: 8px; font-size: 0.8rem; }
+        details[open] summary { border-bottom: 1px solid var(--glass-border); }
+        details[open] summary::after { content: " ⬆️"; }
         
-        #addItemContainer {
-            display: none; background: var(--bg-card); border: 1px solid var(--border-color);
-            border-radius: var(--radius); padding: 20px; margin-top: 10px;
-            flex-direction: column; gap: 12px;
+        #addItemForm { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        #addItemForm input, #addItemForm textarea {
+            padding: 12px; border: 1px solid var(--glass-border); border-radius: var(--radius);
+            background: rgba(127,127,127,0.05); color: var(--text-primary); width: 100%; font-size: 15px;
         }
-        #addItemContainer.show { display: flex; }
-        #addItemContainer input, #addItemContainer textarea {
-            padding: 12px; background: #0f172a; border: 1px solid var(--border-color);
-            border-radius: 6px; color: white; width: 100%;
-        }
-        #addItemContainer button {
-            background: var(--btn-blue); color: white; padding: 12px; border: none;
-            border-radius: 6px; font-weight: bold; cursor: pointer;
+        #addItemForm button {
+            background: var(--accent-green); color: white; padding: 14px; border: none;
+            border-radius: var(--radius); font-weight: bold; cursor: pointer; font-size: 16px;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
         }
 
-        /* --- Cards (Stable Grid) --- */
+        .category-block { margin-bottom: 35px; }
         .category-header {
-            display: flex; justify-content: space-between; padding: 5px;
-            margin: 20px 0 10px; border-bottom: 1px solid var(--border-color);
-            color: var(--text-muted); font-size: 1rem; font-weight: bold;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 5px; margin-bottom: 15px;
+            border-bottom: 2px solid rgba(127,127,127,0.1);
+        }
+        .category-header h2 { margin: 0; font-size: 1.4rem; color: var(--text-primary); font-weight: 700; }
+        .category-badge {
+            background: rgba(127,127,127,0.1); color: var(--text-primary);
+            font-size: 0.85rem; padding: 4px 12px; border-radius: 12px; font-weight: 600;
+            border: 1px solid var(--glass-border);
         }
 
-        .items-grid {
-            display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;
-        }
-
+        .items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        
         .card {
-            background: var(--bg-card); border: 1px solid var(--border-color);
-            border-radius: 8px; position: relative;
-            display: flex; flex-direction: column; min-height: 140px;
-            /* YAZIVUT: Only opacity/color transitions */
-            transition: border-color 0.2s; 
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            transition: box-shadow 0.2s, transform 0.1s;
+            box-shadow: var(--glass-shadow);
         }
-        .card:hover { border-color: var(--btn-blue); }
-        .card.pinned { border: 1px solid var(--accent-gold); background: rgba(245, 158, 11, 0.05); }
-
-        .card-index { 
-            position: absolute; top: 12px; left: 12px; font-size: 0.75rem; 
-            color: var(--text-muted); font-family: monospace; opacity: 0.7;
+        
+        .card:hover { 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
+            transform: translateY(-2px); 
         }
-
-        .card-body { padding: 20px; padding-top: 35px; flex-grow: 1; text-align: center; }
+        
+        .card.pinned {
+            border: 2px solid var(--accent-gold);
+            background: rgba(255, 255, 0, 0.05);
+        }
+        
+        .card-index {
+            position: absolute; top: 12px; left: 12px; 
+            background: rgba(127,127,127,0.1);
+            color: var(--text-secondary); font-size: 11px; padding: 3px 8px;
+            border-radius: 6px; font-family: monospace; 
+        }
+        
+        .card-body { padding: 20px; padding-top: 40px; flex-grow: 1; }
         
         .card-link {
-            display: block; color: var(--btn-blue); text-decoration: none;
-            font-weight: 700; font-size: 1.1rem; margin-bottom: 8px; word-break: break-all;
-            direction: ltr; 
+            display: block; color: var(--primary-color); font-weight: 700; text-decoration: none;
+            margin-bottom: 10px; word-break: break-all; font-size: 16px; line-height: 1.4;
         }
-        .card-text {
-            background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px;
-            font-family: monospace; font-size: 0.9rem; word-break: break-all; display: inline-block;
+        .card-text-content {
+            background: rgba(127,127,127,0.05); padding: 12px; border-radius: 8px;
+            font-family: monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all;
+            border: 1px solid var(--glass-border);
         }
+        .card-desc { font-size: 15px; color: var(--text-primary); opacity: 0.9; margin-top: 8px; line-height: 1.5; margin-bottom: 10px; }
         
-        .card-desc { font-size: 0.95rem; color: var(--text-main); opacity: 0.9; margin-top: 8px; }
         .card-note {
-            margin-top: 12px; padding: 6px 10px; background: rgba(245, 158, 11, 0.1);
-            color: #fbbf24; font-size: 0.85rem; border-radius: 6px; display: inline-block;
+            margin-top: 12px; padding: 10px; background-color: var(--note-bg);
+            color: #4a3b10; font-size: 13px; border-radius: 8px;
+            border-right: 4px solid var(--accent-gold); display: flex; gap: 8px;
         }
+        .card-note::before { content: '📝'; }
 
         .card-footer {
-            padding: 10px 15px; background: rgba(0,0,0,0.2);
-            border-radius: 0 0 8px 8px;
+            padding: 12px 20px; border-top: 1px solid var(--glass-border);
+            background: rgba(127,127,127,0.05);
             display: flex; justify-content: space-between; align-items: center;
+            border-bottom-left-radius: var(--radius); border-bottom-right-radius: var(--radius);
         }
-        .tag { font-size: 0.8rem; color: var(--text-muted); }
+        
+        .tag-category {
+            font-size: 11px; background: rgba(127,127,127,0.1); color: var(--text-primary);
+            padding: 4px 10px; border-radius: 12px; border: 1px solid var(--glass-border); font-weight: 600;
+        }
 
-        /* --- Actions (Stable, No Menu) --- */
-        .card-actions { display: flex; gap: 10px; }
+        .card-actions { display: flex; gap: 4px; position: relative; }
+        
         .icon-btn {
-            background: none; border: none; cursor: pointer; font-size: 1.1rem;
-            color: var(--text-muted); transition: color 0.2s; padding: 4px;
+            background: transparent; border: none; cursor: pointer; font-size: 18px;
+            width: 34px; height: 34px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-secondary); transition: all 0.2s;
         }
-        .icon-btn:hover { color: white; }
-        .icon-btn.active { color: var(--accent-gold); }
-        .icon-btn.delete { color: var(--accent-red); } 
-        .icon-btn.delete:hover { transform: scale(1.1); }
+        .icon-btn:hover { color: var(--primary-color); background: rgba(127,127,127,0.1); }
+        .pin-btn.active { color: var(--accent-gold); transform: rotate(45deg); }
 
-        /* Recycle Bin Modal */
-        .modal {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); z-index: 2000;
-            align-items: center; justify-content: center;
+        .card-menu-dropdown {
+            display: none; 
+            position: absolute;
+            right: 0; bottom: 40px; 
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2); 
+            z-index: 100;
+            border-radius: 8px; 
+            min-width: 140px;
+            padding: 5px;
         }
-        .modal.show { display: flex; }
-        .modal-box {
-            background: #1e293b; width: 90%; max-width: 600px; border-radius: 12px;
-            border: 1px solid var(--border-color); box-shadow: 0 20px 50px rgba(0,0,0,0.7);
-            max-height: 80vh; display: flex; flex-direction: column;
+        .card-menu-dropdown.show { display: block; }
+        
+        .card-menu-dropdown button {
+            display: flex; align-items: center; gap: 8px;
+            width: 100%; text-align: right; padding: 10px;
+            background: none; border: none; cursor: pointer; 
+            color: var(--accent-red); font-weight: 600; font-size: 0.9rem;
+            transition: background 0.2s;
+            border-radius: 4px;
         }
-        .modal-header { padding: 15px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
-        .modal-body { padding: 15px; overflow-y: auto; }
-        .deleted-item {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 12px; background: rgba(255,255,255,0.05); margin-bottom: 8px; border-radius: 6px;
-        }
+        .card-menu-dropdown button:hover { background: rgba(239, 68, 68, 0.1); }
+
+        .duplicate-badge { color: var(--accent-red); font-weight: bold; font-size: 12px; display: none; margin-left: 5px; background: rgba(239,68,68,0.1); padding: 2px 6px; border-radius: 4px; }
+        input[type="file"] { display: none; }
 
         #toast {
             position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px);
-            background: var(--btn-blue); color: white; padding: 10px 24px; border-radius: 30px;
-            font-weight: bold; transition: 0.3s; z-index: 3000;
+            background: rgba(30, 41, 59, 0.95); color: white; padding: 14px 28px; border-radius: 50px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.4); display: flex; align-items: center; gap: 20px;
+            z-index: 9999; transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s; opacity: 0;
+            border: 1px solid rgba(255,255,255,0.1);
         }
-        #toast.show { transform: translateX(-50%) translateY(0); }
+        #toast.visible { transform: translateX(-50%) translateY(0); opacity: 1; }
+        #toast button { background: none; border: none; color: var(--accent-green); font-weight: bold; cursor: pointer; font-size: 15px; }
 
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
-<body>
+<body class="dark-mode">
 
     <header>
-        <h1>מנהל הקישורים <span class="sub-title">Pro</span></h1>
-        <div id="itemCount">טוען...</div>
+        <h1>מנהל הקישורים Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Ultimate Stable)</span></h1>
+        <div id="itemCount">טוען נתונים...</div>
     </header>
 
-    <div id="userSection">
-        <div id="loggedOutView">
-            <button id="googleLoginBtn" class="btn-google">
-                <svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M21.35,11.1H12.18V13.83H18.69C18.36,17.64 15.19,19.27 12.19,19.27C8.36,19.27 5,16.25 5,12C5,7.9 8.2,4.73 12.2,4.73C15.29,4.73 17.1,6.7 17.1,6.7L19,4.72C19,4.72 16.56,2 12.1,2C6.42,2 2.03,6.8 2.03,12C2.03,17.05 6.16,22 12.25,22C17.6,22 21.5,18.33 21.5,12.91C21.5,11.76 21.35,11.1 21.35,11.1V11.1Z"/></svg>
-                התחבר עם Google
+    <div id="userSection" class="glass-panel">
+        <div id="loggedOutView" style="display:none; width:100%; justify-content:center;">
+            <button id="googleLoginBtn" class="btn-login">
+                <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)"><path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z"/><path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z"/><path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.734 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z"/><path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.799 L -6.734 42.379 C -8.804 40.449 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z"/></g></svg>
+                התחבר עם Google לגיבוי אוטומטי
             </button>
         </div>
-        <div id="loggedInView" style="display:none; width:100%; justify-content:space-between; align-items:center; width:100%; max-width:800px;">
-            <div class="user-info-display">
-                <img id="userAvatar" src="" class="avatar">
+        <div id="loggedInView" style="display:none; width:100%; justify-content:space-between; align-items:center;">
+            <div class="user-info">
+                <img id="userAvatar" src="" class="user-avatar" alt="Avatar">
                 <div>
-                    <div id="userName" style="font-weight:bold">משתמש</div>
-                    <div id="syncStatus" style="font-size:0.8rem; color:#10b981">מחובר</div>
+                    <div id="userName" class="user-name">שם משתמש</div>
+                    <div id="syncStatus" class="cloud-status"><span class="status-dot"></span> מנותק</div>
                 </div>
             </div>
-            <button id="logoutBtn" style="background:none; border:1px solid #334155; color:white; padding:5px 15px; border-radius:6px; cursor:pointer;">יציאה</button>
+            <div>
+                <button id="switchAccountBtn" class="btn-switch" title="החלף חשבון גוגל">🔄 החלף חשבון</button>
+                <button id="logoutBtn" class="btn-logout">יציאה</button>
+            </div>
         </div>
     </div>
 
-    <div class="controls-wrapper">
-        <div class="search-row">
-            <input type="text" id="searchInput" placeholder="חפש קישור, תיאור או קטגוריה...">
+    <div id="controlsArea" class="glass-panel">
+        <div class="search-container">
+            <input type="search" id="searchInput" placeholder="🔍 חפש קישור, תיאור או קטגוריה...">
         </div>
 
-        <div class="filters-row">
+        <div class="filters-container">
+            <select id="categoryFilter"><option value="">📂 כל הקטגוריות</option></select>
             <select id="sortOrder">
-                <option value="date-new">תאריך (הכי חדש למעלה #1)</option>
-                <option value="name">שם (א-ת)</option>
-            </select>
-            <select id="categoryFilter">
-                <option value="">📂 כל הקטגוריות</option>
+                <option value="date-new" selected>📅 תאריך (הכי חדש למעלה)</option>
+                <option value="index-new">🔢 לפי סדר הוספה (חדש לישן)</option>
+                <option value="index-old">🔢 לפי סדר הוספה (ישן לחדש)</option>
+                <option value="name">🔤 שם (א-ת)</option>
             </select>
         </div>
 
-        <div class="buttons-row">
-            <button class="icon-btn-small" id="themeBtn">☀️</button>
-            <button class="icon-btn-small" id="dupBtn" style="color:var(--accent-red)">⚠️</button>
-            
-            <div class="manager-group">
-                <div style="position:relative; flex:1;">
-                    <button class="manager-btn btn-purple" onclick="toggleMenu('siteMenu')">
-                        ▼ ניהול אתר 🖥️
-                    </button>
-                    <div id="siteMenu" class="dropdown-menu">
-                        <button onclick="downloadHtml()">🌍 שמור אתר (HTML)</button>
-                        <button onclick="downloadSource()">📜 קוד מקור (Source)</button>
-                        <button onclick="openRecycleBin()" style="color:var(--accent-red)">🗑️ סל מחזור</button>
-                    </div>
-                </div>
-
-                <div style="position:relative; flex:1;">
-                    <button class="manager-btn btn-teal" onclick="toggleMenu('txtMenu')">
-                        ▼ ניהול טקסט 📄
-                    </button>
-                    <div id="txtMenu" class="dropdown-menu">
-                        <button onclick="exportTxt()">📤 ייצוא TXT</button>
-                    </div>
-                </div>
-
-                <div style="position:relative; flex:1;">
-                    <button class="manager-btn btn-blue" onclick="toggleMenu('jsonMenu')">
-                        ▼ ניהול JSON 💾
-                    </button>
-                    <div id="jsonMenu" class="dropdown-menu">
-                        <button onclick="exportJson()">📤 ייצוא JSON</button>
-                        <label for="importFile">📥 ייבוא JSON</label>
-                        <input type="file" id="importFile" accept=".json" style="display:none">
-                    </div>
+        <div class="actions-container">
+            <div class="dropdown">
+                <button class="action-btn btn-json drop-trigger" data-target="jsonMenu">
+                    <span>📂</span> ניהול JSON <span>▼</span>
+                </button>
+                <div id="jsonMenu" class="dropdown-content">
+                    <label for="importJsonInput">📥 ייבוא קובץ JSON</label>
+                    <input type="file" id="importJsonInput" accept=".json">
+                    <div class="dropdown-divider"></div>
+                    <button id="exportJsonBtn">📤 ייצוא לקובץ JSON</button>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <div class="add-bar-wrapper">
-        <button class="btn-add-bar" onclick="document.getElementById('addItemContainer').classList.toggle('show')">
-            ➕ הוספת פריט חדש ידנית
-        </button>
-    </div>
-    
-    <div id="addItemContainer">
-        <textarea id="inpContent" rows="2" placeholder="הדבק כאן קישור או טקסט..." required></textarea>
-        <input type="text" id="inpDesc" placeholder="תיאור">
-        <input type="text" id="inpCat" list="catList" placeholder="קטגוריה">
-        <datalist id="catList"></datalist>
-        <input type="text" id="inpNote" placeholder="הערה">
-        <button onclick="addItem()">הוסף</button>
-    </div>
-
-    <div id="listContainer"></div>
-
-    <div id="recycleBinModal" class="modal">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h3>🗑️ סל מחזור (30 יום)</h3>
-                <button onclick="closeRecycleBin()" style="background:none;border:none;color:white;font-size:1.5rem;cursor:pointer;">×</button>
+            <div class="dropdown">
+                <button class="action-btn btn-txt drop-trigger" data-target="txtMenu">
+                    <span>📄</span> ניהול טקסט <span>▼</span>
+                </button>
+                <div id="txtMenu" class="dropdown-content">
+                    <button id="exportTxtBtn">📤 ייצוא רשימה ל-TXT</button>
+                    <div class="dropdown-divider"></div>
+                    <label for="smartImportInput">🔄 <b>ייבוא חכם (מיזוג)</b></label>
+                    <input type="file" id="smartImportInput" accept=".txt">
+                </div>
             </div>
-            <div class="modal-body" id="recycleBinList"></div>
+
+            <div class="dropdown">
+                <button class="action-btn btn-site drop-trigger" data-target="siteMenu">
+                    <span>💾</span> ניהול אתר <span>▼</span>
+                </button>
+                <div id="siteMenu" class="dropdown-content">
+                    <button id="downloadHtmlBtn">שמור אתר מלא (HTML)</button>
+                    <button id="downloadSourceBtn">הורד קוד מקור (TXT)</button>
+                </div>
+            </div>
+
+            <button id="toggleDuplicatesBtn" class="action-btn btn-toggle" title="הצג/הסתר כפילויות">⚠️</button>
+            <button id="toggleDarkModeBtn" class="action-btn btn-toggle" title="מצב לילה">☀️</button>
         </div>
     </div>
 
-    <div id="toast">הודעה</div>
+    <details class="glass-panel">
+        <summary>הוספת פריט חדש ידנית</summary>
+        <form id="addItemForm">
+            <textarea id="itemContent" rows="2" required placeholder="הדבק כאן קישור או פקודה..."></textarea>
+            <input type="text" id="itemDescription" placeholder="תיאור הפריט">
+            <input type="text" id="itemCategory" list="categoriesDatalist" placeholder="קטגוריה">
+            <datalist id="categoriesDatalist"></datalist>
+            <input type="text" id="itemNote" placeholder="הערה אישית (אופציונלי)">
+            <button type="submit">הוסף למאגר</button>
+        </form>
+    </details>
+
+    <div id="listContainer" class="list-container"></div>
+
+    <div id="toast">
+        <span id="toastMsg">הודעה</span>
+        <button id="undoBtn">בטל</button>
+    </div>
+
+    <script id="app-state" type="application/json">{}</script>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+        // === Config & State ===
         const firebaseConfig = {
             apiKey: "AIzaSyBnRk-Os6EvJcFIdpl-lICc9w-E4pQ74nE",
             authDomain: "linkmanager-fdac5.firebaseapp.com",
             projectId: "linkmanager-fdac5",
             storageBucket: "linkmanager-fdac5.firebasestorage.app",
             messagingSenderId: "532683691813",
-            appId: "1:532683691813:web:5cf639e32a715c626eeccc"
+            appId: "1:532683691813:web:5cf639e32a715c626eeccc",
+            measurementId: "G-NVN4E8TDGE"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const provider = new GoogleAuthProvider();
-
-        window.handleAuth = async () => {
-            if (auth.currentUser) {
-                await signOut(auth); location.reload();
-            } else {
-                try { await signInWithPopup(auth, provider); } catch(e) { alert(e.message); }
-            }
+        const STORAGE_KEY = 'LinkManager_Glass_Stable_Final';
+        const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
+        
+        // Application State
+        const state = {
+            items: [],
+            user: null,
+            unsubscribe: null,
+            undoStack: null,
+            showDuplicates: true
         };
 
-        onAuthStateChanged(auth, user => {
-            const loginDiv = document.getElementById('loggedOutView');
-            const userDiv = document.getElementById('loggedInView');
-            
-            if (user) {
-                loginDiv.style.display = 'none';
-                userDiv.style.display = 'flex';
-                document.getElementById('userName').textContent = user.displayName;
-                document.getElementById('userAvatar').src = user.photoURL;
+        let app, auth, db;
 
-                onSnapshot(doc(db, "users", user.uid), (docSnap) => {
-                    if (docSnap.exists()) {
-                        const data = docSnap.data();
-                        if (data.items) { window.items = data.items; window.renderList(); }
-                        if (data.recycleBin) window.recycleBin = data.recycleBin;
-                    }
-                });
-            } else {
-                loginDiv.style.display = 'block';
-                userDiv.style.display = 'none';
-            }
-        });
-
-        window.saveToCloud = async () => {
-            if (auth.currentUser) {
-                await setDoc(doc(db, "users", auth.currentUser.uid), {
-                    items: window.items,
-                    recycleBin: window.recycleBin,
-                    updated: new Date().toISOString()
-                });
-            }
-        };
-    </script>
-
-    <script id="app-state" type="application/json">[]</script>
-    <script>
-        const KEY = 'LinkManager_Ultimate_Fixed';
-        window.items = [];
-        window.recycleBin = [];
-        let hideDups = false;
+        // === Initialization ===
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (e) {
+            console.error("Firebase Init Error:", e);
+        }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // טעינת נתונים
-            try {
-                const local = localStorage.getItem(KEY);
-                if (local) {
-                    const data = JSON.parse(local);
-                    window.items = data.items || [];
-                    window.recycleBin = data.recycleBin || [];
-                } else {
-                    const embedded = document.getElementById('app-state').textContent;
-                    if (embedded.length > 5) window.items = JSON.parse(embedded);
-                }
-            } catch(e) {}
-            
-            cleanupBin();
+            initTheme();
+            loadLocalData();
+            updateCategoryDropdowns();
+            setupEventListeners();
             renderList();
-
-            // Event Delegation (המפתח ליציבות)
-            document.getElementById('listContainer').addEventListener('click', (e) => {
-                const btn = e.target.closest('button');
-                if (!btn) return;
-                const card = btn.closest('.card');
-                if (!card) return;
-                const id = parseFloat(card.dataset.id);
-
-                if (btn.classList.contains('delete')) moveToTrash(id);
-                if (btn.classList.contains('copy')) copyText(id);
-                if (btn.classList.contains('edit')) editItem(id);
-                if (btn.classList.contains('pin')) togglePin(id);
-            });
-
-            // Close menus on click outside
-            document.addEventListener('click', (e) => {
-                if (!e.target.closest('.manager-group')) {
-                    document.querySelectorAll('.dropdown-menu').forEach(el => el.classList.remove('show'));
-                }
-            });
-
-            // Listeners
-            document.getElementById('googleLoginBtn').addEventListener('click', () => window.handleAuth());
-            document.getElementById('logoutBtn').addEventListener('click', () => window.handleAuth());
-            document.getElementById('searchInput').addEventListener('input', () => renderList());
-            document.getElementById('categoryFilter').addEventListener('change', () => renderList());
-            document.getElementById('sortOrder').addEventListener('change', () => renderList());
-            document.getElementById('themeBtn').addEventListener('click', () => document.body.classList.toggle('dark-mode')); // Fake toggle since design is dark by default
-            document.getElementById('dupBtn').addEventListener('click', () => { hideDups = !hideDups; renderList(); });
-            document.getElementById('importFile').addEventListener('change', importJson);
+            setupFirebaseListeners();
         });
 
-        function toggleMenu(id) {
-            document.querySelectorAll('.dropdown-menu').forEach(el => {
-                if(el.id !== id) el.classList.remove('show');
+        // === Event Listeners Setup ===
+        function setupEventListeners() {
+            // Dropdowns
+            document.querySelectorAll('.drop-trigger').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const targetId = btn.getAttribute('data-target');
+                    const targetMenu = document.getElementById(targetId);
+                    if (!targetMenu) return;
+                    const isOpen = targetMenu.classList.contains('show');
+                    closeAllMenus();
+                    if (!isOpen) {
+                        targetMenu.classList.add('show');
+                        btn.classList.add('active');
+                    }
+                });
             });
-            document.getElementById(id).classList.toggle('show');
-        }
 
-        function saveData() {
-            localStorage.setItem(KEY, JSON.stringify({items: window.items, recycleBin: window.recycleBin}));
-            if (window.saveToCloud) window.saveToCloud();
-        }
+            window.addEventListener('click', () => closeAllMenus());
 
-        function cleanupBin() {
-            const now = Date.now();
-            window.recycleBin = window.recycleBin.filter(i => (now - i.deletedAt) < 30*24*60*60*1000);
-        }
-
-        function addItem() {
-            const content = document.getElementById('inpContent').value;
-            if(!content) return;
+            // Controls
+            document.getElementById('searchInput')?.addEventListener('input', () => window.requestAnimationFrame(renderList));
+            document.getElementById('categoryFilter')?.addEventListener('change', renderList);
+            document.getElementById('sortOrder')?.addEventListener('change', renderList);
+            document.getElementById('addItemForm')?.addEventListener('submit', handleAdd);
             
-            // New items are always first (#1)
-            window.items.unshift({
-                id: Date.now(),
-                content: content,
-                description: document.getElementById('inpDesc').value,
-                category: document.getElementById('inpCat').value || 'כללי',
-                note: document.getElementById('inpNote').value,
-                date: new Date().toISOString(),
-                pinned: false
+            // Toggles
+            document.getElementById('toggleDarkModeBtn')?.addEventListener('click', toggleTheme);
+            document.getElementById('toggleDuplicatesBtn')?.addEventListener('click', toggleDuplicates);
+
+            // Auth Buttons
+            document.getElementById('googleLoginBtn')?.addEventListener('click', cloudLogin);
+            document.getElementById('logoutBtn')?.addEventListener('click', cloudLogout);
+            document.getElementById('switchAccountBtn')?.addEventListener('click', switchAccount);
+
+            // File Operations
+            ['importJsonInput', 'smartImportInput'].forEach(id => {
+                const el = document.getElementById(id);
+                if(el) {
+                    el.addEventListener('click', (e) => e.target.value = null);
+                    el.addEventListener('change', id === 'importJsonInput' ? importJson : smartImport);
+                }
             });
-            saveData();
-            renderList();
-            
-            // Reset form
-            document.getElementById('inpContent').value = '';
-            document.getElementById('inpDesc').value = '';
-            document.getElementById('inpCat').value = '';
-            document.getElementById('inpNote').value = '';
-            
-            showToast("נוסף בהצלחה");
+
+            // Exports & Toast
+            document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
+            document.getElementById('exportTxtBtn')?.addEventListener('click', exportTxt);
+            document.getElementById('downloadHtmlBtn')?.addEventListener('click', downloadSite);
+            document.getElementById('downloadSourceBtn')?.addEventListener('click', downloadSource);
+            document.getElementById('undoBtn')?.addEventListener('click', executeUndo);
         }
 
-        function moveToTrash(id) {
-            if(!confirm("להעביר לסל המחזור?")) return;
-            const idx = window.items.findIndex(i => i.id === id);
-            if(idx > -1) {
-                const item = window.items[idx];
-                item.deletedAt = Date.now();
-                window.recycleBin.unshift(item);
-                window.items.splice(idx, 1);
-                saveData();
-                renderList();
-                showToast("הועבר לסל");
+        // === Core Logic ===
+        
+        // --- Data Management ---
+        function loadLocalData() {
+            try {
+                // Try embedded data first
+                const embedded = document.getElementById('app-state').textContent;
+                if(embedded) {
+                    const parsed = JSON.parse(embedded);
+                    if (parsed.items && parsed.items.length) { 
+                        state.items = parsed.items; 
+                        return; 
+                    }
+                }
+            } catch(e) {}
+
+            // Try LocalStorage
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) { 
+                try { 
+                    state.items = JSON.parse(stored); 
+                    return; 
+                } catch(e) {} 
+            }
+            
+            // Fallback (empty)
+            state.items = [];
+        }
+
+        function saveData(skipCloud = false) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items));
+            if (!skipCloud && state.user && db) {
+                pushToCloud();
             }
         }
 
-        function togglePin(id) {
-            const item = window.items.find(i => i.id === id);
-            item.pinned = !item.pinned;
-            saveData();
-            renderList();
+        // --- Firebase Auth & Sync ---
+        function setupFirebaseListeners() {
+            if (!auth) return;
+            onAuthStateChanged(auth, (user) => {
+                const loginView = document.getElementById('loggedOutView');
+                const loggedView = document.getElementById('loggedInView');
+                
+                if (user) {
+                    state.user = user;
+                    loginView.style.display = 'none';
+                    loggedView.style.display = 'flex';
+                    
+                    const nameEl = document.getElementById('userName');
+                    const imgEl = document.getElementById('userAvatar');
+                    if(nameEl) nameEl.textContent = user.displayName;
+                    if(imgEl) imgEl.src = user.photoURL;
+                    
+                    updateSyncStatus('syncing');
+                    
+                    if (state.unsubscribe) state.unsubscribe();
+                    
+                    // Real-time listener
+                    state.unsubscribe = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+                        if (docSnap.exists()) {
+                            const cloudData = docSnap.data();
+                            const cloudItems = cloudData.items || [];
+                            
+                            // Simple diff check to avoid loops
+                            if (JSON.stringify(cloudItems) !== JSON.stringify(state.items)) {
+                                state.items = cloudItems;
+                                saveData(true); // Save local but don't push back immediately
+                                updateCategoryDropdowns();
+                                renderList();
+                            }
+                            updateSyncStatus('online');
+                        } else {
+                            if(state.items.length > 0) pushToCloud();
+                            else updateSyncStatus('online');
+                        }
+                    }, (error) => {
+                        console.error("Sync Error:", error);
+                        updateSyncStatus('error');
+                    });
+
+                } else {
+                    state.user = null;
+                    if (state.unsubscribe) state.unsubscribe();
+                    loginView.style.display = 'flex';
+                    loggedView.style.display = 'none';
+                }
+            });
         }
 
-        function editItem(id) {
-            const item = window.items.find(i => i.id === id);
-            const c = prompt("ערוך תוכן:", item.content);
-            if(c !== null) {
-                item.content = c;
-                item.description = prompt("תיאור:", item.description) || '';
-                item.category = prompt("קטגוריה:", item.category) || 'כללי';
-                item.note = prompt("הערה:", item.note) || '';
-                saveData();
-                renderList();
+        async function cloudLogin() {
+            const provider = new GoogleAuthProvider();
+            provider.setCustomParameters({ prompt: 'select_account' });
+            try { await signInWithPopup(auth, provider); } 
+            catch (error) { alert("שגיאה בהתחברות: " + error.message); }
+        }
+
+        async function cloudLogout() {
+            if (!auth) return;
+            try { 
+                await signOut(auth); 
+                location.reload(); 
+            } catch (error) { console.error(error); }
+        }
+
+        async function switchAccount() {
+             if(confirm('פעולה זו תנתק אותך מהחשבון הנוכחי. להמשיך?')) {
+                 if (state.unsubscribe) state.unsubscribe();
+                 await signOut(auth);
+                 cloudLogin();
+             }
+        }
+
+        async function pushToCloud() {
+            if (!state.user || !db) return;
+            updateSyncStatus('syncing');
+            try {
+                await setDoc(doc(db, "users", state.user.uid), {
+                    items: state.items,
+                    lastUpdated: new Date().toISOString()
+                });
+                updateSyncStatus('online');
+            } catch (e) {
+                console.error("Save error", e);
+                updateSyncStatus('error');
             }
         }
 
-        function copyText(id) {
-            const item = window.items.find(i => i.id === id);
-            navigator.clipboard.writeText(item.content);
-            showToast("הועתק!");
+        function updateSyncStatus(status) {
+            const el = document.getElementById('syncStatus');
+            if(!el) return;
+            const dot = el.querySelector('.status-dot');
+            dot.className = 'status-dot';
+            
+            if (status === 'online') {
+                dot.classList.add('online');
+                el.innerHTML = '<span class="status-dot online"></span> מחובר ומסונכרן';
+            } else if (status === 'syncing') {
+                dot.classList.add('syncing');
+                el.innerHTML = '<span class="status-dot syncing"></span> מסנכרן...';
+            } else if (status === 'error') {
+                dot.classList.add('error');
+                el.innerHTML = '<span class="status-dot error"></span> שגיאת סנכרון';
+            }
+        }
+
+        // --- UI Rendering & Helpers ---
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function closeAllMenus() {
+            document.querySelectorAll('.dropdown-content').forEach(m => m.classList.remove('show'));
+            document.querySelectorAll('.drop-trigger').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.card-menu-dropdown').forEach(m => m.classList.remove('show'));
+        }
+
+        function updateCategoryDropdowns() {
+            const cats = new Set(state.items.map(i => i.category));
+            const select = document.getElementById('categoryFilter');
+            const datalist = document.getElementById('categoriesDatalist');
+            if(!select || !datalist) return;
+
+            const currentVal = select.value;
+            let html = '<option value="">📂 כל הקטגוריות</option>';
+            let listHtml = '';
+            
+            [...cats].sort().forEach(c => {
+                const safeCat = escapeHtml(c);
+                html += `<option value="${safeCat}">${safeCat}</option>`;
+                listHtml += `<option value="${safeCat}">`;
+            });
+
+            if (select.innerHTML !== html) {
+                select.innerHTML = html;
+                select.value = currentVal;
+            }
+            datalist.innerHTML = listHtml;
         }
 
         function renderList() {
             const container = document.getElementById('listContainer');
-            const search = document.getElementById('searchInput').value.toLowerCase();
-            const cat = document.getElementById('categoryFilter').value;
-            const sort = document.getElementById('sortOrder').value;
-
-            // Update Categories
-            const cats = [...new Set(window.items.map(i => i.category))].sort();
-            const sel = document.getElementById('categoryFilter');
-            if(sel.options.length === 1) { 
-                cats.forEach(c => sel.innerHTML += `<option value="${c}">${c}</option>`);
-                document.getElementById('catList').innerHTML = cats.map(c => `<option value="${c}">`).join('');
-            }
-
-            // Filter
-            let filtered = window.items.filter(i => {
-                const txt = (i.content + i.description + i.category + i.note).toLowerCase();
-                return txt.includes(search) && (!cat || i.category === cat);
-            });
-
-            if (hideDups) {
-                const seen = new Set();
-                filtered = filtered.filter(i => {
-                    const k = i.content.trim();
-                    return seen.has(k) ? false : seen.add(k);
-                });
-            }
-
-            // Sort (Newest = Top = #1)
-            filtered.sort((a, b) => {
-                if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-                
-                if (sort === 'date-new') {
-                    return new Date(b.date) - new Date(a.date);
-                } else if (sort === 'name') {
-                    return a.content.localeCompare(b.content);
-                }
-                return 0;
-            });
-
-            // Handle #123 Search
-            const indexMatch = search.match(/^#(\d+)$/);
-            if (indexMatch) {
-                const idx = parseInt(indexMatch[1]) - 1;
-                if (filtered[idx]) filtered = [filtered[idx]];
-                else filtered = [];
-            }
-
-            document.getElementById('itemCount').textContent = `מציג ${filtered.length} מתוך ${window.items.length}`;
+            if(!container) return;
             container.innerHTML = '';
+            
+            const searchInput = document.getElementById('searchInput');
+            const catFilterInput = document.getElementById('categoryFilter');
+            const sortInput = document.getElementById('sortOrder');
 
-            // Group by Category
+            const query = searchInput ? searchInput.value.toLowerCase() : '';
+            const catFilter = catFilterInput ? catFilterInput.value : '';
+            const sort = sortInput ? sortInput.value : 'date-new';
+
+            // Duplicate detection
+            const seen = new Set(), dups = new Set();
+            state.items.forEach(i => {
+                const k = i.content.toLowerCase().trim();
+                if (seen.has(k)) { i.isDup = true; dups.add(k); } else { i.isDup = false; seen.add(k); }
+            });
+            state.items.forEach(i => { if(dups.has(i.content.toLowerCase().trim())) i.isDup = true; });
+
+            let filtered = state.items.filter(i => {
+                if (!state.showDuplicates && i.isDup && state.items.indexOf(i) !== state.items.findIndex(x => x.content.toLowerCase() === i.content.toLowerCase())) return false;
+                const matchesSearch = !query || i.content.toLowerCase().includes(query) || i.description.toLowerCase().includes(query) || i.category.toLowerCase().includes(query) || (i.note && i.note.toLowerCase().includes(query));
+                const matchesCat = !catFilter || i.category === catFilter;
+                return matchesSearch && matchesCat;
+            });
+
+            const countEl = document.getElementById('itemCount');
+            if(countEl) countEl.textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
+
+            // Sorting
+            const baseSort = (a, b) => {
+                switch(sort) {
+                    case 'name': return a.content.localeCompare(b.content);
+                    case 'date-new': return b.date.localeCompare(a.date);
+                    case 'index-new': return -1; // relies on array order
+                    case 'index-old': return 1;
+                    default: return 0;
+                }
+            };
+            
+            const masterSort = (a, b) => {
+                if (a.isPinned && !b.isPinned) return -1;
+                if (!a.isPinned && b.isPinned) return 1;
+                return baseSort(a, b);
+            };
+
+            // Grouping
             const groups = {};
             filtered.forEach(i => {
-                const c = i.category;
-                if(!groups[c]) groups[c] = [];
-                groups[c].push(i);
+                if(!groups[i.category]) groups[i.category] = [];
+                groups[i.category].push(i);
             });
 
-            Object.keys(groups).sort().forEach(c => {
-                const div = document.createElement('div');
-                div.className = 'category-block';
-                div.innerHTML = `<div class="category-header"><h2>${c}</h2><span>${groups[c].length}</span></div>`;
+            const sortedCategories = Object.keys(groups).sort();
+            const isDescending = (sort === 'index-new' || sort === 'date-new');
+            let visualCounter = isDescending ? filtered.length : 1;
+            const counterStep = isDescending ? -1 : 1;
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-secondary);">לא נמצאו תוצאות</div>';
+                return;
+            }
+
+            sortedCategories.forEach(cat => {
+                const groupItems = groups[cat];
+                groupItems.sort(masterSort); 
+                
+                const section = document.createElement('div');
+                section.className = 'category-block';
+                
+                const header = document.createElement('div');
+                header.className = 'category-header';
+                header.innerHTML = `<h2>${escapeHtml(cat)}</h2><span class="category-badge">${groupItems.length} פריטים</span>`;
+                section.appendChild(header);
+
                 const grid = document.createElement('div');
                 grid.className = 'items-grid';
                 
-                groups[c].forEach(item => {
-                    // Visual index based on sorted list
-                    const visualIndex = filtered.indexOf(item) + 1;
-                    grid.innerHTML += getCardHTML(item, visualIndex);
+                groupItems.forEach(i => {
+                    grid.appendChild(createCard(i, visualCounter));
+                    visualCounter += counterStep;
                 });
                 
-                div.appendChild(grid);
-                container.appendChild(div);
+                section.appendChild(grid);
+                container.appendChild(section);
             });
         }
 
-        function getCardHTML(item, index) {
-            const isLink = /^(http|t\.me)/.test(item.content);
-            const display = isLink ? `<a href="${item.content}" target="_blank" class="card-link">${item.content}</a>` : `<div class="card-text">${item.content}</div>`;
+        function createCard(item, displayNum) {
+            const div = document.createElement('div');
+            div.className = `card ${item.isPinned ? 'pinned' : ''}`;
             
-            return `
-            <div class="card ${item.pinned ? 'pinned' : ''}" data-id="${item.id}">
-                <div class="card-index">#${index}</div>
+            // Safer content injection
+            const safeContent = escapeHtml(item.content);
+            const contentHtml = item.type === 'link' 
+                ? `<a href="${safeContent}" class="card-link" target="_blank">${safeContent}</a>`
+                : `<div class="card-text-content">${safeContent}</div>`;
+            
+            const noteHtml = item.note ? `<div class="card-note">${escapeHtml(item.note)}</div>` : '';
+            const dupBadge = item.isDup ? 'inline' : 'none';
+
+            div.innerHTML = `
+                <div class="card-index">#${displayNum}</div>
                 <div class="card-body">
-                    ${display}
-                    <div class="card-desc">${item.description}</div>
-                    ${item.note ? `<div class="card-note">📝 ${item.note}</div>` : ''}
+                    ${contentHtml}
+                    <div class="card-desc">${escapeHtml(item.description)}</div>
+                    ${noteHtml}
                 </div>
                 <div class="card-footer">
-                    <span class="tag">${item.category}</span>
+                    <div>
+                        <span class="tag-category">${escapeHtml(item.category)}</span>
+                        <span class="duplicate-badge" style="display:${dupBadge}">כפול</span>
+                    </div>
                     <div class="card-actions">
-                        <button class="icon-btn copy" title="העתק">📋</button>
-                        <button class="icon-btn edit" title="ערוך">✏️</button>
-                        <button class="icon-btn pin ${item.pinned?'active':''}" title="נעץ">📌</button>
-                        <button class="icon-btn delete" title="מחק">🗑️</button>
+                        <button class="icon-btn btn-copy" title="העתק">📋</button>
+                        <button class="icon-btn btn-edit" title="ערוך">✏️</button>
+                        <button class="icon-btn pin-btn ${item.isPinned ? 'active' : ''}" title="${item.isPinned ? 'בטל נעיצה' : 'נעץ בראש הרשימה'}">📌</button>
+                        <button class="icon-btn btn-menu" title="פעולות">⋮</button>
+                        <div class="card-menu-dropdown">
+                            <button class="btn-delete">🗑️ מחק פריט</button>
+                        </div>
                     </div>
                 </div>
-            </div>`;
-        }
-
-        // --- Recycle Bin ---
-        window.openRecycleBin = () => {
-            const l = document.getElementById('recycleBinList');
-            l.innerHTML = window.recycleBin.length ? '' : 'הסל ריק';
-            window.recycleBin.forEach(i => {
-                l.innerHTML += `
-                <div class="deleted-item">
-                    <div>${i.content.substring(0,30)}...</div>
-                    <div>
-                        <button onclick="restore(${i.id})">♻️</button>
-                        <button onclick="permDelete(${i.id})" style="color:red">❌</button>
-                    </div>
-                </div>`;
-            });
-            document.getElementById('recycleBinModal').classList.add('show');
-        };
-        window.closeRecycleBin = () => document.getElementById('recycleBinModal').classList.remove('show');
-        window.restore = (id) => {
-            const idx = window.recycleBin.findIndex(i => i.id === id);
-            window.items.unshift(window.recycleBin[idx]);
-            window.recycleBin.splice(idx,1);
-            saveData(); renderList(); window.openRecycleBin();
-        };
-        window.permDelete = (id) => {
-            if(confirm('למחוק?')) {
-                window.recycleBin = window.recycleBin.filter(i => i.id !== id);
-                saveData(); window.openRecycleBin();
-            }
-        };
-
-        // --- Export/Import ---
-        window.downloadHtml = () => {
-            document.getElementById('app-state').textContent = JSON.stringify(window.items);
-            const html = document.documentElement.outerHTML;
-            const b = new Blob([html],{type:'text/html'});
-            const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='Manager.html'; a.click();
-        };
-        window.exportJson = () => {
-            const b = new Blob([JSON.stringify(window.items,null,2)],{type:'application/json'});
-            const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='data.json'; a.click();
-        };
-        window.exportTxt = () => {
-            const t = window.items.map(i=>`${i.content} | ${i.description}`).join('\n');
-            const b = new Blob([t],{type:'text/plain'});
-            const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='data.txt'; a.click();
-        };
-        window.downloadSource = () => {
-            const b = new Blob([document.documentElement.outerHTML],{type:'text/plain'});
-            const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='source.txt'; a.click();
-        };
-        function importJson(e) {
-            const r = new FileReader();
-            r.onload = ev => {
-                window.items = JSON.parse(ev.target.result);
-                saveData(); renderList();
+            `;
+            
+            // Attach event listeners directly (No inline HTML events)
+            div.querySelector('.btn-copy').onclick = () => copyText(item.content);
+            div.querySelector('.btn-edit').onclick = () => editItem(item);
+            div.querySelector('.pin-btn').onclick = () => togglePin(item.id);
+            div.querySelector('.btn-delete').onclick = (e) => {
+                e.stopPropagation();
+                deleteItem(item.id);
             };
-            r.readAsText(e.target.files[0]);
+
+            const menuBtn = div.querySelector('.btn-menu');
+            const menu = div.querySelector('.card-menu-dropdown');
+            menuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                document.querySelectorAll('.card-menu-dropdown.show').forEach(m => {
+                    if (m !== menu) m.classList.remove('show');
+                });
+                menu.classList.toggle('show');
+            });
+            
+            return div;
         }
 
-        function showToast(m) {
+        // --- Item Actions ---
+
+        function handleAdd(e) {
+            e.preventDefault();
+            const contentEl = document.getElementById('itemContent');
+            if(!contentEl) return;
+            const content = contentEl.value.trim();
+            if (!content) return;
+
+            const newItem = {
+                id: Date.now(),
+                content,
+                description: document.getElementById('itemDescription').value.trim(),
+                category: document.getElementById('itemCategory').value.trim() || 'כללי',
+                note: document.getElementById('itemNote').value.trim(),
+                date: new Date().toISOString(),
+                type: URL_REGEX.test(content) ? 'link' : 'text',
+                isPinned: false
+            };
+            state.items.unshift(newItem);
+            onDataChange();
+            e.target.reset();
+            showToast('הפריט נוסף', { type: 'add', id: newItem.id });
+        }
+
+        function deleteItem(id) {
+            if (!confirm('למחוק את הפריט לצמיתות?')) return;
+            const idx = state.items.findIndex(i => i.id === id);
+            if(idx === -1) return;
+            const item = state.items[idx];
+            state.items.splice(idx, 1);
+            onDataChange();
+            showToast('הפריט נמחק', { type: 'delete', item, index: idx });
+        }
+
+        function togglePin(id) {
+            const idx = state.items.findIndex(i => i.id === id);
+            if (idx === -1) return;
+            state.items[idx].isPinned = !state.items[idx].isPinned;
+            onDataChange();
+        }
+
+        function editItem(item) {
+            const previousState = JSON.parse(JSON.stringify(item));
+            const c = prompt('תוכן:', item.content);
+            if (c===null) return;
+            
+            const d = prompt('תיאור:', item.description) || '';
+            const cat = prompt('קטגוריה:', item.category) || 'כללי';
+            const n = prompt('הערה:', item.note) || '';
+            
+            // Mutate item
+            item.content = c;
+            item.description = d;
+            item.category = cat;
+            item.note = n;
+            item.type = URL_REGEX.test(c) ? 'link' : 'text';
+            
+            onDataChange();
+            showToast('השינוי נשמר', { type: 'edit', previousItem: previousState });
+        }
+
+        function onDataChange() {
+            saveData(); 
+            updateCategoryDropdowns();
+            renderList();
+        }
+
+        // --- Import/Export/Utility ---
+
+        function importJson(e) {
+            const f = e.target.files[0];
+            if(!f) return;
+            const r = new FileReader();
+            r.onload = ev => { 
+                try { 
+                    state.items = JSON.parse(ev.target.result); 
+                    onDataChange(); 
+                    closeAllMenus(); 
+                    alert('נטען בהצלחה!'); 
+                } catch(e){ alert('שגיאה בקובץ'); } 
+            };
+            r.readAsText(f);
+        }
+
+        function smartImport(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const lines = ev.target.result.split('\n');
+                let added = 0, updated = 0;
+                const map = new Map(state.items.map(i => [i.content.toLowerCase().trim(), i]));
+                let idBase = Date.now();
+
+                lines.forEach(line => {
+                    const parts = line.split('|').map(s => s.trim());
+                    if (!parts[0]) return;
+                    const key = parts[0].toLowerCase();
+                    const desc = parts[1] || '';
+                    const cat = parts[2] || 'כללי';
+
+                    if (map.has(key)) {
+                        const item = map.get(key);
+                        let changed = false;
+                        if (desc && item.description !== desc) { item.description = desc; changed = true; }
+                        if (cat && item.category !== cat && cat !== 'כללי') { item.category = cat; changed = true; }
+                        if (changed) updated++;
+                    } else {
+                        state.items.unshift({
+                            id: idBase++, content: parts[0], description: desc, category: cat,
+                            date: new Date().toISOString(), type: URL_REGEX.test(parts[0]) ? 'link' : 'text', note: '',
+                            isPinned: false
+                        });
+                        added++;
+                    }
+                });
+                onDataChange();
+                closeAllMenus();
+                alert(`הייבוא הושלם:\n🆕 נוספו: ${added}\n🔄 עודכנו: ${updated}`);
+            };
+            reader.readAsText(file);
+        }
+
+        function exportJson() { downloadFile('links.json', JSON.stringify(state.items, null, 2), 'application/json'); closeAllMenus(); }
+        
+        function exportTxt() { 
+            const txt = state.items.map(i=>`${i.content} | ${i.description} | ${i.category}`).join('\n');
+            downloadFile('links.txt', txt, 'text/plain'); 
+            closeAllMenus(); 
+        }
+
+        function downloadSite() { 
+            closeAllMenus();
+            const stateEl = document.getElementById('app-state');
+            if(stateEl) stateEl.textContent = JSON.stringify({items: state.items}); 
+            downloadFile(`LinkManager_Stable_${new Date().toISOString().slice(0,10)}.html`, '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/html'); 
+        }
+
+        function downloadSource() {
+            closeAllMenus();
+            const stateEl = document.getElementById('app-state');
+            if(stateEl) stateEl.textContent = "{}"; // Clear state for source download
+            downloadFile('source.txt', '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/plain');
+        }
+
+        function downloadFile(n, c, t) { 
+            const b=new Blob([c],{type:t}), u=URL.createObjectURL(b), a=document.createElement('a'); 
+            a.href=u; a.download=n; document.body.appendChild(a); a.click(); document.body.removeChild(a); 
+        }
+
+        async function copyText(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                showToast('הועתק ללוח!');
+            } catch (err) {
+                prompt('העתקה ידנית:', text);
+            }
+        }
+
+        // --- Theme & Toast ---
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem(STORAGE_KEY + '_theme');
+            if (savedTheme === 'light') {
+                document.body.classList.remove('dark-mode');
+                const btn = document.getElementById('toggleDarkModeBtn');
+                if(btn) btn.textContent = '🌙';
+            }
+        }
+
+        function toggleTheme() { 
+            document.body.classList.toggle('dark-mode'); 
+            const isDark = document.body.classList.contains('dark-mode');
+            localStorage.setItem(STORAGE_KEY + '_theme', isDark ? 'dark' : 'light');
+            const btn = document.getElementById('toggleDarkModeBtn');
+            if(btn) btn.textContent = isDark ? '☀️' : '🌙';
+        }
+
+        function toggleDuplicates() { 
+            state.showDuplicates = !state.showDuplicates; 
+            const btn = document.getElementById('toggleDuplicatesBtn');
+            if(btn) btn.style.opacity = state.showDuplicates ? '1' : '0.5'; 
+            renderList(); 
+        }
+
+        function showToast(m, u=null) {
             const t = document.getElementById('toast');
-            t.textContent = m; t.classList.add('show');
-            setTimeout(()=>t.classList.remove('show'),3000);
+            if(!t) return;
+            document.getElementById('toastMsg').textContent = m;
+            t.classList.add('visible'); 
+            state.undoStack = u;
+            document.getElementById('undoBtn').style.display = u ? 'block' : 'none';
+            setTimeout(() => t.classList.remove('visible'), 4000);
+        }
+
+        function executeUndo() {
+            if (!state.undoStack) return;
+            const u = state.undoStack;
+            
+            if (u.type === 'delete') state.items.splice(u.index, 0, u.item);
+            else if (u.type === 'add') state.items = state.items.filter(i => i.id !== u.id);
+            else if (u.type === 'edit') {
+                const idx = state.items.findIndex(i => i.id === u.previousItem.id);
+                if (idx !== -1) state.items[idx] = u.previousItem;
+            }
+            onDataChange(); 
+            document.getElementById('toast').classList.remove('visible');
         }
     </script>
 </body>
