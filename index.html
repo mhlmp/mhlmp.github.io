@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>מנהל הקישורים Pro - Glass Stable</title>
+    <title>מנהל הקישורים Pro - Ultimate Stable</title>
     <style>
         :root {
-            /* === משתני עיצוב Glassmorphism (נשמר מהקובץ שלך) === */
+            /* === העתקתי את צבעי ה-Glassmorphism שאהבת === */
             --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
             --glass-bg: rgba(255, 255, 255, 0.85);
             --glass-border: rgba(255, 255, 255, 0.6);
@@ -54,7 +54,7 @@
             transition: color 0.3s;
         }
 
-        /* --- Glass Utils --- */
+        /* === Utilities מהעיצוב החדש === */
         .glass-panel {
             background: var(--glass-bg);
             backdrop-filter: var(--glass-blur);
@@ -64,7 +64,7 @@
             border-radius: var(--radius);
         }
 
-        /* --- Header --- */
+        /* === Header === */
         header { text-align: center; margin-bottom: 25px; }
         h1 { margin: 5px 0; font-size: 1.8rem; color: var(--text-primary); font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 10px; }
         
@@ -76,7 +76,7 @@
             border: 1px solid var(--glass-border); font-weight: 600;
         }
 
-        /* --- User Section --- */
+        /* === User Section === */
         #userSection {
             padding: 12px; margin-bottom: 20px;
             display: flex; justify-content: space-between; align-items: center;
@@ -102,9 +102,7 @@
         }
         .btn-switch:hover, .btn-logout:hover { background: rgba(127,127,127,0.2); }
 
-        @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.2); } 100% { opacity: 1; transform: scale(1); } }
-
-        /* --- Controls Area --- */
+        /* === Controls Area === */
         #controlsArea {
             padding: 16px; margin-bottom: 25px;
             display: flex; flex-direction: column; gap: 14px;
@@ -132,7 +130,7 @@
         .filters-container select option { background: #1e293b; color: white; }
         body:not(.dark-mode) .filters-container select option { background: #ffffff; color: black; }
 
-        /* --- Buttons --- */
+        /* === Buttons & Menus === */
         .actions-container { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
         .dropdown { position: relative; display: inline-block; flex-grow: 1; }
         
@@ -172,7 +170,7 @@
         .dropdown-content button:hover { background-color: rgba(127,127,127,0.1); color: var(--primary-color); }
         .dropdown-divider { border-top: 1px solid var(--glass-border); margin: 6px 0; }
 
-        /* --- Add Item Form --- */
+        /* === Add Item Form === */
         details { margin-bottom: 25px; transition: 0.3s; }
         summary { 
             padding: 16px; cursor: pointer; font-weight: 700; 
@@ -196,9 +194,9 @@
             box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
         }
 
-        /* ========================================================================== */
-        /* === הכרטיסים (The Object Rectangles) - מבוסס על הקובץ התקין ששלחת === */
-        /* ========================================================================== */
+        /* ========================================================================= */
+        /* === המבנה של הכרטיס - מועתק בדיוק מהקובץ התקין (עם התאמות צבע Glass) === */
+        /* ========================================================================= */
         
         .category-block { margin-bottom: 35px; }
         .category-header {
@@ -215,6 +213,7 @@
 
         .items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
         
+        /* מבנה כרטיס יציב */
         .card {
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
@@ -222,37 +221,40 @@
             position: relative;
             display: flex;
             flex-direction: column;
-            
-            /* זו ההגדרה היציבה מהקובץ התקין (בלי scale) */
-            transition: box-shadow 0.2s, transform 0.2s;
+            transition: box-shadow 0.2s, transform 0.1s; /* אנימציה עדינה מהקובץ התקין */
             box-shadow: var(--glass-shadow);
         }
         
-        /* HOVER יציב - כמו בקובץ התקין (רק צל ותזוזה קלה) */
-        .card:hover {
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-            transform: translateY(-2px);
-            z-index: 5;
+        /* HOVER עדין ויציב - ללא Scale שגורם לרעידות */
+        .card:hover { 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
+            transform: translateY(-2px); 
         }
-
+        
         .card.pinned {
             border: 2px solid var(--accent-gold);
-            box-shadow: var(--gold-glow);
+            background: rgba(255, 255, 0, 0.05); /* רקע צהבהב עדין כמו בקובץ התקין */
         }
         
-        .card-body { padding: 20px; padding-top: 40px; flex: 1; }
-        .card-index { position: absolute; top: 12px; left: 12px; font-size: 0.75rem; color: var(--text-secondary); opacity: 0.7; font-family: monospace; }
+        .card-index {
+            position: absolute; top: 12px; left: 12px; 
+            background: rgba(127,127,127,0.1);
+            color: var(--text-secondary); font-size: 11px; padding: 3px 8px;
+            border-radius: 6px; font-family: monospace; 
+        }
         
-        .card-link { 
+        .card-body { padding: 20px; padding-top: 40px; flex-grow: 1; }
+        
+        .card-link {
             display: block; color: var(--primary-color); font-weight: 700; text-decoration: none;
             margin-bottom: 10px; word-break: break-all; font-size: 16px; line-height: 1.4;
         }
         .card-text-content {
-             display: block; color: var(--text-primary); font-weight: 500;
-             margin-bottom: 10px; word-break: break-all; font-size: 16px; line-height: 1.4;
+            background: rgba(127,127,127,0.05); padding: 12px; border-radius: 8px;
+            font-family: monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all;
+            border: 1px solid var(--glass-border);
         }
-
-        .card-desc { font-size: 15px; color: var(--text-primary); opacity: 0.9; margin-top: 8px; line-height: 1.5; margin-bottom: 10px;}
+        .card-desc { font-size: 15px; color: var(--text-primary); opacity: 0.9; margin-top: 8px; line-height: 1.5; margin-bottom: 10px; }
         
         .card-note {
             margin-top: 12px; padding: 10px; background-color: var(--note-bg);
@@ -273,7 +275,8 @@
             padding: 4px 10px; border-radius: 12px; border: 1px solid var(--glass-border); font-weight: 600;
         }
 
-        .card-actions { display: flex; gap: 4px; position: relative; /* חשוב למיקום התפריט */ }
+        .card-actions { display: flex; gap: 4px; position: relative; }
+        
         .icon-btn {
             background: transparent; border: none; cursor: pointer; font-size: 18px;
             width: 34px; height: 34px; border-radius: 50%;
@@ -283,33 +286,31 @@
         .icon-btn:hover { color: var(--primary-color); background: rgba(127,127,127,0.1); }
         .pin-btn.active { color: var(--accent-gold); transform: rotate(45deg); }
 
-        /* התפריט שנלקח מהקובץ התקין (מותאם ויזואלית ל-Glass) */
+        /* התפריט שנלקח מהקובץ התקין (ממוקם אבסולוטית בתוך הכרטיס) */
         .card-menu-dropdown {
             display: none; 
             position: absolute;
-            right: 0; bottom: 100%; /* נפתח מעל הכפתור */
+            right: 0; bottom: 40px; /* נפתח מעל הכפתור */
             background: var(--glass-bg);
             backdrop-filter: blur(20px);
             border: 1px solid var(--glass-border);
             box-shadow: 0 5px 15px rgba(0,0,0,0.2); 
             z-index: 100;
             border-radius: 8px; 
-            min-width: 120px;
+            min-width: 140px;
             padding: 5px;
         }
         .card-menu-dropdown.show { display: block; }
         
         .card-menu-dropdown button {
             display: flex; align-items: center; gap: 8px;
-            width: 100%; text-align: right; padding: 8px 12px;
+            width: 100%; text-align: right; padding: 10px;
             background: none; border: none; cursor: pointer; 
-            color: var(--accent-red); font-weight: 600; font-size: 0.85rem;
+            color: var(--accent-red); font-weight: 600; font-size: 0.9rem;
             transition: background 0.2s;
             border-radius: 4px;
         }
         .card-menu-dropdown button:hover { background: rgba(239, 68, 68, 0.1); }
-
-        /* ========================================================================== */
 
         .duplicate-badge { color: var(--accent-red); font-weight: bold; font-size: 12px; display: none; margin-left: 5px; background: rgba(239,68,68,0.1); padding: 2px 6px; border-radius: 4px; }
         input[type="file"] { display: none; }
@@ -330,7 +331,7 @@
 <body class="dark-mode">
 
     <header>
-        <h1>מנהל הקישורים Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Glass Sync)</span></h1>
+        <h1>מנהל הקישורים Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Ultimate Stable)</span></h1>
         <div id="itemCount">טוען נתונים...</div>
     </header>
 
@@ -564,7 +565,7 @@
     </script>
 
     <script>
-        const STORAGE_KEY = 'LinkManager_Glass_Fixed_Stable_V2';
+        const STORAGE_KEY = 'LinkManager_Glass_Stable_Final';
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
         
         const rawData = `
@@ -598,7 +599,7 @@
                 });
             });
 
-            // Global click to close menus - Logic from Reference File
+            // Global click to close menus (מהקובץ התקין)
             window.addEventListener('click', () => {
                 closeAllMenus();
             });
@@ -743,7 +744,7 @@
             }
         }
 
-        // === יצירת כרטיס - לפי הלוגיקה מהקובץ התקין ===
+        // === יצירת כרטיס - לפי הלוגיקה מהקובץ התקין (העתק מדויק של המבנה) ===
         function createCard(item, displayNum) {
             const div = document.createElement('div');
             div.className = `card ${item.isPinned ? 'pinned' : ''}`;
@@ -770,7 +771,7 @@
                         <button class="icon-btn btn-copy" title="העתק">📋</button>
                         <button class="icon-btn btn-edit" title="ערוך">✏️</button>
                         <button class="icon-btn pin-btn ${item.isPinned ? 'active' : ''}" title="${item.isPinned ? 'בטל נעיצה' : 'נעץ בראש הרשימה'}">📌</button>
-                        <button class="icon-btn btn-menu" style="color:var(--accent-red)" title="פעולות">⋮</button>
+                        <button class="icon-btn btn-menu" title="פעולות">⋮</button>
                         <div class="card-menu-dropdown">
                             <button class="btn-delete">🗑️ מחק פריט</button>
                         </div>
@@ -786,7 +787,7 @@
                 deleteItem(item.id);
             };
 
-            // לוגיקת תפריט מהקובץ התקין
+            // לוגיקת תפריט מהקובץ התקין - שימוש ב stopPropagation
             const menuBtn = div.querySelector('.btn-menu');
             const menu = div.querySelector('.card-menu-dropdown');
             menuBtn.addEventListener('click', (e) => {
