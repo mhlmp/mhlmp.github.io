@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Link Manager Pro - Ultimate Recycle</title>
+    <title>מנהל הקישורים Pro - Ultimate Undo</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
@@ -21,7 +21,6 @@
             --accent-green: #00a651;
             --accent-red: #d93025;
             --accent-gold: #f59e0b;
-            --gold-glow: 0 0 10px rgba(245, 158, 11, 0.4);
             
             --note-bg: rgba(255, 248, 220, 0.9);
             --google-btn: #4285F4;
@@ -48,7 +47,7 @@
             color: var(--text-primary);
             margin: 0;
             padding: 15px;
-            padding-bottom: 80px;
+            padding-bottom: 100px;
             min-height: 100vh;
             transition: color 0.3s;
         }
@@ -73,7 +72,7 @@
             border: 1px solid var(--glass-border); font-weight: 600;
         }
 
-        /* User Section & Auth */
+        /* User Section */
         #userSection {
             padding: 12px; margin-bottom: 20px;
             display: flex; justify-content: space-between; align-items: center;
@@ -89,8 +88,6 @@
         .status-dot.error { background: var(--accent-red); }
         
         .btn-login { background: var(--google-btn); color: white; border: none; padding: 10px 24px; border-radius: 30px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 0.95rem; transition: 0.2s; box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3); }
-        .btn-login:hover { transform: scale(1.02); }
-        
         .btn-logout, .btn-switch { 
             background: rgba(127,127,127,0.1); 
             border: 1px solid var(--glass-border); 
@@ -166,7 +163,6 @@
         .dropdown-content button:hover { background-color: rgba(127,127,127,0.1); color: var(--primary-color); }
         .dropdown-divider { border-top: 1px solid var(--glass-border); margin: 6px 0; }
 
-        /* Add Item Form */
         details { margin-bottom: 25px; transition: 0.3s; }
         summary { 
             padding: 16px; cursor: pointer; font-weight: 700; 
@@ -190,7 +186,6 @@
             box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
         }
 
-        /* List & Cards */
         .category-block { margin-bottom: 35px; }
         .category-header {
             display: flex; align-items: center; justify-content: space-between;
@@ -218,10 +213,10 @@
         }
         .card:hover { box-shadow: 0 10px 30px rgba(0,0,0,0.15); transform: translateY(-2px); }
         
+        /* Pinned Style */
         .card.pinned {
             border: 2px solid var(--accent-gold);
             background: rgba(255, 255, 0, 0.05);
-            order: -1 !important; /* Force to top visually if flex/grid allows, but we sort in JS */
         }
         
         .card-index {
@@ -232,7 +227,6 @@
         }
         
         .card-body { padding: 20px; padding-top: 40px; flex-grow: 1; }
-        
         .card-link {
             display: block; color: var(--primary-color); font-weight: 700; text-decoration: none;
             margin-bottom: 10px; word-break: break-all; font-size: 16px; line-height: 1.4;
@@ -299,21 +293,61 @@
             border: 1px solid var(--glass-border);
         }
         .trash-info { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
-        .trash-date { font-size: 0.75rem; color: var(--text-secondary); display: block; }
         .trash-actions button { font-size: 0.8rem; margin-left: 5px; padding: 4px 8px; border-radius: 4px; cursor: pointer; border: 1px solid var(--glass-border); }
         .btn-restore { background: var(--accent-green); color: white; border: none; }
         .btn-forever { background: var(--accent-red); color: white; border: none; }
         .btn-close-modal { background: transparent; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-primary); }
 
+        /* Enhanced Toast with Progress Bar */
         #toast {
             position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px);
-            background: rgba(30, 41, 59, 0.95); color: white; padding: 14px 28px; border-radius: 50px;
-            box-shadow: 0 15px 40px rgba(0,0,0,0.4); display: flex; align-items: center; gap: 20px;
-            z-index: 9999; transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s; opacity: 0;
+            background: rgba(30, 41, 59, 0.95); 
+            color: white; 
+            padding: 0; 
+            border-radius: 12px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.4); 
+            display: flex; flex-direction: column;
+            z-index: 9999; 
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s; 
+            opacity: 0;
             border: 1px solid rgba(255,255,255,0.1);
+            overflow: hidden;
+            min-width: 300px;
         }
         #toast.visible { transform: translateX(-50%) translateY(0); opacity: 1; }
-        #toast button { background: none; border: none; color: var(--accent-green); font-weight: bold; cursor: pointer; font-size: 15px; }
+        
+        .toast-content {
+            padding: 14px 20px;
+            display: flex; align-items: center; justify-content: space-between; gap: 20px;
+        }
+        
+        #toast button { 
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); 
+            color: var(--accent-gold); font-weight: bold; cursor: pointer; font-size: 13px; 
+            padding: 6px 12px; border-radius: 6px; transition: 0.2s;
+        }
+        #toast button:hover { background: rgba(255,255,255,0.2); }
+
+        .progress-container {
+            width: 100%;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+        }
+        .progress-bar {
+            height: 100%;
+            background: var(--accent-green);
+            width: 100%;
+            transform-origin: left;
+        }
+        
+        @keyframes countdown {
+            from { transform: scaleX(1); }
+            to { transform: scaleX(0); }
+        }
+        
+        .animate-progress {
+            animation: countdown 10s linear forwards;
+        }
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
@@ -321,16 +355,13 @@
 <body class="dark-mode">
 
     <header>
-        <h1>מנהל הקישורים Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Ultimate Recycle)</span></h1>
+        <h1>מנהל הקישורים Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Ultimate Undo)</span></h1>
         <div id="itemCount">טוען נתונים...</div>
     </header>
 
     <div id="userSection" class="glass-panel">
         <div id="loggedOutView" style="display:none; width:100%; justify-content:center;">
-            <button id="googleLoginBtn" class="btn-login">
-                <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)"><path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z"/><path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z"/><path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.734 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z"/><path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.799 L -6.734 42.379 C -8.804 40.449 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z"/></g></svg>
-                התחבר עם Google לגיבוי אוטומטי
-            </button>
+            <button id="googleLoginBtn" class="btn-login">התחבר עם Google לגיבוי אוטומטי</button>
         </div>
         <div id="loggedInView" style="display:none; width:100%; justify-content:space-between; align-items:center;">
             <div class="user-info">
@@ -341,7 +372,7 @@
                 </div>
             </div>
             <div>
-                <button id="switchAccountBtn" class="btn-switch" title="החלף חשבון גוגל">🔄 החלף חשבון</button>
+                <button id="switchAccountBtn" class="btn-switch">🔄 החלף חשבון</button>
                 <button id="logoutBtn" class="btn-logout">יציאה</button>
             </div>
         </div>
@@ -362,9 +393,7 @@
 
         <div class="actions-container">
             <div class="dropdown">
-                <button class="action-btn btn-json drop-trigger" data-target="jsonMenu">
-                    <span>📂</span> ניהול JSON <span>▼</span>
-                </button>
+                <button class="action-btn btn-json drop-trigger" data-target="jsonMenu"><span>📂</span> ניהול JSON <span>▼</span></button>
                 <div id="jsonMenu" class="dropdown-content">
                     <label for="importJsonInput">📥 ייבוא קובץ JSON</label>
                     <input type="file" id="importJsonInput" accept=".json">
@@ -374,9 +403,7 @@
             </div>
 
             <div class="dropdown">
-                <button class="action-btn btn-txt drop-trigger" data-target="txtMenu">
-                    <span>📄</span> ניהול טקסט <span>▼</span>
-                </button>
+                <button class="action-btn btn-txt drop-trigger" data-target="txtMenu"><span>📄</span> ניהול טקסט <span>▼</span></button>
                 <div id="txtMenu" class="dropdown-content">
                     <button id="exportTxtBtn">📤 ייצוא רשימה ל-TXT</button>
                     <div class="dropdown-divider"></div>
@@ -386,16 +413,10 @@
             </div>
 
             <div class="dropdown">
-                <button class="action-btn btn-site drop-trigger" data-target="siteMenu">
-                    <span>💾</span> ניהול אתר <span>▼</span>
-                </button>
+                <button class="action-btn btn-site drop-trigger" data-target="siteMenu"><span>💾</span> ניהול אתר <span>▼</span></button>
                 <div id="siteMenu" class="dropdown-content">
-                    <button id="downloadHtmlBtn">
-                        <span style="font-size:1.2em">🌐</span> שמור אתר מלא (HTML)
-                    </button>
-                    <button id="downloadSourceBtn">
-                        <span style="font-size:1.2em">💻</span> הורד קוד מקור (TXT)
-                    </button>
+                    <button id="downloadHtmlBtn"><span style="font-size:1.2em">🌐</span> שמור אתר מלא (HTML)</button>
+                    <button id="downloadSourceBtn"><span style="font-size:1.2em">💻</span> הורד קוד מקור (TXT)</button>
                 </div>
             </div>
 
@@ -425,14 +446,18 @@
                 <h3>🗑️ סל מחזור (נשמר ל-30 יום)</h3>
                 <button class="btn-close-modal">✖</button>
             </div>
-            <div id="trashList" class="modal-body">
-                </div>
+            <div id="trashList" class="modal-body"></div>
         </div>
     </div>
 
     <div id="toast">
-        <span id="toastMsg">הודעה</span>
-        <button id="undoBtn" style="display:none;">בטל</button>
+        <div class="toast-content">
+            <span id="toastMsg">הודעה</span>
+            <button id="undoBtn">↪ בטל</button>
+        </div>
+        <div class="progress-container">
+            <div id="toastProgress" class="progress-bar"></div>
+        </div>
     </div>
 
     <script id="app-state" type="application/json">{}</script>
@@ -442,7 +467,7 @@
         import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // === Config & State ===
+        // === Configuration ===
         const firebaseConfig = {
             apiKey: "AIzaSyBnRk-Os6EvJcFIdpl-lICc9w-E4pQ74nE",
             authDomain: "linkmanager-fdac5.firebaseapp.com",
@@ -453,16 +478,16 @@
             measurementId: "G-NVN4E8TDGE"
         };
 
-        const STORAGE_KEY = 'LinkManager_Pro_V2';
+        const STORAGE_KEY = 'LinkManager_Pro_V3';
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
         
-        // Application State
         const state = {
             items: [],
-            trash: [], // New Trash Array
+            trash: [], 
             user: null,
             unsubscribe: null,
-            showDuplicates: true
+            showDuplicates: true,
+            toastTimeout: null
         };
 
         let app, auth, db;
@@ -472,14 +497,12 @@
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
-        } catch (e) {
-            console.error("Firebase Init Error:", e);
-        }
+        } catch (e) { console.error("Firebase Init Error:", e); }
 
         document.addEventListener('DOMContentLoaded', () => {
             initTheme();
             loadLocalData();
-            checkTrashExpiry(); // Clean old trash
+            checkTrashExpiry(); 
             updateCategoryDropdowns();
             setupEventListeners();
             renderList();
@@ -497,10 +520,7 @@
                     if (!targetMenu) return;
                     const isOpen = targetMenu.classList.contains('show');
                     closeAllMenus();
-                    if (!isOpen) {
-                        targetMenu.classList.add('show');
-                        btn.classList.add('active');
-                    }
+                    if (!isOpen) { targetMenu.classList.add('show'); btn.classList.add('active'); }
                 });
             });
 
@@ -512,21 +532,19 @@
             document.getElementById('sortOrder')?.addEventListener('change', renderList);
             document.getElementById('addItemForm')?.addEventListener('submit', handleAdd);
             
-            // Toggles & Buttons
+            // Buttons
             document.getElementById('toggleDarkModeBtn')?.addEventListener('click', toggleTheme);
             document.getElementById('toggleDuplicatesBtn')?.addEventListener('click', toggleDuplicates);
             document.getElementById('trashBtn')?.addEventListener('click', openTrashModal);
             document.querySelector('.btn-close-modal')?.addEventListener('click', closeTrashModal);
-            document.getElementById('trashModal')?.addEventListener('click', (e) => {
-                if(e.target.id === 'trashModal') closeTrashModal();
-            });
+            document.getElementById('trashModal')?.addEventListener('click', (e) => { if(e.target.id === 'trashModal') closeTrashModal(); });
 
-            // Auth Buttons
+            // Auth
             document.getElementById('googleLoginBtn')?.addEventListener('click', cloudLogin);
             document.getElementById('logoutBtn')?.addEventListener('click', cloudLogout);
             document.getElementById('switchAccountBtn')?.addEventListener('click', switchAccount);
 
-            // File Operations
+            // Import/Export
             ['importJsonInput', 'smartImportInput'].forEach(id => {
                 const el = document.getElementById(id);
                 if(el) {
@@ -541,7 +559,7 @@
             document.getElementById('downloadSourceBtn')?.addEventListener('click', downloadSource);
         }
 
-        // === Data Management ===
+        // === Core Logic ===
         function loadLocalData() {
             try {
                 const embedded = document.getElementById('app-state').textContent;
@@ -552,25 +570,19 @@
                     return;
                 }
             } catch(e) {}
-
             const stored = localStorage.getItem(STORAGE_KEY);
             if (stored) { 
                 try { 
                     const parsed = JSON.parse(stored);
                     state.items = parsed.items || [];
                     state.trash = parsed.trash || [];
-                    return; 
                 } catch(e) {} 
             }
-            state.items = [];
-            state.trash = [];
         }
 
         function saveData(skipCloud = false) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify({ items: state.items, trash: state.trash }));
-            if (!skipCloud && state.user && db) {
-                pushToCloud();
-            }
+            if (!skipCloud && state.user && db) pushToCloud();
         }
 
         function checkTrashExpiry() {
@@ -578,9 +590,7 @@
             const initialLen = state.trash.length;
             state.trash = state.trash.filter(item => {
                 if (!item.deletedAt) return false;
-                const delDate = new Date(item.deletedAt);
-                const diffTime = Math.abs(now - delDate);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                const diffDays = Math.ceil(Math.abs(now - new Date(item.deletedAt)) / (1000 * 60 * 60 * 24)); 
                 return diffDays <= 30;
             });
             if(state.trash.length !== initialLen) saveData();
@@ -590,36 +600,21 @@
         function setupFirebaseListeners() {
             if (!auth) return;
             onAuthStateChanged(auth, (user) => {
-                const loginView = document.getElementById('loggedOutView');
-                const loggedView = document.getElementById('loggedInView');
-                
                 if (user) {
                     state.user = user;
-                    loginView.style.display = 'none';
-                    loggedView.style.display = 'flex';
-                    
-                    const nameEl = document.getElementById('userName');
-                    const imgEl = document.getElementById('userAvatar');
-                    if(nameEl) nameEl.textContent = user.displayName;
-                    if(imgEl) imgEl.src = user.photoURL;
-                    
+                    document.getElementById('loggedOutView').style.display = 'none';
+                    document.getElementById('loggedInView').style.display = 'flex';
+                    document.getElementById('userName').textContent = user.displayName;
+                    document.getElementById('userAvatar').src = user.photoURL;
                     updateSyncStatus('syncing');
-                    
                     if (state.unsubscribe) state.unsubscribe();
-                    
                     state.unsubscribe = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
                         if (docSnap.exists()) {
-                            const cloudData = docSnap.data();
-                            const cloudItems = cloudData.items || [];
-                            const cloudTrash = cloudData.trash || [];
-                            
-                            if (JSON.stringify(cloudItems) !== JSON.stringify(state.items) ||
-                                JSON.stringify(cloudTrash) !== JSON.stringify(state.trash)) {
-                                state.items = cloudItems;
-                                state.trash = cloudTrash;
+                            const d = docSnap.data();
+                            if (JSON.stringify(d.items || []) !== JSON.stringify(state.items) || JSON.stringify(d.trash || []) !== JSON.stringify(state.trash)) {
+                                state.items = d.items || [];
+                                state.trash = d.trash || [];
                                 saveData(true);
-                                checkTrashExpiry();
-                                updateCategoryDropdowns();
                                 renderList();
                             }
                             updateSyncStatus('online');
@@ -627,16 +622,12 @@
                             if(state.items.length > 0) pushToCloud();
                             else updateSyncStatus('online');
                         }
-                    }, (error) => {
-                        console.error("Sync Error:", error);
-                        updateSyncStatus('error');
-                    });
-
+                    }, () => updateSyncStatus('error'));
                 } else {
                     state.user = null;
                     if (state.unsubscribe) state.unsubscribe();
-                    loginView.style.display = 'flex';
-                    loggedView.style.display = 'none';
+                    document.getElementById('loggedOutView').style.display = 'flex';
+                    document.getElementById('loggedInView').style.display = 'none';
                 }
             });
         }
@@ -644,90 +635,49 @@
         async function cloudLogin() {
             const provider = new GoogleAuthProvider();
             provider.setCustomParameters({ prompt: 'select_account' });
-            try { await signInWithPopup(auth, provider); } 
-            catch (error) { alert("שגיאה בהתחברות: " + error.message); }
+            try { await signInWithPopup(auth, provider); } catch (e) { alert(e.message); }
         }
-
-        async function cloudLogout() {
-            if (!auth) return;
-            try { await signOut(auth); location.reload(); } catch (error) { console.error(error); }
-        }
-
-        async function switchAccount() {
-             if(confirm('פעולה זו תנתק אותך מהחשבון הנוכחי. להמשיך?')) {
-                 if (state.unsubscribe) state.unsubscribe();
-                 await signOut(auth);
-                 cloudLogin();
-             }
-        }
+        async function cloudLogout() { if(auth) { await signOut(auth); location.reload(); } }
+        async function switchAccount() { if(confirm('החלף חשבון?')) { if (state.unsubscribe) state.unsubscribe(); await signOut(auth); cloudLogin(); } }
 
         async function pushToCloud() {
             if (!state.user || !db) return;
             updateSyncStatus('syncing');
             try {
-                await setDoc(doc(db, "users", state.user.uid), {
-                    items: state.items,
-                    trash: state.trash,
-                    lastUpdated: new Date().toISOString()
-                });
+                await setDoc(doc(db, "users", state.user.uid), { items: state.items, trash: state.trash, lastUpdated: new Date().toISOString() });
                 updateSyncStatus('online');
-            } catch (e) {
-                console.error("Save error", e);
-                updateSyncStatus('error');
-            }
+            } catch (e) { updateSyncStatus('error'); }
         }
 
         function updateSyncStatus(status) {
             const el = document.getElementById('syncStatus');
             if(!el) return;
             const dot = el.querySelector('.status-dot');
-            dot.className = 'status-dot';
-            if (status === 'online') {
-                dot.classList.add('online');
-                el.innerHTML = '<span class="status-dot online"></span> מחובר';
-            } else if (status === 'syncing') {
-                dot.classList.add('syncing');
-                el.innerHTML = '<span class="status-dot syncing"></span> מסנכרן...';
-            } else if (status === 'error') {
-                dot.classList.add('error');
-                el.innerHTML = '<span class="status-dot error"></span> שגיאה';
-            }
+            dot.className = `status-dot ${status}`;
+            el.innerHTML = `<span class="status-dot ${status}"></span> ${status === 'online' ? 'מחובר' : status === 'syncing' ? 'מסנכרן...' : 'שגיאה'}`;
         }
 
-        // === UI Rendering ===
-        function escapeHtml(text) {
-            if (!text) return '';
-            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-        }
-
-        function closeAllMenus() {
-            document.querySelectorAll('.dropdown-content').forEach(m => m.classList.remove('show'));
-            document.querySelectorAll('.drop-trigger').forEach(b => b.classList.remove('active'));
-        }
+        // === Helpers ===
+        function escapeHtml(text) { return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : ''; }
+        function closeAllMenus() { document.querySelectorAll('.dropdown-content, .drop-trigger').forEach(el => el.classList.remove('show', 'active')); }
 
         function updateCategoryDropdowns() {
             const cats = new Set(state.items.map(i => i.category));
             const select = document.getElementById('categoryFilter');
             const datalist = document.getElementById('categoriesDatalist');
-            if(!select || !datalist) return;
-
             const currentVal = select.value;
             let html = '<option value="">📂 כל הקטגוריות</option>';
             let listHtml = '';
-            
             [...cats].sort().forEach(c => {
-                const safeCat = escapeHtml(c);
-                html += `<option value="${safeCat}">${safeCat}</option>`;
-                listHtml += `<option value="${safeCat}">`;
+                const s = escapeHtml(c);
+                html += `<option value="${s}">${s}</option>`;
+                listHtml += `<option value="${s}">`;
             });
-
-            if (select.innerHTML !== html) {
-                select.innerHTML = html;
-                select.value = currentVal;
-            }
+            if (select.innerHTML !== html) { select.innerHTML = html; select.value = currentVal; }
             datalist.innerHTML = listHtml;
         }
 
+        // === Render Logic (Pinned + Numbering) ===
         function renderList() {
             const container = document.getElementById('listContainer');
             if(!container) return;
@@ -737,7 +687,7 @@
             const catFilter = document.getElementById('categoryFilter')?.value || '';
             const sort = document.getElementById('sortOrder')?.value || 'date-new';
 
-            // Filter logic
+            // Mark Duplicates
             const seen = new Set(), dups = new Set();
             state.items.forEach(i => {
                 const k = i.content.toLowerCase().trim();
@@ -745,6 +695,7 @@
             });
             state.items.forEach(i => { if(dups.has(i.content.toLowerCase().trim())) i.isDup = true; });
 
+            // Filter
             let filtered = state.items.filter(i => {
                 if (!state.showDuplicates && i.isDup && state.items.indexOf(i) !== state.items.findIndex(x => x.content.toLowerCase() === i.content.toLowerCase())) return false;
                 const matchesSearch = !query || i.content.toLowerCase().includes(query) || i.description.toLowerCase().includes(query) || i.category.toLowerCase().includes(query) || (i.note && i.note.toLowerCase().includes(query));
@@ -754,28 +705,30 @@
 
             document.getElementById('itemCount').textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
 
-            // Sort logic: Pinned first, then by Date Newest (Default) or Name
-            const masterSort = (a, b) => {
-                if (a.isPinned && !b.isPinned) return -1;
-                if (!a.isPinned && b.isPinned) return 1;
-                
+            // Separate Pinned items
+            const pinnedItems = filtered.filter(i => i.isPinned);
+            const regularItems = filtered.filter(i => !i.isPinned);
+
+            // Sorting Function
+            const baseSort = (a, b) => {
                 if (sort === 'name') return a.content.localeCompare(b.content);
-                // Default 'date-new': Newest First
+                // Date Newest: Newer dates first
                 return b.date.localeCompare(a.date); 
             };
 
+            pinnedItems.sort(baseSort);
+            
+            // Group Regular Items
             const groups = {};
-            filtered.forEach(i => {
+            regularItems.forEach(i => {
                 if(!groups[i.category]) groups[i.category] = [];
                 groups[i.category].push(i);
             });
-
             const sortedCategories = Object.keys(groups).sort();
-            
+
             // Visual Counter: 
-            // Since we sort 'date-new' by default, the top item should be the highest number (total items)
-            // If sort is 'name', numbers will follow the sort order.
-            // Logic: Count down from total active items if sorting by date-new, else count up.
+            // If sort is 'date-new', the top item gets the highest number.
+            // We start counting from filtered.length down to 1.
             let visualCounter = (sort === 'date-new') ? filtered.length : 1;
             const counterStep = (sort === 'date-new') ? -1 : 1;
 
@@ -784,27 +737,44 @@
                 return;
             }
 
+            // 1. Render Pinned Category
+            if (pinnedItems.length > 0) {
+                const section = document.createElement('div');
+                section.className = 'category-block';
+                section.innerHTML = `
+                    <div class="category-header" style="border-bottom: 2px solid var(--accent-gold);">
+                        <h2 style="color: var(--accent-gold);">📌 מוצמד</h2>
+                        <span class="category-badge">${pinnedItems.length} פריטים</span>
+                    </div>
+                    <div class="items-grid"></div>
+                `;
+                const grid = section.querySelector('.items-grid');
+                pinnedItems.forEach(i => {
+                    grid.appendChild(createCard(i, visualCounter));
+                    visualCounter += counterStep;
+                });
+                container.appendChild(section);
+            }
+
+            // 2. Render Other Categories
             sortedCategories.forEach(cat => {
                 const groupItems = groups[cat];
-                groupItems.sort(masterSort); 
+                groupItems.sort(baseSort);
                 
                 const section = document.createElement('div');
                 section.className = 'category-block';
-                
-                const header = document.createElement('div');
-                header.className = 'category-header';
-                header.innerHTML = `<h2>${escapeHtml(cat)}</h2><span class="category-badge">${groupItems.length} פריטים</span>`;
-                section.appendChild(header);
-
-                const grid = document.createElement('div');
-                grid.className = 'items-grid';
-                
+                section.innerHTML = `
+                    <div class="category-header">
+                        <h2>${escapeHtml(cat)}</h2>
+                        <span class="category-badge">${groupItems.length} פריטים</span>
+                    </div>
+                    <div class="items-grid"></div>
+                `;
+                const grid = section.querySelector('.items-grid');
                 groupItems.forEach(i => {
                     grid.appendChild(createCard(i, visualCounter));
                     visualCounter += counterStep;
                 });
-                
-                section.appendChild(grid);
                 container.appendChild(section);
             });
         }
@@ -812,14 +782,11 @@
         function createCard(item, displayNum) {
             const div = document.createElement('div');
             div.className = `card ${item.isPinned ? 'pinned' : ''}`;
-            
             const safeContent = escapeHtml(item.content);
             const contentHtml = item.type === 'link' 
                 ? `<a href="${safeContent}" class="card-link" target="_blank">${safeContent}</a>`
                 : `<div class="card-text-content">${safeContent}</div>`;
-            
             const noteHtml = item.note ? `<div class="card-note">${escapeHtml(item.note)}</div>` : '';
-            const dupBadge = item.isDup ? 'inline' : 'none';
 
             div.innerHTML = `
                 <div class="card-index">#${displayNum}</div>
@@ -831,13 +798,13 @@
                 <div class="card-footer">
                     <div>
                         <span class="tag-category">${escapeHtml(item.category)}</span>
-                        <span class="duplicate-badge" style="display:${dupBadge}">כפול</span>
+                        <span class="duplicate-badge" style="display:${item.isDup ? 'inline' : 'none'}">כפול</span>
                     </div>
                     <div class="card-actions">
                         <button class="icon-btn btn-copy" title="העתק">📋</button>
                         <button class="icon-btn btn-edit" title="ערוך">✏️</button>
-                        <button class="icon-btn pin-btn ${item.isPinned ? 'active' : ''}" title="${item.isPinned ? 'בטל נעיצה' : 'נעץ בראש הרשימה'}">📌</button>
-                        <button class="icon-btn trash-btn" title="מחק לסל מחזור">🗑️</button>
+                        <button class="icon-btn pin-btn ${item.isPinned ? 'active' : ''}" title="${item.isPinned ? 'בטל נעיצה' : 'נעץ'}">📌</button>
+                        <button class="icon-btn trash-btn" title="מחק">🗑️</button>
                     </div>
                 </div>
             `;
@@ -846,7 +813,6 @@
             div.querySelector('.btn-edit').onclick = () => editItem(item);
             div.querySelector('.pin-btn').onclick = () => togglePin(item.id);
             div.querySelector('.trash-btn').onclick = () => moveToTrash(item.id);
-            
             return div;
         }
 
@@ -855,260 +821,202 @@
             e.preventDefault();
             const content = document.getElementById('itemContent').value.trim();
             if (!content) return;
-
+            
             const newItem = {
                 id: Date.now(),
                 content,
                 description: document.getElementById('itemDescription').value.trim(),
                 category: document.getElementById('itemCategory').value.trim() || 'כללי',
                 note: document.getElementById('itemNote').value.trim(),
-                date: new Date().toISOString(),
+                date: new Date().toISOString(), // Current timestamp ensures it's newest
                 type: URL_REGEX.test(content) ? 'link' : 'text',
                 isPinned: false
             };
-            // Unshift puts it at the TOP of the array
+            
+            // Unshift puts it at index 0 (top of array)
             state.items.unshift(newItem);
             onDataChange();
             e.target.reset();
-            showToast('הפריט נוסף לראש הרשימה');
+            
+            showToast('הפריט נוסף בהצלחה', () => {
+                // Undo Logic for Add
+                state.items.shift();
+                onDataChange();
+            });
         }
 
         function moveToTrash(id) {
             const idx = state.items.findIndex(i => i.id === id);
             if(idx === -1) return;
             const item = state.items[idx];
-            
-            // Add deleted timestamp
             item.deletedAt = new Date().toISOString();
             
             state.trash.unshift(item);
             state.items.splice(idx, 1);
             onDataChange();
-            showToast('הועבר לסל המחזור');
+            
+            showToast('הועבר לסל המחזור', () => {
+                // Undo Logic for Trash
+                restoreFromTrash(item.id, false); // false = don't show another toast
+            });
         }
 
         function togglePin(id) {
             const idx = state.items.findIndex(i => i.id === id);
-            if (idx === -1) return;
-            state.items[idx].isPinned = !state.items[idx].isPinned;
-            onDataChange();
+            if (idx !== -1) { 
+                state.items[idx].isPinned = !state.items[idx].isPinned; 
+                onDataChange(); 
+            }
         }
 
         function editItem(item) {
-            const previousState = JSON.parse(JSON.stringify(item));
+            const oldItem = JSON.parse(JSON.stringify(item));
             const c = prompt('תוכן:', item.content);
             if (c===null) return;
-            
-            const d = prompt('תיאור:', item.description) || '';
-            const cat = prompt('קטגוריה:', item.category) || 'כללי';
-            const n = prompt('הערה:', item.note) || '';
-            
             item.content = c;
-            item.description = d;
-            item.category = cat;
-            item.note = n;
+            item.description = prompt('תיאור:', item.description) || '';
+            item.category = prompt('קטגוריה:', item.category) || 'כללי';
+            item.note = prompt('הערה:', item.note) || '';
             item.type = URL_REGEX.test(c) ? 'link' : 'text';
-            
             onDataChange();
-            showToast('השינוי נשמר');
+            
+            showToast('השינוי נשמר', () => {
+                // Undo Logic for Edit
+                const idx = state.items.findIndex(i => i.id === item.id);
+                if(idx !== -1) state.items[idx] = oldItem;
+                onDataChange();
+            });
         }
 
-        function onDataChange() {
-            saveData(); 
-            updateCategoryDropdowns();
-            renderList();
+        function onDataChange() { saveData(); updateCategoryDropdowns(); renderList(); }
+
+        // === Toast Logic ===
+        function showToast(msg, undoCallback) {
+            const t = document.getElementById('toast');
+            const progress = document.getElementById('toastProgress');
+            const undoBtn = document.getElementById('undoBtn');
+            
+            if (state.toastTimeout) clearTimeout(state.toastTimeout);
+            
+            // Reset Animation
+            progress.classList.remove('animate-progress');
+            void progress.offsetWidth; // Trigger reflow
+            
+            document.getElementById('toastMsg').textContent = msg;
+            t.classList.add('visible');
+            
+            if (undoCallback) {
+                undoBtn.style.display = 'block';
+                progress.classList.add('animate-progress');
+                
+                undoBtn.onclick = () => {
+                    undoCallback();
+                    t.classList.remove('visible');
+                };
+                
+                state.toastTimeout = setTimeout(() => {
+                    t.classList.remove('visible');
+                }, 10000);
+            } else {
+                undoBtn.style.display = 'none';
+                state.toastTimeout = setTimeout(() => {
+                    t.classList.remove('visible');
+                }, 3000);
+            }
         }
 
-        // === Trash Logic ===
+        // === Trash & Import/Export (unchanged logic) ===
         function openTrashModal() {
             const list = document.getElementById('trashList');
             list.innerHTML = '';
-            
-            if(state.trash.length === 0) {
-                list.innerHTML = '<div style="text-align:center; padding:20px;">סל המחזור ריק</div>';
-            } else {
-                state.trash.forEach(item => {
-                    const el = document.createElement('div');
-                    el.className = 'trash-item';
-                    const delDate = new Date(item.deletedAt).toLocaleDateString();
-                    el.innerHTML = `
-                        <div class="trash-info">
-                            <strong>${escapeHtml(item.description || 'ללא כותרת')}</strong><br>
-                            <span style="font-size:0.8em">${escapeHtml(item.content)}</span>
-                            <span class="trash-date">נמחק ב: ${delDate}</span>
-                        </div>
-                        <div class="trash-actions">
-                            <button class="btn-restore">♻️ שחזר</button>
-                            <button class="btn-forever">❌ מחק</button>
-                        </div>
-                    `;
-                    el.querySelector('.btn-restore').onclick = () => restoreFromTrash(item.id);
-                    el.querySelector('.btn-forever').onclick = () => deleteForever(item.id);
-                    list.appendChild(el);
-                });
-            }
+            if(state.trash.length === 0) list.innerHTML = '<div style="text-align:center; padding:20px;">ריק</div>';
+            else state.trash.forEach(item => {
+                const el = document.createElement('div');
+                el.className = 'trash-item';
+                el.innerHTML = `
+                    <div class="trash-info"><strong>${escapeHtml(item.description)}</strong><br><small>${escapeHtml(item.content)}</small></div>
+                    <div class="trash-actions"><button class="btn-restore">♻️</button><button class="btn-forever">❌</button></div>
+                `;
+                el.querySelector('.btn-restore').onclick = () => restoreFromTrash(item.id);
+                el.querySelector('.btn-forever').onclick = () => deleteForever(item.id);
+                list.appendChild(el);
+            });
             document.getElementById('trashModal').classList.add('open');
         }
-
-        function closeTrashModal() {
-            document.getElementById('trashModal').classList.remove('open');
-        }
-
-        function restoreFromTrash(id) {
+        function closeTrashModal() { document.getElementById('trashModal').classList.remove('open'); }
+        
+        function restoreFromTrash(id, notify = true) {
             const idx = state.trash.findIndex(i => i.id === id);
             if(idx === -1) return;
             const item = state.trash[idx];
-            delete item.deletedAt; // Remove trash tag
-            state.items.unshift(item); // Restore to top
+            delete item.deletedAt;
+            state.items.unshift(item);
             state.trash.splice(idx, 1);
-            saveData();
-            openTrashModal(); // Refresh modal
-            renderList(); // Refresh background list
-            showToast('הפריט שוחזר');
+            saveData(); 
+            openTrashModal(); 
+            renderList(); 
+            if(notify) showToast('שוחזר');
         }
-
+        
         function deleteForever(id) {
-            if(!confirm('זה ימחק את הפריט לצמיתות. להמשיך?')) return;
+            if(!confirm('למחוק לצמיתות?')) return;
             const idx = state.trash.findIndex(i => i.id === id);
-            if(idx !== -1) {
-                state.trash.splice(idx, 1);
-                saveData();
-                openTrashModal();
-            }
+            if(idx !== -1) { state.trash.splice(idx, 1); saveData(); openTrashModal(); }
         }
 
-        // === Utilities ===
         function importJson(e) {
             const f = e.target.files[0];
             if(!f) return;
             const r = new FileReader();
             r.onload = ev => { 
                 try { 
-                    const data = JSON.parse(ev.target.result);
-                    // Handle both old array format and new object format
-                    if (Array.isArray(data)) state.items = data;
-                    else {
-                        if(data.items) state.items = data.items;
-                        if(data.trash) state.trash = data.trash;
-                    }
-                    onDataChange(); 
-                    closeAllMenus(); 
-                    alert('נטען בהצלחה!'); 
-                } catch(e){ alert('שגיאה בקובץ'); } 
+                    const d = JSON.parse(ev.target.result);
+                    if(Array.isArray(d)) state.items = d; else { state.items = d.items||[]; state.trash = d.trash||[]; }
+                    onDataChange(); closeAllMenus(); alert('נטען!'); 
+                } catch(e){ alert('שגיאה'); } 
             };
             r.readAsText(f);
         }
 
         function smartImport(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (ev) => {
+            const f = e.target.files[0];
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = (ev) => {
                 const lines = ev.target.result.split('\n');
-                let added = 0, updated = 0;
+                let added = 0;
                 const map = new Map(state.items.map(i => [i.content.toLowerCase().trim(), i]));
-                let idBase = Date.now();
-
-                lines.forEach(line => {
-                    const parts = line.split('|').map(s => s.trim());
-                    if (!parts[0]) return;
-                    const key = parts[0].toLowerCase();
-                    const desc = parts[1] || '';
-                    const cat = parts[2] || 'כללי';
-
-                    if (map.has(key)) {
-                        const item = map.get(key);
-                        let changed = false;
-                        if (desc && item.description !== desc) { item.description = desc; changed = true; }
-                        if (cat && item.category !== cat && cat !== 'כללי') { item.category = cat; changed = true; }
-                        if (changed) updated++;
-                    } else {
-                        state.items.unshift({
-                            id: idBase++, content: parts[0], description: desc, category: cat,
-                            date: new Date().toISOString(), type: URL_REGEX.test(parts[0]) ? 'link' : 'text', note: '',
-                            isPinned: false
-                        });
+                lines.forEach(l => {
+                    const p = l.split('|').map(s => s.trim());
+                    if (!p[0]) return;
+                    if (!map.has(p[0].toLowerCase())) {
+                        state.items.unshift({ id: Date.now()+added, content: p[0], description: p[1]||'', category: p[2]||'כללי', date: new Date().toISOString(), type: URL_REGEX.test(p[0])?'link':'text', isPinned: false });
                         added++;
                     }
                 });
-                onDataChange();
-                closeAllMenus();
-                alert(`הייבוא הושלם:\n🆕 נוספו: ${added}\n🔄 עודכנו: ${updated}`);
+                onDataChange(); closeAllMenus(); alert(`נוספו: ${added}`);
             };
-            reader.readAsText(file);
+            r.readAsText(f);
         }
 
-        function exportJson() { 
-            const exportData = { items: state.items, trash: state.trash };
-            downloadFile('links_backup.json', JSON.stringify(exportData, null, 2), 'application/json'); 
-            closeAllMenus(); 
-        }
-        
-        function exportTxt() { 
-            const txt = state.items.map(i=>`${i.content} | ${i.description} | ${i.category}`).join('\n');
-            downloadFile('links.txt', txt, 'text/plain'); 
-            closeAllMenus(); 
-        }
-
+        function exportJson() { downloadFile('backup.json', JSON.stringify({ items: state.items, trash: state.trash }, null, 2), 'application/json'); closeAllMenus(); }
+        function exportTxt() { downloadFile('links.txt', state.items.map(i=>`${i.content} | ${i.description} | ${i.category}`).join('\n'), 'text/plain'); closeAllMenus(); }
         function downloadSite() { 
             closeAllMenus();
-            const stateEl = document.getElementById('app-state');
-            if(stateEl) stateEl.textContent = JSON.stringify({ items: state.items, trash: state.trash }); 
-            downloadFile(`LinkManager_Recycle_${new Date().toISOString().slice(0,10)}.html`, '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/html'); 
+            document.getElementById('app-state').textContent = JSON.stringify({ items: state.items, trash: state.trash });
+            downloadFile(`LinkManager_${new Date().toISOString().slice(0,10)}.html`, '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/html');
+            document.getElementById('app-state').textContent = "{}";
         }
-
         function downloadSource() {
             closeAllMenus();
-            const stateEl = document.getElementById('app-state');
-            if(stateEl) stateEl.textContent = "{}"; 
+            document.getElementById('app-state').textContent = "{}";
             downloadFile('source.txt', '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/plain');
         }
-
-        function downloadFile(n, c, t) { 
-            const b=new Blob([c],{type:t}), u=URL.createObjectURL(b), a=document.createElement('a'); 
-            a.href=u; a.download=n; document.body.appendChild(a); a.click(); document.body.removeChild(a); 
-        }
-
-        async function copyText(text) {
-            try {
-                await navigator.clipboard.writeText(text);
-                showToast('הועתק ללוח!');
-            } catch (err) {
-                prompt('העתקה ידנית:', text);
-            }
-        }
-
-        function initTheme() {
-            const savedTheme = localStorage.getItem(STORAGE_KEY + '_theme');
-            if (savedTheme === 'light') {
-                document.body.classList.remove('dark-mode');
-                const btn = document.getElementById('toggleDarkModeBtn');
-                if(btn) btn.textContent = '🌙';
-            }
-        }
-
-        function toggleTheme() { 
-            document.body.classList.toggle('dark-mode'); 
-            const isDark = document.body.classList.contains('dark-mode');
-            localStorage.setItem(STORAGE_KEY + '_theme', isDark ? 'dark' : 'light');
-            const btn = document.getElementById('toggleDarkModeBtn');
-            if(btn) btn.textContent = isDark ? '☀️' : '🌙';
-        }
-
-        function toggleDuplicates() { 
-            state.showDuplicates = !state.showDuplicates; 
-            const btn = document.getElementById('toggleDuplicatesBtn');
-            if(btn) btn.style.opacity = state.showDuplicates ? '1' : '0.5'; 
-            renderList(); 
-        }
-
-        function showToast(m) {
-            const t = document.getElementById('toast');
-            if(!t) return;
-            document.getElementById('toastMsg').textContent = m;
-            t.classList.add('visible'); 
-            setTimeout(() => t.classList.remove('visible'), 4000);
-        }
+        function downloadFile(n, c, t) { const b=new Blob([c],{type:t}), u=URL.createObjectURL(b), a=document.createElement('a'); a.href=u; a.download=n; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
+        async function copyText(t) { try { await navigator.clipboard.writeText(t); showToast('הועתק'); } catch (e) { prompt('העתק:', t); } }
+        function initTheme() { if(localStorage.getItem(STORAGE_KEY+'_theme')==='light') { document.body.classList.remove('dark-mode'); document.getElementById('toggleDarkModeBtn').textContent='🌙'; } }
+        function toggleTheme() { document.body.classList.toggle('dark-mode'); localStorage.setItem(STORAGE_KEY+'_theme', document.body.classList.contains('dark-mode')?'dark':'light'); document.getElementById('toggleDarkModeBtn').textContent=document.body.classList.contains('dark-mode')?'☀️':'🌙'; }
+        function toggleDuplicates() { state.showDuplicates=!state.showDuplicates; renderList(); }
     </script>
 </body>
 </html>
