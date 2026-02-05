@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Link Manager Pro - Fixed Categories</title>
+    <title>Link Manager Pro - Clean Start</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
@@ -340,7 +340,7 @@
 <body class="dark-mode">
 
     <header>
-        <h1>Link Manager Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Ultimate V6)</span></h1>
+        <h1>Link Manager Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Clean Start)</span></h1>
         <div id="itemCount">טוען נתונים...</div>
     </header>
 
@@ -452,6 +452,7 @@
         import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+        // === Configuration ===
         const firebaseConfig = {
             apiKey: "AIzaSyBnRk-Os6EvJcFIdpl-lICc9w-E4pQ74nE",
             authDomain: "linkmanager-fdac5.firebaseapp.com",
@@ -462,7 +463,7 @@
             measurementId: "G-NVN4E8TDGE"
         };
 
-        const STORAGE_KEY = 'LinkManager_Pro_V6';
+        const STORAGE_KEY = 'LinkManager_Pro_V7';
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
         
         const state = {
@@ -476,6 +477,7 @@
 
         let app, auth, db;
 
+        // === Initialization ===
         try {
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
@@ -492,6 +494,7 @@
             setupFirebaseListeners();
         });
 
+        // === Event Listeners ===
         function setupEventListeners() {
             document.querySelectorAll('.drop-trigger').forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -535,6 +538,7 @@
             document.getElementById('downloadSourceBtn')?.addEventListener('click', downloadSource);
         }
 
+        // === Core Logic ===
         function loadLocalData() {
             try {
                 const embedded = document.getElementById('app-state').textContent;
@@ -571,6 +575,7 @@
             if(state.trash.length !== initialLen) saveData();
         }
 
+        // === Firebase ===
         function setupFirebaseListeners() {
             if (!auth) return;
             onAuthStateChanged(auth, (user) => {
@@ -589,13 +594,21 @@
                                 state.items = d.items || [];
                                 state.trash = d.trash || [];
                                 saveData(true);
-                                updateCategoryDropdowns(); // FORCE UPDATE ON CLOUD SYNC
+                                updateCategoryDropdowns(); 
                                 renderList();
                             }
                             updateSyncStatus('online');
                         } else {
-                            if(state.items.length > 0) pushToCloud();
-                            else updateSyncStatus('online');
+                            // NEW USER LOGIC: FORCE EMPTY STATE
+                            // This prevents pushing local test data to a new user
+                            state.items = [];
+                            state.trash = [];
+                            saveData(true); // Wipe local
+                            pushToCloud();  // Init cloud with empty
+                            renderList();
+                            updateCategoryDropdowns();
+                            updateSyncStatus('online');
+                            showToast("חשבון חדש נוצר בהצלחה!");
                         }
                     }, () => updateSyncStatus('error'));
                 } else {
@@ -632,10 +645,10 @@
             el.innerHTML = `<span class="status-dot ${status}"></span> ${status === 'online' ? 'מחובר' : status === 'syncing' ? 'מסנכרן...' : 'שגיאה'}`;
         }
 
+        // === Helpers ===
         function escapeHtml(text) { return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : ''; }
         function closeAllMenus() { document.querySelectorAll('.dropdown-content, .drop-trigger').forEach(el => el.classList.remove('show', 'active')); }
 
-        // === FIXED CATEGORY UPDATE ===
         function updateCategoryDropdowns() {
             const cats = new Set(state.items.map(i => i.category));
             const select = document.getElementById('categoryFilter');
@@ -643,9 +656,7 @@
             
             if(!select || !datalist) return;
 
-            // Preserve current selection if possible
             const currentVal = select.value;
-            
             let html = '<option value="">📂 כל הקטגוריות</option>';
             let listHtml = '';
             
@@ -655,15 +666,14 @@
                 listHtml += `<option value="${s}">`;
             });
 
-            // FORCE UPDATE every time
             select.innerHTML = html;
             datalist.innerHTML = listHtml;
             
-            // Restore selection
             if(currentVal && cats.has(currentVal)) select.value = currentVal;
             else select.value = "";
         }
 
+        // === Render Logic ===
         function renderList() {
             const container = document.getElementById('listContainer');
             if(!container) return;
