@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>מנהל הקישורים Pro - Ultimate Stable</title>
+    <title>Link Manager Pro - Ultimate Recycle</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
@@ -73,6 +73,7 @@
             border: 1px solid var(--glass-border); font-weight: 600;
         }
 
+        /* User Section & Auth */
         #userSection {
             padding: 12px; margin-bottom: 20px;
             display: flex; justify-content: space-between; align-items: center;
@@ -96,8 +97,8 @@
             color: var(--text-primary); 
             padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; margin-left: 5px; transition: 0.2s;
         }
-        .btn-switch:hover, .btn-logout:hover { background: rgba(127,127,127,0.2); }
 
+        /* Controls */
         #controlsArea {
             padding: 16px; margin-bottom: 25px;
             display: flex; flex-direction: column; gap: 14px;
@@ -139,6 +140,7 @@
         .btn-json { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
         .btn-txt { background: linear-gradient(135deg, #06b6d4, #0891b2); }
         .btn-site { background: linear-gradient(135deg, #6366f1, #4f46e5); } 
+        .btn-trash-view { background: linear-gradient(135deg, #64748b, #475569); }
         .btn-toggle { 
             background: rgba(127,127,127,0.1); 
             color: var(--text-primary); 
@@ -164,6 +166,7 @@
         .dropdown-content button:hover { background-color: rgba(127,127,127,0.1); color: var(--primary-color); }
         .dropdown-divider { border-top: 1px solid var(--glass-border); margin: 6px 0; }
 
+        /* Add Item Form */
         details { margin-bottom: 25px; transition: 0.3s; }
         summary { 
             padding: 16px; cursor: pointer; font-weight: 700; 
@@ -187,6 +190,7 @@
             box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
         }
 
+        /* List & Cards */
         .category-block { margin-bottom: 35px; }
         .category-header {
             display: flex; align-items: center; justify-content: space-between;
@@ -212,15 +216,12 @@
             transition: box-shadow 0.2s, transform 0.1s;
             box-shadow: var(--glass-shadow);
         }
-        
-        .card:hover { 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
-            transform: translateY(-2px); 
-        }
+        .card:hover { box-shadow: 0 10px 30px rgba(0,0,0,0.15); transform: translateY(-2px); }
         
         .card.pinned {
             border: 2px solid var(--accent-gold);
             background: rgba(255, 255, 0, 0.05);
+            order: -1 !important; /* Force to top visually if flex/grid allows, but we sort in JS */
         }
         
         .card-index {
@@ -271,35 +272,38 @@
             color: var(--text-secondary); transition: all 0.2s;
         }
         .icon-btn:hover { color: var(--primary-color); background: rgba(127,127,127,0.1); }
-        .pin-btn.active { color: var(--accent-gold); transform: rotate(45deg); }
-
-        .card-menu-dropdown {
-            display: none; 
-            position: absolute;
-            right: 0; bottom: 40px; 
-            background: var(--glass-bg);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2); 
-            z-index: 100;
-            border-radius: 8px; 
-            min-width: 140px;
-            padding: 5px;
-        }
-        .card-menu-dropdown.show { display: block; }
-        
-        .card-menu-dropdown button {
-            display: flex; align-items: center; gap: 8px;
-            width: 100%; text-align: right; padding: 10px;
-            background: none; border: none; cursor: pointer; 
-            color: var(--accent-red); font-weight: 600; font-size: 0.9rem;
-            transition: background 0.2s;
-            border-radius: 4px;
-        }
-        .card-menu-dropdown button:hover { background: rgba(239, 68, 68, 0.1); }
+        .pin-btn.active { color: var(--accent-gold); transform: rotate(45deg); opacity: 1; }
+        .trash-btn:hover { color: var(--accent-red); background: rgba(239, 68, 68, 0.1); }
 
         .duplicate-badge { color: var(--accent-red); font-weight: bold; font-size: 12px; display: none; margin-left: 5px; background: rgba(239,68,68,0.1); padding: 2px 6px; border-radius: 4px; }
         input[type="file"] { display: none; }
+
+        /* Trash Modal */
+        #trashModal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 3000; display: none;
+            justify-content: center; align-items: center; backdrop-filter: blur(5px);
+        }
+        #trashModal.open { display: flex; }
+        .modal-content {
+            background: var(--glass-bg); width: 90%; max-width: 600px; max-height: 80vh;
+            border-radius: var(--radius); border: 1px solid var(--glass-border);
+            display: flex; flex-direction: column; overflow: hidden;
+            box-shadow: var(--glass-shadow);
+        }
+        .modal-header { padding: 15px 20px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center; }
+        .modal-body { padding: 20px; overflow-y: auto; flex-grow: 1; }
+        .trash-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px; background: rgba(127,127,127,0.05); margin-bottom: 8px; border-radius: 8px;
+            border: 1px solid var(--glass-border);
+        }
+        .trash-info { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
+        .trash-date { font-size: 0.75rem; color: var(--text-secondary); display: block; }
+        .trash-actions button { font-size: 0.8rem; margin-left: 5px; padding: 4px 8px; border-radius: 4px; cursor: pointer; border: 1px solid var(--glass-border); }
+        .btn-restore { background: var(--accent-green); color: white; border: none; }
+        .btn-forever { background: var(--accent-red); color: white; border: none; }
+        .btn-close-modal { background: transparent; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-primary); }
 
         #toast {
             position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px);
@@ -317,7 +321,7 @@
 <body class="dark-mode">
 
     <header>
-        <h1>מנהל הקישורים Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Ultimate Stable)</span></h1>
+        <h1>מנהל הקישורים Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Ultimate Recycle)</span></h1>
         <div id="itemCount">טוען נתונים...</div>
     </header>
 
@@ -351,9 +355,7 @@
         <div class="filters-container">
             <select id="categoryFilter"><option value="">📂 כל הקטגוריות</option></select>
             <select id="sortOrder">
-                <option value="date-new" selected>📅 תאריך (הכי חדש למעלה)</option>
-                <option value="index-new">🔢 לפי סדר הוספה (חדש לישן)</option>
-                <option value="index-old">🔢 לפי סדר הוספה (ישן לחדש)</option>
+                <option value="date-new" selected>📅 תאריך (הכי חדש = הכי גבוה)</option>
                 <option value="name">🔤 שם (א-ת)</option>
             </select>
         </div>
@@ -388,11 +390,16 @@
                     <span>💾</span> ניהול אתר <span>▼</span>
                 </button>
                 <div id="siteMenu" class="dropdown-content">
-                    <button id="downloadHtmlBtn">שמור אתר מלא (HTML)</button>
-                    <button id="downloadSourceBtn">הורד קוד מקור (TXT)</button>
+                    <button id="downloadHtmlBtn">
+                        <span style="font-size:1.2em">🌐</span> שמור אתר מלא (HTML)
+                    </button>
+                    <button id="downloadSourceBtn">
+                        <span style="font-size:1.2em">💻</span> הורד קוד מקור (TXT)
+                    </button>
                 </div>
             </div>
 
+            <button id="trashBtn" class="action-btn btn-trash-view" title="סל מחזור">🗑️ סל מחזור</button>
             <button id="toggleDuplicatesBtn" class="action-btn btn-toggle" title="הצג/הסתר כפילויות">⚠️</button>
             <button id="toggleDarkModeBtn" class="action-btn btn-toggle" title="מצב לילה">☀️</button>
         </div>
@@ -412,9 +419,20 @@
 
     <div id="listContainer" class="list-container"></div>
 
+    <div id="trashModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🗑️ סל מחזור (נשמר ל-30 יום)</h3>
+                <button class="btn-close-modal">✖</button>
+            </div>
+            <div id="trashList" class="modal-body">
+                </div>
+        </div>
+    </div>
+
     <div id="toast">
         <span id="toastMsg">הודעה</span>
-        <button id="undoBtn">בטל</button>
+        <button id="undoBtn" style="display:none;">בטל</button>
     </div>
 
     <script id="app-state" type="application/json">{}</script>
@@ -435,15 +453,15 @@
             measurementId: "G-NVN4E8TDGE"
         };
 
-        const STORAGE_KEY = 'LinkManager_Glass_Stable_Final';
+        const STORAGE_KEY = 'LinkManager_Pro_V2';
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
         
         // Application State
         const state = {
             items: [],
+            trash: [], // New Trash Array
             user: null,
             unsubscribe: null,
-            undoStack: null,
             showDuplicates: true
         };
 
@@ -461,13 +479,14 @@
         document.addEventListener('DOMContentLoaded', () => {
             initTheme();
             loadLocalData();
+            checkTrashExpiry(); // Clean old trash
             updateCategoryDropdowns();
             setupEventListeners();
             renderList();
             setupFirebaseListeners();
         });
 
-        // === Event Listeners Setup ===
+        // === Event Listeners ===
         function setupEventListeners() {
             // Dropdowns
             document.querySelectorAll('.drop-trigger').forEach(btn => {
@@ -493,9 +512,14 @@
             document.getElementById('sortOrder')?.addEventListener('change', renderList);
             document.getElementById('addItemForm')?.addEventListener('submit', handleAdd);
             
-            // Toggles
+            // Toggles & Buttons
             document.getElementById('toggleDarkModeBtn')?.addEventListener('click', toggleTheme);
             document.getElementById('toggleDuplicatesBtn')?.addEventListener('click', toggleDuplicates);
+            document.getElementById('trashBtn')?.addEventListener('click', openTrashModal);
+            document.querySelector('.btn-close-modal')?.addEventListener('click', closeTrashModal);
+            document.getElementById('trashModal')?.addEventListener('click', (e) => {
+                if(e.target.id === 'trashModal') closeTrashModal();
+            });
 
             // Auth Buttons
             document.getElementById('googleLoginBtn')?.addEventListener('click', cloudLogin);
@@ -511,51 +535,58 @@
                 }
             });
 
-            // Exports & Toast
             document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
             document.getElementById('exportTxtBtn')?.addEventListener('click', exportTxt);
             document.getElementById('downloadHtmlBtn')?.addEventListener('click', downloadSite);
             document.getElementById('downloadSourceBtn')?.addEventListener('click', downloadSource);
-            document.getElementById('undoBtn')?.addEventListener('click', executeUndo);
         }
 
-        // === Core Logic ===
-        
-        // --- Data Management ---
+        // === Data Management ===
         function loadLocalData() {
             try {
-                // Try embedded data first
                 const embedded = document.getElementById('app-state').textContent;
                 if(embedded) {
                     const parsed = JSON.parse(embedded);
-                    if (parsed.items && parsed.items.length) { 
-                        state.items = parsed.items; 
-                        return; 
-                    }
+                    if (parsed.items) state.items = parsed.items;
+                    if (parsed.trash) state.trash = parsed.trash;
+                    return;
                 }
             } catch(e) {}
 
-            // Try LocalStorage
             const stored = localStorage.getItem(STORAGE_KEY);
             if (stored) { 
                 try { 
-                    state.items = JSON.parse(stored); 
+                    const parsed = JSON.parse(stored);
+                    state.items = parsed.items || [];
+                    state.trash = parsed.trash || [];
                     return; 
                 } catch(e) {} 
             }
-            
-            // Fallback (empty)
             state.items = [];
+            state.trash = [];
         }
 
         function saveData(skipCloud = false) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ items: state.items, trash: state.trash }));
             if (!skipCloud && state.user && db) {
                 pushToCloud();
             }
         }
 
-        // --- Firebase Auth & Sync ---
+        function checkTrashExpiry() {
+            const now = new Date();
+            const initialLen = state.trash.length;
+            state.trash = state.trash.filter(item => {
+                if (!item.deletedAt) return false;
+                const delDate = new Date(item.deletedAt);
+                const diffTime = Math.abs(now - delDate);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                return diffDays <= 30;
+            });
+            if(state.trash.length !== initialLen) saveData();
+        }
+
+        // === Firebase ===
         function setupFirebaseListeners() {
             if (!auth) return;
             onAuthStateChanged(auth, (user) => {
@@ -576,16 +607,18 @@
                     
                     if (state.unsubscribe) state.unsubscribe();
                     
-                    // Real-time listener
                     state.unsubscribe = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
                         if (docSnap.exists()) {
                             const cloudData = docSnap.data();
                             const cloudItems = cloudData.items || [];
+                            const cloudTrash = cloudData.trash || [];
                             
-                            // Simple diff check to avoid loops
-                            if (JSON.stringify(cloudItems) !== JSON.stringify(state.items)) {
+                            if (JSON.stringify(cloudItems) !== JSON.stringify(state.items) ||
+                                JSON.stringify(cloudTrash) !== JSON.stringify(state.trash)) {
                                 state.items = cloudItems;
-                                saveData(true); // Save local but don't push back immediately
+                                state.trash = cloudTrash;
+                                saveData(true);
+                                checkTrashExpiry();
                                 updateCategoryDropdowns();
                                 renderList();
                             }
@@ -617,10 +650,7 @@
 
         async function cloudLogout() {
             if (!auth) return;
-            try { 
-                await signOut(auth); 
-                location.reload(); 
-            } catch (error) { console.error(error); }
+            try { await signOut(auth); location.reload(); } catch (error) { console.error(error); }
         }
 
         async function switchAccount() {
@@ -637,6 +667,7 @@
             try {
                 await setDoc(doc(db, "users", state.user.uid), {
                     items: state.items,
+                    trash: state.trash,
                     lastUpdated: new Date().toISOString()
                 });
                 updateSyncStatus('online');
@@ -651,35 +682,27 @@
             if(!el) return;
             const dot = el.querySelector('.status-dot');
             dot.className = 'status-dot';
-            
             if (status === 'online') {
                 dot.classList.add('online');
-                el.innerHTML = '<span class="status-dot online"></span> מחובר ומסונכרן';
+                el.innerHTML = '<span class="status-dot online"></span> מחובר';
             } else if (status === 'syncing') {
                 dot.classList.add('syncing');
                 el.innerHTML = '<span class="status-dot syncing"></span> מסנכרן...';
             } else if (status === 'error') {
                 dot.classList.add('error');
-                el.innerHTML = '<span class="status-dot error"></span> שגיאת סנכרון';
+                el.innerHTML = '<span class="status-dot error"></span> שגיאה';
             }
         }
 
-        // --- UI Rendering & Helpers ---
-
+        // === UI Rendering ===
         function escapeHtml(text) {
             if (!text) return '';
-            return text
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#039;");
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
 
         function closeAllMenus() {
             document.querySelectorAll('.dropdown-content').forEach(m => m.classList.remove('show'));
             document.querySelectorAll('.drop-trigger').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.card-menu-dropdown').forEach(m => m.classList.remove('show'));
         }
 
         function updateCategoryDropdowns() {
@@ -710,15 +733,11 @@
             if(!container) return;
             container.innerHTML = '';
             
-            const searchInput = document.getElementById('searchInput');
-            const catFilterInput = document.getElementById('categoryFilter');
-            const sortInput = document.getElementById('sortOrder');
+            const query = document.getElementById('searchInput')?.value.toLowerCase() || '';
+            const catFilter = document.getElementById('categoryFilter')?.value || '';
+            const sort = document.getElementById('sortOrder')?.value || 'date-new';
 
-            const query = searchInput ? searchInput.value.toLowerCase() : '';
-            const catFilter = catFilterInput ? catFilterInput.value : '';
-            const sort = sortInput ? sortInput.value : 'date-new';
-
-            // Duplicate detection
+            // Filter logic
             const seen = new Set(), dups = new Set();
             state.items.forEach(i => {
                 const k = i.content.toLowerCase().trim();
@@ -733,27 +752,18 @@
                 return matchesSearch && matchesCat;
             });
 
-            const countEl = document.getElementById('itemCount');
-            if(countEl) countEl.textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
+            document.getElementById('itemCount').textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
 
-            // Sorting
-            const baseSort = (a, b) => {
-                switch(sort) {
-                    case 'name': return a.content.localeCompare(b.content);
-                    case 'date-new': return b.date.localeCompare(a.date);
-                    case 'index-new': return -1; // relies on array order
-                    case 'index-old': return 1;
-                    default: return 0;
-                }
-            };
-            
+            // Sort logic: Pinned first, then by Date Newest (Default) or Name
             const masterSort = (a, b) => {
                 if (a.isPinned && !b.isPinned) return -1;
                 if (!a.isPinned && b.isPinned) return 1;
-                return baseSort(a, b);
+                
+                if (sort === 'name') return a.content.localeCompare(b.content);
+                // Default 'date-new': Newest First
+                return b.date.localeCompare(a.date); 
             };
 
-            // Grouping
             const groups = {};
             filtered.forEach(i => {
                 if(!groups[i.category]) groups[i.category] = [];
@@ -761,9 +771,13 @@
             });
 
             const sortedCategories = Object.keys(groups).sort();
-            const isDescending = (sort === 'index-new' || sort === 'date-new');
-            let visualCounter = isDescending ? filtered.length : 1;
-            const counterStep = isDescending ? -1 : 1;
+            
+            // Visual Counter: 
+            // Since we sort 'date-new' by default, the top item should be the highest number (total items)
+            // If sort is 'name', numbers will follow the sort order.
+            // Logic: Count down from total active items if sorting by date-new, else count up.
+            let visualCounter = (sort === 'date-new') ? filtered.length : 1;
+            const counterStep = (sort === 'date-new') ? -1 : 1;
 
             if (filtered.length === 0) {
                 container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-secondary);">לא נמצאו תוצאות</div>';
@@ -799,7 +813,6 @@
             const div = document.createElement('div');
             div.className = `card ${item.isPinned ? 'pinned' : ''}`;
             
-            // Safer content injection
             const safeContent = escapeHtml(item.content);
             const contentHtml = item.type === 'link' 
                 ? `<a href="${safeContent}" class="card-link" target="_blank">${safeContent}</a>`
@@ -824,43 +837,23 @@
                         <button class="icon-btn btn-copy" title="העתק">📋</button>
                         <button class="icon-btn btn-edit" title="ערוך">✏️</button>
                         <button class="icon-btn pin-btn ${item.isPinned ? 'active' : ''}" title="${item.isPinned ? 'בטל נעיצה' : 'נעץ בראש הרשימה'}">📌</button>
-                        <button class="icon-btn btn-menu" title="פעולות">⋮</button>
-                        <div class="card-menu-dropdown">
-                            <button class="btn-delete">🗑️ מחק פריט</button>
-                        </div>
+                        <button class="icon-btn trash-btn" title="מחק לסל מחזור">🗑️</button>
                     </div>
                 </div>
             `;
             
-            // Attach event listeners directly (No inline HTML events)
             div.querySelector('.btn-copy').onclick = () => copyText(item.content);
             div.querySelector('.btn-edit').onclick = () => editItem(item);
             div.querySelector('.pin-btn').onclick = () => togglePin(item.id);
-            div.querySelector('.btn-delete').onclick = (e) => {
-                e.stopPropagation();
-                deleteItem(item.id);
-            };
-
-            const menuBtn = div.querySelector('.btn-menu');
-            const menu = div.querySelector('.card-menu-dropdown');
-            menuBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                document.querySelectorAll('.card-menu-dropdown.show').forEach(m => {
-                    if (m !== menu) m.classList.remove('show');
-                });
-                menu.classList.toggle('show');
-            });
+            div.querySelector('.trash-btn').onclick = () => moveToTrash(item.id);
             
             return div;
         }
 
-        // --- Item Actions ---
-
+        // === Actions ===
         function handleAdd(e) {
             e.preventDefault();
-            const contentEl = document.getElementById('itemContent');
-            if(!contentEl) return;
-            const content = contentEl.value.trim();
+            const content = document.getElementById('itemContent').value.trim();
             if (!content) return;
 
             const newItem = {
@@ -873,20 +866,25 @@
                 type: URL_REGEX.test(content) ? 'link' : 'text',
                 isPinned: false
             };
+            // Unshift puts it at the TOP of the array
             state.items.unshift(newItem);
             onDataChange();
             e.target.reset();
-            showToast('הפריט נוסף', { type: 'add', id: newItem.id });
+            showToast('הפריט נוסף לראש הרשימה');
         }
 
-        function deleteItem(id) {
-            if (!confirm('למחוק את הפריט לצמיתות?')) return;
+        function moveToTrash(id) {
             const idx = state.items.findIndex(i => i.id === id);
             if(idx === -1) return;
             const item = state.items[idx];
+            
+            // Add deleted timestamp
+            item.deletedAt = new Date().toISOString();
+            
+            state.trash.unshift(item);
             state.items.splice(idx, 1);
             onDataChange();
-            showToast('הפריט נמחק', { type: 'delete', item, index: idx });
+            showToast('הועבר לסל המחזור');
         }
 
         function togglePin(id) {
@@ -905,7 +903,6 @@
             const cat = prompt('קטגוריה:', item.category) || 'כללי';
             const n = prompt('הערה:', item.note) || '';
             
-            // Mutate item
             item.content = c;
             item.description = d;
             item.category = cat;
@@ -913,7 +910,7 @@
             item.type = URL_REGEX.test(c) ? 'link' : 'text';
             
             onDataChange();
-            showToast('השינוי נשמר', { type: 'edit', previousItem: previousState });
+            showToast('השינוי נשמר');
         }
 
         function onDataChange() {
@@ -922,15 +919,78 @@
             renderList();
         }
 
-        // --- Import/Export/Utility ---
+        // === Trash Logic ===
+        function openTrashModal() {
+            const list = document.getElementById('trashList');
+            list.innerHTML = '';
+            
+            if(state.trash.length === 0) {
+                list.innerHTML = '<div style="text-align:center; padding:20px;">סל המחזור ריק</div>';
+            } else {
+                state.trash.forEach(item => {
+                    const el = document.createElement('div');
+                    el.className = 'trash-item';
+                    const delDate = new Date(item.deletedAt).toLocaleDateString();
+                    el.innerHTML = `
+                        <div class="trash-info">
+                            <strong>${escapeHtml(item.description || 'ללא כותרת')}</strong><br>
+                            <span style="font-size:0.8em">${escapeHtml(item.content)}</span>
+                            <span class="trash-date">נמחק ב: ${delDate}</span>
+                        </div>
+                        <div class="trash-actions">
+                            <button class="btn-restore">♻️ שחזר</button>
+                            <button class="btn-forever">❌ מחק</button>
+                        </div>
+                    `;
+                    el.querySelector('.btn-restore').onclick = () => restoreFromTrash(item.id);
+                    el.querySelector('.btn-forever').onclick = () => deleteForever(item.id);
+                    list.appendChild(el);
+                });
+            }
+            document.getElementById('trashModal').classList.add('open');
+        }
 
+        function closeTrashModal() {
+            document.getElementById('trashModal').classList.remove('open');
+        }
+
+        function restoreFromTrash(id) {
+            const idx = state.trash.findIndex(i => i.id === id);
+            if(idx === -1) return;
+            const item = state.trash[idx];
+            delete item.deletedAt; // Remove trash tag
+            state.items.unshift(item); // Restore to top
+            state.trash.splice(idx, 1);
+            saveData();
+            openTrashModal(); // Refresh modal
+            renderList(); // Refresh background list
+            showToast('הפריט שוחזר');
+        }
+
+        function deleteForever(id) {
+            if(!confirm('זה ימחק את הפריט לצמיתות. להמשיך?')) return;
+            const idx = state.trash.findIndex(i => i.id === id);
+            if(idx !== -1) {
+                state.trash.splice(idx, 1);
+                saveData();
+                openTrashModal();
+            }
+        }
+
+        // === Utilities ===
         function importJson(e) {
             const f = e.target.files[0];
             if(!f) return;
             const r = new FileReader();
             r.onload = ev => { 
                 try { 
-                    state.items = JSON.parse(ev.target.result); 
+                    const data = JSON.parse(ev.target.result);
+                    // Handle both old array format and new object format
+                    if (Array.isArray(data)) state.items = data;
+                    else {
+                        if(data.items) state.items = data.items;
+                        if(data.trash) state.trash = data.trash;
+                    }
                     onDataChange(); 
                     closeAllMenus(); 
                     alert('נטען בהצלחה!'); 
@@ -978,7 +1038,11 @@
             reader.readAsText(file);
         }
 
-        function exportJson() { downloadFile('links.json', JSON.stringify(state.items, null, 2), 'application/json'); closeAllMenus(); }
+        function exportJson() { 
+            const exportData = { items: state.items, trash: state.trash };
+            downloadFile('links_backup.json', JSON.stringify(exportData, null, 2), 'application/json'); 
+            closeAllMenus(); 
+        }
         
         function exportTxt() { 
             const txt = state.items.map(i=>`${i.content} | ${i.description} | ${i.category}`).join('\n');
@@ -989,14 +1053,14 @@
         function downloadSite() { 
             closeAllMenus();
             const stateEl = document.getElementById('app-state');
-            if(stateEl) stateEl.textContent = JSON.stringify({items: state.items}); 
-            downloadFile(`LinkManager_Stable_${new Date().toISOString().slice(0,10)}.html`, '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/html'); 
+            if(stateEl) stateEl.textContent = JSON.stringify({ items: state.items, trash: state.trash }); 
+            downloadFile(`LinkManager_Recycle_${new Date().toISOString().slice(0,10)}.html`, '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/html'); 
         }
 
         function downloadSource() {
             closeAllMenus();
             const stateEl = document.getElementById('app-state');
-            if(stateEl) stateEl.textContent = "{}"; // Clear state for source download
+            if(stateEl) stateEl.textContent = "{}"; 
             downloadFile('source.txt', '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/plain');
         }
 
@@ -1013,8 +1077,6 @@
                 prompt('העתקה ידנית:', text);
             }
         }
-
-        // --- Theme & Toast ---
 
         function initTheme() {
             const savedTheme = localStorage.getItem(STORAGE_KEY + '_theme');
@@ -1040,28 +1102,12 @@
             renderList(); 
         }
 
-        function showToast(m, u=null) {
+        function showToast(m) {
             const t = document.getElementById('toast');
             if(!t) return;
             document.getElementById('toastMsg').textContent = m;
             t.classList.add('visible'); 
-            state.undoStack = u;
-            document.getElementById('undoBtn').style.display = u ? 'block' : 'none';
             setTimeout(() => t.classList.remove('visible'), 4000);
-        }
-
-        function executeUndo() {
-            if (!state.undoStack) return;
-            const u = state.undoStack;
-            
-            if (u.type === 'delete') state.items.splice(u.index, 0, u.item);
-            else if (u.type === 'add') state.items = state.items.filter(i => i.id !== u.id);
-            else if (u.type === 'edit') {
-                const idx = state.items.findIndex(i => i.id === u.previousItem.id);
-                if (idx !== -1) state.items[idx] = u.previousItem;
-            }
-            onDataChange(); 
-            document.getElementById('toast').classList.remove('visible');
         }
     </script>
 </body>
