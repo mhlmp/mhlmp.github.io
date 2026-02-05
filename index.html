@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Link Manager Pro - Ultimate Undo</title>
+    <title>מנהל הקישורים Pro - Search Fix</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
@@ -298,7 +298,7 @@
         .btn-forever { background: var(--accent-red); color: white; border: none; }
         .btn-close-modal { background: transparent; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-primary); }
 
-        /* Enhanced Toast with Progress Bar */
+        /* Toast with Progress */
         #toast {
             position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px);
             background: rgba(30, 41, 59, 0.95); 
@@ -328,26 +328,11 @@
         }
         #toast button:hover { background: rgba(255,255,255,0.2); }
 
-        .progress-container {
-            width: 100%;
-            height: 4px;
-            background: rgba(255,255,255,0.1);
-        }
-        .progress-bar {
-            height: 100%;
-            background: var(--accent-green);
-            width: 100%;
-            transform-origin: left;
-        }
+        .progress-container { width: 100%; height: 4px; background: rgba(255,255,255,0.1); }
+        .progress-bar { height: 100%; background: var(--accent-green); width: 100%; transform-origin: left; }
         
-        @keyframes countdown {
-            from { transform: scaleX(1); }
-            to { transform: scaleX(0); }
-        }
-        
-        .animate-progress {
-            animation: countdown 10s linear forwards;
-        }
+        @keyframes countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+        .animate-progress { animation: countdown 10s linear forwards; }
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
@@ -355,7 +340,7 @@
 <body class="dark-mode">
 
     <header>
-        <h1>Link Manager Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Ultimate Undo)</span></h1>
+        <h1>מנהל הקישורים Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Fixed)</span></h1>
         <div id="itemCount">טוען נתונים...</div>
     </header>
 
@@ -380,7 +365,7 @@
 
     <div id="controlsArea" class="glass-panel">
         <div class="search-container">
-            <input type="search" id="searchInput" placeholder="🔍 חפש קישור, תיאור או קטגוריה...">
+            <input type="search" id="searchInput" placeholder="🔍 חפש קישור, תיאור או קטגוריה... (חפש #10 למספר כרטיס)">
         </div>
 
         <div class="filters-container">
@@ -478,7 +463,7 @@
             measurementId: "G-NVN4E8TDGE"
         };
 
-        const STORAGE_KEY = 'LinkManager_Pro_V3';
+        const STORAGE_KEY = 'LinkManager_Pro_V4';
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
         
         const state = {
@@ -511,7 +496,6 @@
 
         // === Event Listeners ===
         function setupEventListeners() {
-            // Dropdowns
             document.querySelectorAll('.drop-trigger').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -523,28 +507,23 @@
                     if (!isOpen) { targetMenu.classList.add('show'); btn.classList.add('active'); }
                 });
             });
-
             window.addEventListener('click', () => closeAllMenus());
 
-            // Controls
             document.getElementById('searchInput')?.addEventListener('input', () => window.requestAnimationFrame(renderList));
             document.getElementById('categoryFilter')?.addEventListener('change', renderList);
             document.getElementById('sortOrder')?.addEventListener('change', renderList);
             document.getElementById('addItemForm')?.addEventListener('submit', handleAdd);
             
-            // Buttons
             document.getElementById('toggleDarkModeBtn')?.addEventListener('click', toggleTheme);
             document.getElementById('toggleDuplicatesBtn')?.addEventListener('click', toggleDuplicates);
             document.getElementById('trashBtn')?.addEventListener('click', openTrashModal);
             document.querySelector('.btn-close-modal')?.addEventListener('click', closeTrashModal);
             document.getElementById('trashModal')?.addEventListener('click', (e) => { if(e.target.id === 'trashModal') closeTrashModal(); });
 
-            // Auth
             document.getElementById('googleLoginBtn')?.addEventListener('click', cloudLogin);
             document.getElementById('logoutBtn')?.addEventListener('click', cloudLogout);
             document.getElementById('switchAccountBtn')?.addEventListener('click', switchAccount);
 
-            // Import/Export
             ['importJsonInput', 'smartImportInput'].forEach(id => {
                 const el = document.getElementById(id);
                 if(el) {
@@ -677,7 +656,7 @@
             datalist.innerHTML = listHtml;
         }
 
-        // === Render Logic (Pinned + Numbering) ===
+        // === Render Logic ===
         function renderList() {
             const container = document.getElementById('listContainer');
             if(!container) return;
@@ -687,57 +666,69 @@
             const catFilter = document.getElementById('categoryFilter')?.value || '';
             const sort = document.getElementById('sortOrder')?.value || 'date-new';
 
-            // Mark Duplicates
+            // 1. Prepare Full List with Visual Indices (PRE-CALCULATION)
+            let sortedFullList = [...state.items];
+            
+            // Sort to determine what #ID corresponds to which item
+            const baseSort = (a, b) => {
+                if (sort === 'name') return a.content.localeCompare(b.content);
+                return b.date.localeCompare(a.date); // Default: Newest first
+            };
+            sortedFullList.sort(baseSort);
+
+            // Assign "Visual ID" based on this sort
+            // If sorting date-new: top item is #Total, bottom is #1
+            // If sorting name: top item is #1, bottom is #Total
+            const total = sortedFullList.length;
+            sortedFullList.forEach((item, index) => {
+                if (sort === 'date-new') item.visualIndex = total - index;
+                else item.visualIndex = index + 1;
+            });
+
+            // 2. Filter
             const seen = new Set(), dups = new Set();
-            state.items.forEach(i => {
+            sortedFullList.forEach(i => {
                 const k = i.content.toLowerCase().trim();
                 if (seen.has(k)) { i.isDup = true; dups.add(k); } else { i.isDup = false; seen.add(k); }
             });
-            state.items.forEach(i => { if(dups.has(i.content.toLowerCase().trim())) i.isDup = true; });
+            sortedFullList.forEach(i => { if(dups.has(i.content.toLowerCase().trim())) i.isDup = true; });
 
-            // Filter
-            let filtered = state.items.filter(i => {
+            // Detect if search is for a specific number (e.g., "#12")
+            const isHashSearch = /^#\s*\d+$/.test(query);
+            const searchNum = isHashSearch ? parseInt(query.replace(/\D/g, '')) : null;
+
+            let filtered = sortedFullList.filter(i => {
+                if (isHashSearch) {
+                    return i.visualIndex === searchNum;
+                }
+                
                 if (!state.showDuplicates && i.isDup && state.items.indexOf(i) !== state.items.findIndex(x => x.content.toLowerCase() === i.content.toLowerCase())) return false;
-                const matchesSearch = !query || i.content.toLowerCase().includes(query) || i.description.toLowerCase().includes(query) || i.category.toLowerCase().includes(query) || (i.note && i.note.toLowerCase().includes(query));
+                
+                const matchesSearch = !query || 
+                                      i.content.toLowerCase().includes(query) || 
+                                      i.description.toLowerCase().includes(query) || 
+                                      i.category.toLowerCase().includes(query) || 
+                                      (i.note && i.note.toLowerCase().includes(query));
+                
                 const matchesCat = !catFilter || i.category === catFilter;
                 return matchesSearch && matchesCat;
             });
 
             document.getElementById('itemCount').textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
 
-            // Separate Pinned items
+            // 3. Separate Pinned
             const pinnedItems = filtered.filter(i => i.isPinned);
             const regularItems = filtered.filter(i => !i.isPinned);
 
-            // Sorting Function
-            const baseSort = (a, b) => {
-                if (sort === 'name') return a.content.localeCompare(b.content);
-                // Date Newest: Newer dates first
-                return b.date.localeCompare(a.date); 
-            };
-
-            pinnedItems.sort(baseSort);
-            
-            // Group Regular Items
-            const groups = {};
-            regularItems.forEach(i => {
-                if(!groups[i.category]) groups[i.category] = [];
-                groups[i.category].push(i);
-            });
-            const sortedCategories = Object.keys(groups).sort();
-
-            // Visual Counter: 
-            // If sort is 'date-new', the top item gets the highest number.
-            // We start counting from filtered.length down to 1.
-            let visualCounter = (sort === 'date-new') ? filtered.length : 1;
-            const counterStep = (sort === 'date-new') ? -1 : 1;
+            // They are already sorted by baseSort because sortedFullList was sorted
 
             if (filtered.length === 0) {
                 container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-secondary);">לא נמצאו תוצאות</div>';
                 return;
             }
 
-            // 1. Render Pinned Category
+            // 4. Render Groups
+            // Pinned
             if (pinnedItems.length > 0) {
                 const section = document.createElement('div');
                 section.className = 'category-block';
@@ -749,18 +740,20 @@
                     <div class="items-grid"></div>
                 `;
                 const grid = section.querySelector('.items-grid');
-                pinnedItems.forEach(i => {
-                    grid.appendChild(createCard(i, visualCounter));
-                    visualCounter += counterStep;
-                });
+                pinnedItems.forEach(i => grid.appendChild(createCard(i, i.visualIndex)));
                 container.appendChild(section);
             }
 
-            // 2. Render Other Categories
+            // Regular Categories
+            const groups = {};
+            regularItems.forEach(i => {
+                if(!groups[i.category]) groups[i.category] = [];
+                groups[i.category].push(i);
+            });
+            const sortedCategories = Object.keys(groups).sort();
+
             sortedCategories.forEach(cat => {
                 const groupItems = groups[cat];
-                groupItems.sort(baseSort);
-                
                 const section = document.createElement('div');
                 section.className = 'category-block';
                 section.innerHTML = `
@@ -771,10 +764,7 @@
                     <div class="items-grid"></div>
                 `;
                 const grid = section.querySelector('.items-grid');
-                groupItems.forEach(i => {
-                    grid.appendChild(createCard(i, visualCounter));
-                    visualCounter += counterStep;
-                });
+                groupItems.forEach(i => grid.appendChild(createCard(i, i.visualIndex)));
                 container.appendChild(section);
             });
         }
@@ -822,24 +812,23 @@
             const content = document.getElementById('itemContent').value.trim();
             if (!content) return;
             
+            // Note: Date.now() increases, so sorting by date-new (desc) puts this first.
             const newItem = {
                 id: Date.now(),
                 content,
                 description: document.getElementById('itemDescription').value.trim(),
                 category: document.getElementById('itemCategory').value.trim() || 'כללי',
                 note: document.getElementById('itemNote').value.trim(),
-                date: new Date().toISOString(), // Current timestamp ensures it's newest
+                date: new Date().toISOString(), 
                 type: URL_REGEX.test(content) ? 'link' : 'text',
                 isPinned: false
             };
             
-            // Unshift puts it at index 0 (top of array)
-            state.items.unshift(newItem);
+            state.items.unshift(newItem); // Add to top of array
             onDataChange();
             e.target.reset();
             
             showToast('הפריט נוסף בהצלחה', () => {
-                // Undo Logic for Add
                 state.items.shift();
                 onDataChange();
             });
@@ -856,8 +845,7 @@
             onDataChange();
             
             showToast('הועבר לסל המחזור', () => {
-                // Undo Logic for Trash
-                restoreFromTrash(item.id, false); // false = don't show another toast
+                restoreFromTrash(item.id, false); 
             });
         }
 
@@ -881,7 +869,6 @@
             onDataChange();
             
             showToast('השינוי נשמר', () => {
-                // Undo Logic for Edit
                 const idx = state.items.findIndex(i => i.id === item.id);
                 if(idx !== -1) state.items[idx] = oldItem;
                 onDataChange();
@@ -898,9 +885,8 @@
             
             if (state.toastTimeout) clearTimeout(state.toastTimeout);
             
-            // Reset Animation
             progress.classList.remove('animate-progress');
-            void progress.offsetWidth; // Trigger reflow
+            void progress.offsetWidth; 
             
             document.getElementById('toastMsg').textContent = msg;
             t.classList.add('visible');
@@ -925,7 +911,7 @@
             }
         }
 
-        // === Trash & Import/Export (unchanged logic) ===
+        // === Trash & Import/Export ===
         function openTrashModal() {
             const list = document.getElementById('trashList');
             list.innerHTML = '';
