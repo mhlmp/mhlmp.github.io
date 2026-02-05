@@ -3,35 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>מנהל הקישורים Pro - Ultimate Edition</title>
+    <title>מנהל הקישורים Pro - Complete</title>
     <style>
         :root {
-            /* --- משתני עיצוב (Glassmorphism) --- */
-            --bg-gradient: linear-gradient(135deg, #f6d365 0%, #fda085 100%); /* ברירת מחדל חמה */
-            --glass-bg: rgba(255, 255, 255, 0.70);
-            --glass-border: rgba(255, 255, 255, 0.5);
-            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-            --backdrop: blur(8px);
+            /* === עיצוב Glassmorphism === */
+            --bg-gradient: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+            --glass-bg: rgba(255, 255, 255, 0.90);
+            --glass-border: rgba(255, 255, 255, 0.6);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+            --backdrop: blur(12px);
             
-            --text-primary: #2d3436;
-            --text-secondary: #636e72;
-            --primary-color: #0984e3;
-            --accent-green: #00b894;
-            --accent-red: #d63031;
-            --accent-gold: #fdcb6e;
+            --text-primary: #1a1a1a;
+            --text-secondary: #555555;
+            --primary-color: #2563eb;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-gold: #fbbf24;
             
-            --radius: 16px;
+            --radius: 14px;
         }
 
         body.dark-mode {
-            --bg-gradient: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
-            --glass-bg: rgba(16, 20, 24, 0.8); 
-            --glass-border: rgba(255, 255, 255, 0.08);
-            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #334155 100%);
+            --glass-bg: rgba(30, 41, 59, 0.90); 
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
             
-            --text-primary: #dfe6e9;
-            --text-secondary: #b2bec3;
-            --primary-color: #74b9ff;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --primary-color: #60a5fa;
         }
 
         * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
@@ -43,12 +43,12 @@
             color: var(--text-primary);
             margin: 0;
             padding: 15px;
-            padding-bottom: 100px;
+            padding-bottom: 120px;
             min-height: 100vh;
             transition: color 0.3s;
         }
 
-        /* --- רכיב Glass גנרי --- */
+        /* --- Utilities --- */
         .glass-panel {
             background: var(--glass-bg);
             backdrop-filter: var(--backdrop);
@@ -58,201 +58,221 @@
             border-radius: var(--radius);
         }
 
-        /* --- כותרת ומשתמש --- */
-        header { text-align: center; margin-bottom: 20px; }
-        h1 { margin: 5px 0; font-size: 2rem; font-weight: 800; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        header { text-align: center; margin-bottom: 25px; }
+        h1 { margin: 5px 0 10px 0; font-size: 2rem; font-weight: 800; text-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         
+        /* המונה המעוצב */
+        #itemCount {
+            display: inline-block; 
+            padding: 6px 18px; 
+            border-radius: 20px; 
+            font-size: 0.95rem;
+            font-weight: 600;
+            background: rgba(127,127,127,0.1); 
+            border: 1px solid var(--glass-border);
+            color: var(--text-secondary);
+        }
+
+        /* --- User & Login --- */
         #userSection {
-            padding: 12px 20px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
         }
         .user-info { display: flex; align-items: center; gap: 12px; }
         .user-avatar { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid var(--glass-border); }
-        .btn-google { background: #4285F4; color: white; border: none; padding: 8px 20px; border-radius: 50px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3); }
-        .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #bdc3c7; margin-inline-end: 6px; }
-        .status-dot.online { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+        .user-details { display: flex; flex-direction: column; line-height: 1.2; }
+        .user-name { font-weight: 700; font-size: 0.95rem; }
+        .btn-google { background: #4285F4; color: white; border: none; padding: 8px 20px; border-radius: 50px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3); }
+        
+        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ccc; margin-right: 6px; }
+        .status-dot.online { background: var(--accent-green); box-shadow: 0 0 6px var(--accent-green); }
         .status-dot.syncing { background: var(--accent-gold); animation: pulse 1s infinite; }
 
-        /* --- אזור שליטה (חיפוש ופילטרים) --- */
+        .btn-auth { background: transparent; border: 1px solid var(--glass-border); color: var(--text-primary); padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; transition: background 0.2s; }
+        .btn-auth:hover { background: rgba(127,127,127,0.1); }
+
+        /* --- Controls --- */
         #controlsArea {
-            padding: 20px; margin-bottom: 30px; display: flex; flex-direction: column; gap: 15px;
+            padding: 20px; margin-bottom: 25px; display: flex; flex-direction: column; gap: 15px;
             position: relative; z-index: 10;
         }
 
         .search-container input {
-            width: 100%; padding: 14px 20px; font-size: 16px;
+            width: 100%; padding: 12px 16px; font-size: 16px;
             border: 1px solid var(--glass-border); border-radius: var(--radius);
             background: rgba(127,127,127,0.05); color: var(--text-primary);
-            transition: all 0.3s;
+            transition: 0.3s;
         }
-        .search-container input:focus { background: rgba(127,127,127,0.1); border-color: var(--primary-color); }
+        .search-container input:focus { border-color: var(--primary-color); background: rgba(127,127,127,0.1); }
 
-        .filters-row { display: flex; gap: 10px; flex-wrap: wrap; }
-        .filters-row select {
-            flex: 1; height: 48px; padding: 0 15px; font-size: 15px;
+        .filters-container { display: flex; gap: 10px; flex-wrap: wrap; }
+        .filters-container select {
+            flex: 1; height: 44px; padding: 0 12px; font-size: 15px;
             background: var(--glass-bg); color: var(--text-primary);
             border: 1px solid var(--glass-border); border-radius: var(--radius); cursor: pointer;
         }
-        .filters-row select option { background: #fff; color: #000; }
-        body.dark-mode .filters-row select option { background: #2d3436; color: #fff; }
+        .filters-container select option { background: #fff; color: #000; }
+        body.dark-mode .filters-container select option { background: #1e293b; color: #fff; }
 
-        .actions-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 5px; }
+        .actions-container { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 5px; }
         .action-btn {
-            flex: 1; min-width: 120px; height: 44px; border: none; border-radius: var(--radius); cursor: pointer;
-            color: white; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px;
-            transition: transform 0.2s, opacity 0.2s; font-size: 0.95rem; text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            flex: 1; min-width: 110px; height: 44px; border: none; border-radius: var(--radius); cursor: pointer;
+            color: white; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px;
+            transition: opacity 0.2s, transform 0.1s; font-size: 0.9rem;
         }
-        .action-btn:active { transform: scale(0.96); }
+        .action-btn:active { transform: scale(0.97); }
         .action-btn:hover { opacity: 0.9; }
         
-        .btn-blue { background: linear-gradient(135deg, #0984e3, #74b9ff); }
-        .btn-cyan { background: linear-gradient(135deg, #00cec9, #81ecec); }
-        .btn-red { background: linear-gradient(135deg, #d63031, #ff7675); }
+        .btn-blue { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+        .btn-cyan { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+        .btn-red { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+        .btn-orange { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .btn-purple { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
         .btn-toggle { flex: 0 0 44px; background: rgba(127,127,127,0.2); color: var(--text-primary); min-width: auto; }
 
-        /* --- טופס הוספה --- */
-        details { margin-bottom: 30px; }
+        /* --- Add Form --- */
+        details { margin-bottom: 25px; transition: 0.3s; }
         summary { 
             padding: 15px; cursor: pointer; font-weight: 700; text-align: center;
             color: var(--primary-color); list-style: none; background: rgba(127,127,127,0.05);
-            border-radius: var(--radius); transition: background 0.2s;
+            border-radius: var(--radius);
         }
-        summary:hover { background: rgba(127,127,127,0.1); }
-        
-        #addItemForm { padding: 25px; display: flex; flex-direction: column; gap: 15px; }
+        #addItemForm { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
         #addItemForm input, #addItemForm textarea {
-            padding: 14px; border: 1px solid var(--glass-border); border-radius: var(--radius);
+            padding: 12px; border: 1px solid var(--glass-border); border-radius: var(--radius);
             background: rgba(127,127,127,0.05); color: var(--text-primary); width: 100%; font-family: inherit;
         }
         #addItemForm button {
-            background: var(--accent-green); color: white; padding: 16px; border: none;
-            border-radius: var(--radius); font-weight: 800; cursor: pointer; font-size: 1.1rem;
-            box-shadow: 0 4px 15px rgba(0, 184, 148, 0.3);
+            background: var(--accent-green); color: white; padding: 14px; border: none;
+            border-radius: var(--radius); font-weight: bold; cursor: pointer; font-size: 16px;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
         }
 
-        /* --- הגריד והכרטיסים (החלק החשוב ליציבות) --- */
-        .category-block { margin-bottom: 40px; }
+        /* --- Grid & Cards (Stable - Zero Jitter) --- */
         .category-header {
-            padding: 10px 5px; margin-bottom: 15px;
+            padding: 10px 5px; margin: 25px 0 10px 0;
             border-bottom: 2px solid rgba(127,127,127,0.1);
             display: flex; justify-content: space-between; align-items: center;
         }
-        .category-header h2 { margin: 0; font-size: 1.4rem; color: var(--text-primary); }
-        .category-count { background: rgba(127,127,127,0.1); padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; }
-
+        .category-header h2 { margin: 0; font-size: 1.3rem; }
+        
         .items-grid {
-            display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px;
         }
 
-        /* === עיצוב כרטיס יציב ללא רעידות === */
+        /* CARD DESIGN - שינוי קריטי: ללא Scale */
         .card {
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
             border-radius: var(--radius);
             position: relative;
             display: flex; flex-direction: column;
-            /* הסוד ליציבות: שינוי רק של צל ומיקום עדין, בלי שינוי גודל */
-            transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.2s;
-            overflow: hidden; /* מונע גלישה */
+            transition: box-shadow 0.2s, border-color 0.2s, transform 0.2s;
         }
 
         .card:hover {
-            transform: translateY(-4px); /* תזוזה למעלה */
-            box-shadow: 0 12px 30px rgba(0,0,0,0.15); /* צל עמוק יותר */
-            border-color: rgba(255,255,255,0.8);
+            border-color: var(--primary-color);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            transform: translateY(-2px); /* תזוזה מינורית */
         }
 
-        .card.pinned {
-            border: 2px solid var(--accent-gold);
-            background: rgba(253, 203, 110, 0.05);
+        .card.pinned { 
+            border: 2px solid var(--accent-gold); 
+            background: rgba(251, 191, 36, 0.05);
         }
+        .card.duplicate { border-right: 4px solid var(--accent-red); }
 
-        .card-body { padding: 20px; padding-top: 45px; flex-grow: 1; }
+        .card-body { padding: 16px; padding-top: 40px; flex-grow: 1; }
         
         .card-index { 
-            position: absolute; top: 15px; left: 15px; font-size: 0.8rem; 
+            position: absolute; top: 10px; left: 10px; font-size: 0.8rem; 
             color: var(--text-secondary); background: rgba(127,127,127,0.1);
-            padding: 3px 8px; border-radius: 6px; font-family: monospace; font-weight: bold;
+            padding: 2px 8px; border-radius: 6px; font-family: monospace; font-weight: bold;
         }
 
         .card-link {
             display: block; color: var(--primary-color); font-weight: 700; text-decoration: none;
-            margin-bottom: 10px; word-break: break-all; font-size: 1.1rem; line-height: 1.4;
+            margin-bottom: 8px; word-break: break-all; font-size: 1.05rem; line-height: 1.4;
         }
         .card-text { 
-            background: rgba(127,127,127,0.06); padding: 12px; border-radius: 8px; 
-            word-break: break-all; font-family: monospace; font-size: 0.95rem; border: 1px solid rgba(127,127,127,0.1);
+            font-family: monospace; background: rgba(127,127,127,0.06); padding: 8px; 
+            border-radius: 6px; word-break: break-all; display: block; 
         }
-        .card-desc { font-size: 0.95rem; color: var(--text-primary); opacity: 0.9; margin-top: 10px; line-height: 1.5; }
+        .card-desc { font-size: 0.9rem; color: var(--text-primary); opacity: 0.9; margin-top: 5px; }
         
         .card-note {
-            margin-top: 15px; padding: 10px; background: rgba(253, 203, 110, 0.15);
-            color: #d35400; font-size: 0.9rem; border-radius: 8px;
-            border-right: 4px solid var(--accent-gold); display: flex; gap: 8px; font-weight: 500;
+            margin-top: 10px; padding: 8px; background: rgba(255, 255, 0, 0.1);
+            color: #b7791f; font-size: 0.85rem; border-radius: 6px;
+            border-right: 3px solid var(--accent-gold);
         }
-        body.dark-mode .card-note { color: #ffeaa7; background: rgba(253, 203, 110, 0.1); }
+        body.dark-mode .card-note { color: #f6e05e; background: rgba(255, 215, 0, 0.15); }
 
         .card-footer {
-            padding: 12px 20px; border-top: 1px solid rgba(127,127,127,0.1);
+            padding: 10px 16px; border-top: 1px solid var(--glass-border);
             background: rgba(127,127,127,0.03);
             display: flex; justify-content: space-between; align-items: center;
+            border-bottom-left-radius: var(--radius); border-bottom-right-radius: var(--radius);
         }
-        
-        .tag-cat { font-size: 0.8rem; opacity: 0.7; font-weight: 600; }
 
-        .card-actions { display: flex; gap: 8px; }
+        .tag-cat { font-size: 0.8rem; opacity: 0.8; font-weight: 500; }
+        .dup-badge { color: var(--accent-red); font-weight: bold; font-size: 0.8rem; display: none; margin-right: 5px; }
+        .card.duplicate .dup-badge { display: inline; }
+
+        .card-actions { display: flex; gap: 4px; }
         .icon-btn {
-            background: transparent; border: none; cursor: pointer; font-size: 1.1rem;
-            width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            color: var(--text-secondary); transition: all 0.2s;
+            background: none; border: none; cursor: pointer; font-size: 1.15rem;
+            width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            color: var(--text-secondary); transition: background 0.2s;
         }
-        .icon-btn:hover { background: rgba(127,127,127,0.15); color: var(--primary-color); transform: scale(1.1); }
+        .icon-btn:hover { background: rgba(127,127,127,0.15); color: var(--primary-color); }
         .icon-btn.active { color: var(--accent-gold); }
         
-        /* כפתור המחיקה הישיר */
-        .btn-delete:hover { color: var(--accent-red) !important; background: rgba(214, 48, 49, 0.1) !important; }
+        /* כפתור פח אדום וישיר */
+        .btn-delete:hover { color: var(--accent-red) !important; background: rgba(239, 68, 68, 0.15) !important; }
 
         /* === Recycle Bin Modal === */
         .modal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); z-index: 5000;
-            align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); z-index: 3000;
+            align-items: center; justify-content: center;
         }
-        .modal.show { display: flex; opacity: 1; }
+        .modal.show { display: flex; animation: fadeIn 0.2s; }
         
         .modal-content {
             background: var(--glass-bg); border: 1px solid var(--glass-border);
-            width: 95%; max-width: 600px; max-height: 85vh; border-radius: 20px;
-            display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.5);
-            transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            width: 90%; max-width: 600px; max-height: 80vh; border-radius: 16px;
+            display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
         }
-        .modal.show .modal-content { transform: scale(1); }
-
         .modal-header {
-            padding: 20px; border-bottom: 1px solid var(--glass-border);
+            padding: 15px 20px; border-bottom: 1px solid var(--glass-border);
             display: flex; justify-content: space-between; align-items: center;
         }
-        .modal-header h2 { margin: 0; font-size: 1.3rem; }
-        .close-modal { background: none; border: none; font-size: 2rem; cursor: pointer; color: var(--text-secondary); line-height: 1; }
-        
+        .close-modal { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); }
         .modal-body { padding: 20px; overflow-y: auto; }
         
         .deleted-item {
             background: rgba(127,127,127,0.05); border: 1px solid var(--glass-border);
-            padding: 12px; border-radius: 12px; margin-bottom: 12px;
+            padding: 10px; border-radius: 8px; margin-bottom: 10px;
             display: flex; justify-content: space-between; align-items: center;
         }
-        .deleted-info { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 60%; }
 
-        /* Toast */
+        /* === Toast Notification & Undo Button === */
         #toast {
             position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px);
-            background: #2d3436; color: white; padding: 12px 28px; border-radius: 50px;
-            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 6000;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3); font-weight: 600;
+            background: #1e293b; color: white; padding: 12px 24px; border-radius: 30px;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            z-index: 4000; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: flex; align-items: center; gap: 15px; font-weight: 500;
         }
         #toast.show { transform: translateX(-50%) translateY(0); }
+        #undoActionBtn {
+            background: transparent; border: 1px solid rgba(255,255,255,0.3); 
+            color: #4ade80; border-radius: 20px; padding: 4px 12px; 
+            cursor: pointer; font-size: 0.85rem; transition: all 0.2s;
+        }
+        #undoActionBtn:hover { background: rgba(255,255,255,0.1); }
 
-        @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
 <body class="dark-mode">
@@ -266,39 +286,51 @@
         <div id="loggedOutView" style="display:none; width:100%; justify-content:center;">
             <button id="googleLoginBtn" class="btn-google">
                 <svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M21.35,11.1H12.18V13.83H18.69C18.36,17.64 15.19,19.27 12.19,19.27C8.36,19.27 5,16.25 5,12C5,7.9 8.2,4.73 12.2,4.73C15.29,4.73 17.1,6.7 17.1,6.7L19,4.72C19,4.72 16.56,2 12.1,2C6.42,2 2.03,6.8 2.03,12C2.03,17.05 6.16,22 12.25,22C17.6,22 21.5,18.33 21.5,12.91C21.5,11.76 21.35,11.1 21.35,11.1V11.1Z"/></svg>
-                התחבר עם Google לגיבוי בענן
+                התחבר עם Google לגיבוי
             </button>
         </div>
         <div id="loggedInView" style="display:none; width:100%; justify-content:space-between;">
             <div class="user-info">
                 <img id="userAvatar" src="" class="user-avatar" alt="Avatar">
-                <div>
+                <div class="user-details">
                     <div id="userName" style="font-weight:bold;"></div>
                     <div id="syncStatus" style="font-size:0.85rem; color:var(--text-secondary);"><span class="status-dot"></span>מנותק</div>
                 </div>
             </div>
-            <button id="logoutBtn" style="background:transparent; border:1px solid var(--glass-border); color:var(--text-primary); padding:6px 12px; border-radius:8px; cursor:pointer;">יציאה</button>
+            <div style="display:flex; gap:8px;">
+                <button id="switchAccountBtn" class="btn-auth">🔄 החלף חשבון</button>
+                <button id="logoutBtn" class="btn-auth">יציאה</button>
+            </div>
         </div>
     </div>
 
     <div id="controlsArea" class="glass-panel">
         <div class="search-container">
-            <input type="search" id="searchInput" placeholder="🔍 חיפוש מהיר (תוכן, תיאור, קטגוריה)...">
+            <input type="search" id="searchInput" placeholder="🔍 חפש קישור, תיאור או קטגוריה...">
         </div>
 
-        <div class="filters-row">
+        <div class="filters-container">
             <select id="categoryFilter"><option value="">📂 כל הקטגוריות</option></select>
             <select id="sortOrder">
-                <option value="date-new">📅 תאריך (חדש לישן)</option>
-                <option value="name">🔤 שם (א-ת)</option>
+                <option value="date-new" selected>📅 תאריך (חדש לישן)</option>
+                <option value="date-old">📅 תאריך (ישן לחדש)</option>
+                <option value="name">🔤 שם (א-ת / A-Z)</option>
             </select>
         </div>
 
-        <div class="actions-row">
+        <div class="actions-container">
             <button class="action-btn btn-blue" onclick="exportJson()">💾 JSON</button>
-            <button class="action-btn btn-cyan" onclick="downloadHtml()">🌍 אתר</button>
+            <button class="action-btn btn-cyan" onclick="downloadHtml()">🌍 HTML</button>
+            <button class="action-btn btn-orange" onclick="downloadSource()">📜 קוד מקור</button>
             <button class="action-btn btn-red" onclick="openRecycleBin()">🗑️ סל מחזור</button>
             <button id="toggleThemeBtn" class="action-btn btn-toggle">☀️</button>
+        </div>
+        
+        <div class="actions-container" style="margin-top:10px;">
+            <button class="action-btn btn-purple" id="toggleDupBtn">⚠️ כפילויות</button>
+            <button class="action-btn btn-red" id="deleteDupBtn">🗑️ מחק כפילויות</button>
+            <label for="importFile" class="action-btn btn-blue" style="margin:0; text-align:center;">📥 ייבוא</label>
+            <input type="file" id="importFile" accept=".json" style="display:none;">
         </div>
     </div>
 
@@ -319,7 +351,7 @@
     <div id="recycleBinModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>🗑️ סל מחזור (נמחק אוטומטית אחרי 30 יום)</h2>
+                <h2>🗑️ סל מחזור (30 יום)</h2>
                 <button class="close-modal" onclick="closeRecycleBin()">×</button>
             </div>
             <div class="modal-body" id="recycleBinList"></div>
@@ -353,7 +385,6 @@
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
 
-        // פונקציות גלובליות
         window.cloudLogin = async () => {
             try { await signInWithPopup(auth, provider); } 
             catch (error) { alert("שגיאה בהתחברות: " + error.message); }
@@ -377,31 +408,17 @@
                     
                     updateSyncStatus('syncing');
                     
-                    // סנכרון בזמן אמת - חד צדדי (ענן -> לקוח) בשינוי
                     onSnapshot(doc(db, "users", user.uid), (docSnap) => {
                         if (docSnap.exists()) {
                             const data = docSnap.data();
-                            let updated = false;
-                            
-                            // בדיקה אם המידע בענן חדש יותר או שונה
                             if (data.items && JSON.stringify(data.items) !== JSON.stringify(window.items)) {
                                 window.items = data.items;
-                                localStorage.setItem('LinkManager_Pro_Data', JSON.stringify(window.items));
-                                updated = true;
+                                window.renderList();
                             }
-                            if (data.recycleBin && JSON.stringify(data.recycleBin) !== JSON.stringify(window.recycleBin)) {
-                                window.recycleBin = data.recycleBin;
-                                localStorage.setItem('LinkManager_RecycleBin', JSON.stringify(window.recycleBin));
-                            }
-                            
-                            if (updated) window.renderList();
+                            if (data.recycleBin) window.recycleBin = data.recycleBin;
                             updateSyncStatus('online');
                         }
-                    }, (error) => {
-                        console.error("Sync Error:", error);
-                        updateSyncStatus('error');
                     });
-
                 } else {
                     currentUser = null;
                     loginView.style.display = 'flex';
@@ -410,7 +427,6 @@
             });
         }
 
-        // שמירה לענן
         window.pushToCloud = async () => {
             if (!currentUser || !db) return;
             updateSyncStatus('syncing');
@@ -420,58 +436,40 @@
                     recycleBin: window.recycleBin,
                     lastUpdated: new Date().toISOString()
                 });
-            } catch (e) {
-                console.error("Save error", e);
-                updateSyncStatus('error');
-            }
+            } catch (e) { updateSyncStatus('error'); }
         };
 
         function updateSyncStatus(status) {
             const el = document.getElementById('syncStatus');
             const dot = el.querySelector('.status-dot');
             dot.className = 'status-dot';
-            
-            if (status === 'online') {
-                dot.classList.add('online');
-                el.innerHTML = '<span class="status-dot online"></span> מסונכרן';
-            } else if (status === 'syncing') {
-                dot.classList.add('syncing');
-                el.innerHTML = '<span class="status-dot syncing"></span> מסנכרן...';
-            } else if (status === 'error') {
-                dot.classList.add('error');
-                el.innerHTML = '<span class="status-dot error"></span> שגיאה';
-            }
+            if (status === 'online') { dot.classList.add('online'); el.innerHTML = '<span class="status-dot online"></span> מסונכרן'; }
+            else if (status === 'syncing') { dot.classList.add('syncing'); el.innerHTML = '<span class="status-dot syncing"></span> מסנכרן...'; }
+            else { dot.classList.add('error'); el.innerHTML = '<span class="status-dot error"></span> שגיאה'; }
         }
     </script>
 
+    <script id="app-state" type="application/json">[]</script>
+
     <script>
-        // --- ניהול משתנים ---
-        const STORAGE_KEY = 'LinkManager_Pro_Data';
-        const BIN_KEY = 'LinkManager_RecycleBin';
+        const STORAGE_KEY = 'LinkManager_Final_Complete';
+        const BIN_KEY = 'LinkManager_Bin_Final';
+        
         window.items = [];
         window.recycleBin = [];
+        let hideDuplicates = false;
+        let toastTimeout;
+        let currentUndo = null;
 
-        // --- אתחול ---
         document.addEventListener('DOMContentLoaded', () => {
             loadData();
             cleanupRecycleBin();
             window.renderList();
             
-            // חיבור אירועים
-            document.getElementById('addItemForm').addEventListener('submit', handleAdd);
-            document.getElementById('searchInput').addEventListener('input', window.renderList);
-            document.getElementById('categoryFilter').addEventListener('change', window.renderList);
-            document.getElementById('sortOrder').addEventListener('change', window.renderList);
-            document.getElementById('toggleThemeBtn').addEventListener('click', toggleTheme);
-            document.getElementById('googleLoginBtn').addEventListener('click', () => window.cloudLogin && window.cloudLogin());
-            document.getElementById('logoutBtn').addEventListener('click', () => window.cloudLogout && window.cloudLogout());
-
-            // === EVENT DELEGATION ===
-            // המפתח ליציבות - מאזין אחד לכל הרשימה
+            // Event Delegation Core
             document.getElementById('listContainer').addEventListener('click', (e) => {
                 const btn = e.target.closest('button');
                 if (!btn) return;
-
                 const card = btn.closest('.card');
                 if (!card) return;
                 
@@ -483,46 +481,124 @@
                 if (action === 'edit') editItem(id);
                 if (action === 'pin') togglePin(id);
             });
+
+            // Listeners
+            document.getElementById('addItemForm').addEventListener('submit', handleAdd);
+            document.getElementById('searchInput').addEventListener('input', () => window.renderList());
+            document.getElementById('categoryFilter').addEventListener('change', () => window.renderList());
+            document.getElementById('sortOrder').addEventListener('change', () => window.renderList());
+            document.getElementById('toggleThemeBtn').addEventListener('click', toggleTheme);
+            document.getElementById('googleLoginBtn').addEventListener('click', () => window.cloudLogin && window.cloudLogin());
+            document.getElementById('logoutBtn').addEventListener('click', () => window.cloudLogout && window.cloudLogout());
+            
+            // Switch Account
+            document.getElementById('switchAccountBtn').addEventListener('click', () => {
+                if(confirm('האם להתנתק ולהחליף חשבון?')) window.cloudLogout();
+            });
+
+            // Duplicates & Import/Export
+            document.getElementById('toggleDupBtn').addEventListener('click', () => {
+                hideDuplicates = !hideDuplicates;
+                window.renderList();
+                showToast(hideDuplicates ? 'כפילויות מוסתרות' : 'כפילויות מוצגות');
+            });
+            document.getElementById('deleteDupBtn').addEventListener('click', deleteDuplicates);
+            document.getElementById('importFile').addEventListener('change', importJson);
         });
 
-        // --- נתונים ---
+        // --- Data Logic ---
         function loadData() {
             try {
                 const local = localStorage.getItem(STORAGE_KEY);
-                if (local) window.items = JSON.parse(local);
-                
-                const bin = localStorage.getItem(BIN_KEY);
-                if (bin) window.recycleBin = JSON.parse(bin);
-            } catch(e) { console.error(e); }
+                if (local) {
+                    const data = JSON.parse(local);
+                    window.items = data.items || [];
+                    window.recycleBin = data.recycleBin || [];
+                } else {
+                    const embedded = document.getElementById('app-state').textContent;
+                    if (embedded.length > 5) window.items = JSON.parse(embedded);
+                }
+            } catch(e) { window.items = []; }
         }
 
         function saveData() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(window.items));
-            localStorage.setItem(BIN_KEY, JSON.stringify(window.recycleBin));
-            
-            if (window.renderList) window.renderList(); // רענון מקומי
-            if (window.pushToCloud) window.pushToCloud(); // סנכרון ענן
+            const data = { items: window.items, recycleBin: window.recycleBin };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            if (window.pushToCloud) window.pushToCloud();
         }
 
         function cleanupRecycleBin() {
             const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
             const now = Date.now();
-            const initialCount = window.recycleBin.length;
-            
-            window.recycleBin = window.recycleBin.filter(item => {
-                return (now - (item.deletedAt || 0)) < THIRTY_DAYS;
-            });
-
-            if (window.recycleBin.length !== initialCount) {
-                localStorage.setItem(BIN_KEY, JSON.stringify(window.recycleBin));
-            }
+            window.recycleBin = window.recycleBin.filter(item => (now - (item.deletedAt || 0)) < THIRTY_DAYS);
+            saveData();
         }
 
-        // --- פעולות על כרטיסים ---
-        function moveToTrash(id) {
-            // הוספת מנגנון אישור לפני מחיקה
-            if (!confirm('האם להעביר את הפריט לסל המחזור?')) return;
+        function findDuplicates() {
+            const seen = new Set();
+            const dups = new Set();
+            window.items.forEach(i => {
+                const txt = i.content.toLowerCase().trim();
+                if (seen.has(txt)) { i.isDuplicate = true; dups.add(txt); }
+                else { i.isDuplicate = false; seen.add(txt); }
+            });
+            window.items.forEach(i => {
+                if (dups.has(i.content.toLowerCase().trim())) i.isDuplicate = true;
+            });
+        }
 
+        // --- Toast & Undo Logic (10s) ---
+        function showToast(msg, undoCallback = null) {
+            const t = document.getElementById('toast');
+            
+            t.innerHTML = `
+                <span>${msg}</span>
+                ${undoCallback ? '<button id="undoActionBtn">בטל ↺</button>' : ''}
+            `;
+            
+            if(undoCallback) {
+                document.getElementById('undoActionBtn').onclick = () => {
+                    undoCallback();
+                    t.classList.remove('show');
+                };
+            }
+
+            t.classList.add('show');
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => t.classList.remove('show'), 10000);
+        }
+
+        // --- Actions ---
+        function handleAdd(e) {
+            e.preventDefault();
+            const content = document.getElementById('inpContent').value.trim();
+            if (!content) return;
+
+            const newItem = {
+                id: Date.now(),
+                content: content,
+                description: document.getElementById('inpDesc').value.trim(),
+                category: document.getElementById('inpCat').value.trim() || 'כללי',
+                note: document.getElementById('inpNote').value.trim(),
+                date: new Date().toISOString(),
+                pinned: false,
+                isDuplicate: false
+            };
+
+            window.items.unshift(newItem);
+            saveData();
+            window.renderList();
+            e.target.reset();
+            
+            showToast('נוסף בהצלחה', () => {
+                window.items = window.items.filter(i => i.id !== newItem.id);
+                saveData();
+                window.renderList();
+            });
+        }
+
+        function moveToTrash(id) {
+            if (!confirm('להעביר לסל המחזור?')) return;
             const idx = window.items.findIndex(i => i.id === id);
             if (idx > -1) {
                 const item = window.items[idx];
@@ -530,28 +606,16 @@
                 window.recycleBin.unshift(item);
                 window.items.splice(idx, 1);
                 saveData();
-                showToast('הפריט הועבר לסל המחזור');
+                window.renderList();
+
+                showToast('הועבר לסל', () => {
+                    item.deletedAt = null;
+                    window.items.splice(idx, 0, item);
+                    window.recycleBin = window.recycleBin.filter(i => i.id !== item.id);
+                    saveData();
+                    window.renderList();
+                });
             }
-        }
-
-        function handleAdd(e) {
-            e.preventDefault();
-            const content = document.getElementById('inpContent').value.trim();
-            if (!content) return;
-
-            window.items.unshift({
-                id: Date.now(),
-                content: content,
-                desc: document.getElementById('inpDesc').value.trim(),
-                cat: document.getElementById('inpCat').value.trim() || 'כללי',
-                note: document.getElementById('inpNote').value.trim(),
-                date: new Date().toISOString(),
-                pinned: false
-            });
-            
-            saveData();
-            e.target.reset();
-            showToast('נוסף בהצלחה');
         }
 
         function togglePin(id) {
@@ -559,59 +623,96 @@
             if (item) {
                 item.pinned = !item.pinned;
                 saveData();
+                window.renderList();
+                showToast(item.pinned ? 'הוצמד' : 'בוטלה הצמדה');
             }
         }
 
         function editItem(id) {
             const item = window.items.find(i => i.id === id);
             if (!item) return;
-            const newVal = prompt('ערוך תוכן:', item.content);
-            if (newVal !== null) {
-                item.content = newVal;
-                item.desc = prompt('תיאור:', item.desc) || '';
-                item.cat = prompt('קטגוריה:', item.cat) || 'כללי';
+            const oldItem = { ...item };
+            
+            const c = prompt('תוכן:', item.content);
+            if (c !== null) {
+                item.content = c;
+                item.description = prompt('תיאור:', item.description) || '';
+                item.category = prompt('קטגוריה:', item.category) || 'כללי';
                 item.note = prompt('הערה:', item.note) || '';
                 saveData();
+                window.renderList();
+                
+                showToast('עודכן', () => {
+                    Object.assign(item, oldItem);
+                    saveData();
+                    window.renderList();
+                });
             }
         }
 
-        function copyText(id) {
-            const item = window.items.find(i => i.id === id);
-            if (item) {
-                navigator.clipboard.writeText(item.content);
-                showToast('הועתק ללוח');
+        function deleteDuplicates() {
+            if (confirm('למחוק את כל הכפילויות? (משאיר עותק אחד)')) {
+                const oldItems = [...window.items];
+                const uniqueContent = new Set();
+                const newItems = [];
+                
+                window.items.forEach(item => {
+                    const key = item.content.toLowerCase().trim();
+                    if (!uniqueContent.has(key)) {
+                        uniqueContent.add(key);
+                        newItems.push(item);
+                    } else {
+                        item.deletedAt = Date.now();
+                        window.recycleBin.unshift(item);
+                    }
+                });
+                
+                window.items = newItems;
+                saveData();
+                window.renderList();
+                
+                showToast('כפילויות נמחקו', () => {
+                    window.items = oldItems;
+                    const restoredIds = oldItems.map(i => i.id);
+                    window.recycleBin = window.recycleBin.filter(i => !restoredIds.includes(i.id));
+                    saveData();
+                    window.renderList();
+                });
             }
         }
 
-        // --- רינדור (Rendering) ---
+        // --- Rendering ---
         window.renderList = function() {
-            const container = document.getElementById('listContainer');
-            if (!container) return;
+            findDuplicates();
+            updateCategories();
 
+            const container = document.getElementById('listContainer');
             const search = document.getElementById('searchInput').value.toLowerCase();
             const catFilter = document.getElementById('categoryFilter').value;
             const sort = document.getElementById('sortOrder').value;
 
-            updateCategories();
-
-            let filtered = window.items.filter(i => {
-                const text = (i.content + i.desc + i.cat + i.note).toLowerCase();
-                return text.includes(search) && (!catFilter || i.cat === catFilter);
+            let displayList = window.items.filter(i => {
+                if (hideDuplicates && i.isDuplicate) return false;
+                const txt = (i.content + i.description + i.category + i.note).toLowerCase();
+                return txt.includes(search) && (!catFilter || i.category === catFilter);
             });
 
-            filtered.sort((a, b) => {
+            // Sort
+            displayList.sort((a, b) => {
                 if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-                if (sort === 'date-new') return b.date.localeCompare(a.date);
-                if (sort === 'name') return a.content.localeCompare(b.content);
+                if (sort === 'date-new') return new Date(b.date || 0) - new Date(a.date || 0);
+                if (sort === 'date-old') return new Date(a.date || 0) - new Date(b.date || 0);
+                if (sort === 'name') return a.content.localeCompare(b.content, 'he'); // מיון שמי
                 return 0;
             });
 
-            document.getElementById('itemCount').textContent = `מציג ${filtered.length}`;
+            // Counter Update
+            document.getElementById('itemCount').textContent = `מציג ${displayList.length} מתוך ${window.items.length}`;
             container.innerHTML = '';
 
             const groups = {};
-            filtered.forEach(i => {
-                const c = i.cat || 'כללי';
+            displayList.forEach(i => {
+                const c = i.category || 'כללי';
                 if (!groups[c]) groups[c] = [];
                 groups[c].push(i);
             });
@@ -622,34 +723,42 @@
                 section.innerHTML = `
                     <div class="category-header">
                         <h2>${cat}</h2>
-                        <span class="category-count">${groups[cat].length}</span>
+                        <span style="font-size:0.9rem; opacity:0.6; font-weight:bold;">${groups[cat].length}</span>
                     </div>
-                    <div class="items-grid">
-                        ${groups[cat].map((item, idx) => getCardHTML(item, idx + 1)).join('')}
-                    </div>
+                    <div class="items-grid"></div>
                 `;
+                const grid = section.querySelector('.items-grid');
+                
+                groups[cat].forEach(item => {
+                    const visualIndex = displayList.indexOf(item) + 1;
+                    grid.innerHTML += getCardHTML(item, visualIndex);
+                });
+                
                 container.appendChild(section);
             });
         };
 
         function getCardHTML(item, index) {
             const isLink = /^(http|t\.me)/.test(item.content);
-            const mainContent = isLink 
+            const content = isLink 
                 ? `<a href="${item.content}" target="_blank" class="card-link">${item.content}</a>`
                 : `<div class="card-text">${item.content}</div>`;
             const note = item.note ? `<div class="card-note">📝 ${item.note}</div>` : '';
+            const dupBadge = item.isDuplicate ? '<span class="dup-badge">⚠️ כפול</span>' : '';
 
-            // הכפתור האחרון כאן הוא כפתור המחיקה הישיר
             return `
-                <div class="card ${item.pinned ? 'pinned' : ''}" data-id="${item.id}">
+                <div class="card ${item.pinned ? 'pinned' : ''} ${item.isDuplicate ? 'duplicate' : ''}" data-id="${item.id}">
                     <div class="card-index">#${index}</div>
                     <div class="card-body">
-                        ${mainContent}
-                        <div class="card-desc">${item.desc || ''}</div>
+                        ${content}
+                        <div class="card-desc">${item.description || ''}</div>
                         ${note}
                     </div>
                     <div class="card-footer">
-                        <span class="tag-cat">${item.cat}</span>
+                        <div>
+                            <span class="tag-cat">${item.category}</span>
+                            ${dupBadge}
+                        </div>
                         <div class="card-actions">
                             <button class="icon-btn" data-action="copy" title="העתק">📋</button>
                             <button class="icon-btn" data-action="edit" title="ערוך">✏️</button>
@@ -661,15 +770,14 @@
             `;
         }
 
+        // --- Helpers ---
         function updateCategories() {
-            const cats = [...new Set(window.items.map(i => i.cat))].sort();
+            const cats = [...new Set(window.items.map(i => i.category || 'כללי'))].sort();
             const select = document.getElementById('categoryFilter');
             const list = document.getElementById('catList');
             const current = select.value;
-
             select.innerHTML = '<option value="">📂 כל הקטגוריות</option>';
             list.innerHTML = '';
-
             cats.forEach(c => {
                 select.innerHTML += `<option value="${c}">${c}</option>`;
                 list.innerHTML += `<option value="${c}">`;
@@ -677,83 +785,79 @@
             select.value = current;
         }
 
-        // --- סל מחזור ---
+        function copyText(id) {
+            const item = window.items.find(i => i.id === id);
+            navigator.clipboard.writeText(item.content);
+            showToast('הועתק!');
+        }
+
+        function toggleTheme() { document.body.classList.toggle('dark-mode'); }
+
+        // --- Import/Export ---
+        window.exportJson = () => {
+            const b = new Blob([JSON.stringify(window.items,null,2)],{type:'application/json'});
+            const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='links.json'; a.click();
+        };
+        window.downloadHtml = () => {
+            document.getElementById('app-state').textContent = JSON.stringify(window.items);
+            const b = new Blob([document.documentElement.outerHTML],{type:'text/html'});
+            const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='Manager.html'; a.click();
+        };
+        window.downloadSource = () => {
+            const b = new Blob([document.documentElement.outerHTML],{type:'text/plain'});
+            const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='source.txt'; a.click();
+        };
+        function importJson(e) {
+            const r = new FileReader();
+            r.onload = ev => {
+                try {
+                    const data = JSON.parse(ev.target.result);
+                    if(Array.isArray(data)) {
+                        const oldItems = [...window.items];
+                        window.items = data;
+                        saveData(); window.renderList();
+                        showToast('יובא בהצלחה', () => {
+                            window.items = oldItems;
+                            saveData(); window.renderList();
+                        });
+                    }
+                } catch(err) { alert('קובץ לא תקין'); }
+            };
+            r.readAsText(e.target.files[0]);
+        }
+
+        // --- Recycle Bin ---
         window.openRecycleBin = () => {
-            const list = document.getElementById('recycleBinList');
-            list.innerHTML = window.recycleBin.length === 0 ? '<div style="text-align:center;color:gray;">הסל ריק</div>' : '';
-            
-            window.recycleBin.forEach(item => {
-                const date = new Date(item.deletedAt).toLocaleDateString();
-                list.innerHTML += `
+            const l = document.getElementById('recycleBinList');
+            l.innerHTML = window.recycleBin.length ? '' : '<div style="text-align:center;color:gray;">ריק</div>';
+            window.recycleBin.forEach(i => {
+                l.innerHTML += `
                     <div class="deleted-item">
-                        <div style="width:70%;">
-                            <div class="deleted-info"><b>${item.content}</b></div>
-                            <div style="font-size:0.8rem; opacity:0.7">נמחק: ${date}</div>
+                        <div><b>${i.content.substring(0,30)}...</b><br><small>נמחק: ${new Date(i.deletedAt).toLocaleDateString()}</small></div>
+                        <div>
+                            <button class="icon-btn" onclick="restoreItem(${i.id})">♻️</button>
+                            <button class="icon-btn" onclick="permDelete(${i.id})" style="color:var(--accent-red)">❌</button>
                         </div>
-                        <div style="display:flex; gap:10px;">
-                            <button class="icon-btn" onclick="restoreItem(${item.id})" title="שחזר">♻️</button>
-                            <button class="icon-btn" onclick="permDelete(${item.id})" style="color:var(--accent-red)" title="מחק סופית">❌</button>
-                        </div>
-                    </div>
-                `;
+                    </div>`;
             });
             document.getElementById('recycleBinModal').classList.add('show');
         };
-
-        window.closeRecycleBin = () => {
-            document.getElementById('recycleBinModal').classList.remove('show');
-        };
-
+        window.closeRecycleBin = () => document.getElementById('recycleBinModal').classList.remove('show');
         window.restoreItem = (id) => {
             const idx = window.recycleBin.findIndex(i => i.id === id);
             if (idx > -1) {
                 const item = window.recycleBin[idx];
                 delete item.deletedAt;
                 window.items.unshift(item);
-                window.recycleBin.splice(idx, 1);
-                saveData();
-                window.openRecycleBin();
-                showToast('שוחזר');
+                window.recycleBin.splice(idx,1);
+                saveData(); window.openRecycleBin(); window.renderList();
             }
         };
-
         window.permDelete = (id) => {
-            if (confirm('מחיקה סופית - לא ניתן לשחזר. להמשיך?')) {
+            if(confirm('למחוק סופית?')) {
                 window.recycleBin = window.recycleBin.filter(i => i.id !== id);
-                saveData();
-                window.openRecycleBin();
-                showToast('נמחק סופית');
+                saveData(); window.openRecycleBin();
             }
-        };
-
-        // --- עזרים ---
-        function toggleTheme() {
-            document.body.classList.toggle('dark-mode');
-        }
-
-        function showToast(msg) {
-            const t = document.getElementById('toast');
-            t.textContent = msg;
-            t.classList.add('show');
-            setTimeout(() => t.classList.remove('show'), 3000);
-        }
-
-        window.exportJson = () => {
-            const blob = new Blob([JSON.stringify(window.items, null, 2)], {type: 'application/json'});
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'links.json';
-            a.click();
-        };
-
-        window.downloadHtml = () => {
-            document.getElementById('app-state').textContent = JSON.stringify(window.items); // גיבוי מצב נוכחי
-            const html = document.documentElement.outerHTML;
-            const blob = new Blob([html], {type: 'text/html'});
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'LinkManager_Backup.html';
-            a.click();
         };
     </script>
 </body>
