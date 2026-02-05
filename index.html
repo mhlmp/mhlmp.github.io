@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>מנהל הקישורים Pro - Complete</title>
+    <title>מנהל הקישורים Pro - Ultimate Feature Pack</title>
     <style>
         :root {
             /* === עיצוב Glassmorphism === */
@@ -59,18 +59,11 @@
         }
 
         header { text-align: center; margin-bottom: 25px; }
-        h1 { margin: 5px 0 10px 0; font-size: 2rem; font-weight: 800; text-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        h1 { margin: 5px 0; font-size: 1.8rem; font-weight: 800; text-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         
-        /* המונה המעוצב */
         #itemCount {
-            display: inline-block; 
-            padding: 6px 18px; 
-            border-radius: 20px; 
-            font-size: 0.95rem;
-            font-weight: 600;
-            background: rgba(127,127,127,0.1); 
-            border: 1px solid var(--glass-border);
-            color: var(--text-secondary);
+            display: inline-block; padding: 4px 15px; border-radius: 20px; font-size: 0.9rem;
+            background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); font-weight: 600;
         }
 
         /* --- User & Login --- */
@@ -78,13 +71,11 @@
             padding: 12px 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
         }
         .user-info { display: flex; align-items: center; gap: 12px; }
-        .user-avatar { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid var(--glass-border); }
-        .user-details { display: flex; flex-direction: column; line-height: 1.2; }
-        .user-name { font-weight: 700; font-size: 0.95rem; }
+        .user-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid var(--glass-border); }
         .btn-google { background: #4285F4; color: white; border: none; padding: 8px 20px; border-radius: 50px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3); }
         
-        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ccc; margin-right: 6px; }
-        .status-dot.online { background: var(--accent-green); box-shadow: 0 0 6px var(--accent-green); }
+        .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #ccc; margin-left: 5px; }
+        .status-dot.online { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
         .status-dot.syncing { background: var(--accent-gold); animation: pulse 1s infinite; }
 
         .btn-auth { background: transparent; border: 1px solid var(--glass-border); color: var(--text-primary); padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; transition: background 0.2s; }
@@ -115,7 +106,7 @@
 
         .actions-container { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 5px; }
         .action-btn {
-            flex: 1; min-width: 110px; height: 44px; border: none; border-radius: var(--radius); cursor: pointer;
+            flex: 1; min-width: 100px; height: 44px; border: none; border-radius: var(--radius); cursor: pointer;
             color: white; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px;
             transition: opacity 0.2s, transform 0.1s; font-size: 0.9rem;
         }
@@ -156,23 +147,23 @@
         .category-header h2 { margin: 0; font-size: 1.3rem; }
         
         .items-grid {
-            display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px;
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;
         }
 
-        /* CARD DESIGN - שינוי קריטי: ללא Scale */
+        /* CARD DESIGN - היציב והאמין (ללא Scale) */
         .card {
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
             border-radius: var(--radius);
             position: relative;
             display: flex; flex-direction: column;
-            transition: box-shadow 0.2s, border-color 0.2s, transform 0.2s;
+            /* ללא אנימציית גודל למניעת רעידות */
+            transition: box-shadow 0.2s, border-color 0.2s;
         }
 
         .card:hover {
             border-color: var(--primary-color);
             box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            transform: translateY(-2px); /* תזוזה מינורית */
         }
 
         .card.pinned { 
@@ -226,7 +217,7 @@
         .icon-btn:hover { background: rgba(127,127,127,0.15); color: var(--primary-color); }
         .icon-btn.active { color: var(--accent-gold); }
         
-        /* כפתור פח אדום וישיר */
+        /* כפתור מחיקה ישיר (יציב) */
         .btn-delete:hover { color: var(--accent-red) !important; background: rgba(239, 68, 68, 0.15) !important; }
 
         /* === Recycle Bin Modal === */
@@ -251,7 +242,7 @@
         
         .deleted-item {
             background: rgba(127,127,127,0.05); border: 1px solid var(--glass-border);
-            padding: 10px; border-radius: 8px; margin-bottom: 10px;
+            padding: 12px; border-radius: 10px; margin-bottom: 10px;
             display: flex; justify-content: space-between; align-items: center;
         }
 
@@ -292,13 +283,13 @@
         <div id="loggedInView" style="display:none; width:100%; justify-content:space-between;">
             <div class="user-info">
                 <img id="userAvatar" src="" class="user-avatar" alt="Avatar">
-                <div class="user-details">
+                <div>
                     <div id="userName" style="font-weight:bold;"></div>
                     <div id="syncStatus" style="font-size:0.85rem; color:var(--text-secondary);"><span class="status-dot"></span>מנותק</div>
                 </div>
             </div>
             <div style="display:flex; gap:8px;">
-                <button id="switchAccountBtn" class="btn-auth">🔄 החלף חשבון</button>
+                <button id="switchAccountBtn" class="btn-auth">🔄 החלף</button>
                 <button id="logoutBtn" class="btn-auth">יציאה</button>
             </div>
         </div>
@@ -312,7 +303,7 @@
         <div class="filters-container">
             <select id="categoryFilter"><option value="">📂 כל הקטגוריות</option></select>
             <select id="sortOrder">
-                <option value="date-new" selected>📅 תאריך (חדש לישן)</option>
+                <option value="date-new" selected>📅 תאריך (חדש לישן) - #1 ראשון</option>
                 <option value="date-old">📅 תאריך (ישן לחדש)</option>
                 <option value="name">🔤 שם (א-ת / A-Z)</option>
             </select>
@@ -320,17 +311,18 @@
 
         <div class="actions-container">
             <button class="action-btn btn-blue" onclick="exportJson()">💾 JSON</button>
-            <button class="action-btn btn-cyan" onclick="downloadHtml()">🌍 HTML</button>
+            <button class="action-btn btn-cyan" onclick="downloadTxt()">📄 TXT</button>
+            <button class="action-btn btn-purple" onclick="downloadHtml()">🌍 אתר</button>
             <button class="action-btn btn-orange" onclick="downloadSource()">📜 קוד מקור</button>
-            <button class="action-btn btn-red" onclick="openRecycleBin()">🗑️ סל מחזור</button>
-            <button id="toggleThemeBtn" class="action-btn btn-toggle">☀️</button>
         </div>
         
         <div class="actions-container" style="margin-top:10px;">
-            <button class="action-btn btn-purple" id="toggleDupBtn">⚠️ כפילויות</button>
-            <button class="action-btn btn-red" id="deleteDupBtn">🗑️ מחק כפילויות</button>
+            <button class="action-btn btn-red" onclick="openRecycleBin()">🗑️ סל מחזור</button>
+            <button class="action-btn" style="background:var(--accent-gold); color:black;" id="toggleDupBtn">⚠️ כפילויות</button>
+            <button class="action-btn btn-red" id="deleteDupBtn">❌ מחק כפול</button>
             <label for="importFile" class="action-btn btn-blue" style="margin:0; text-align:center;">📥 ייבוא</label>
             <input type="file" id="importFile" accept=".json" style="display:none;">
+            <button id="toggleThemeBtn" class="action-btn btn-toggle">☀️</button>
         </div>
     </div>
 
@@ -452,8 +444,8 @@
     <script id="app-state" type="application/json">[]</script>
 
     <script>
-        const STORAGE_KEY = 'LinkManager_Final_Complete';
-        const BIN_KEY = 'LinkManager_Bin_Final';
+        const STORAGE_KEY = 'LinkManager_Pro_Features_V7';
+        const BIN_KEY = 'LinkManager_RecycleBin_V7';
         
         window.items = [];
         window.recycleBin = [];
@@ -466,7 +458,7 @@
             cleanupRecycleBin();
             window.renderList();
             
-            // Event Delegation Core
+            // Event Delegation (Stability Core)
             document.getElementById('listContainer').addEventListener('click', (e) => {
                 const btn = e.target.closest('button');
                 if (!btn) return;
@@ -550,6 +542,7 @@
         // --- Toast & Undo Logic (10s) ---
         function showToast(msg, undoCallback = null) {
             const t = document.getElementById('toast');
+            currentUndo = undoCallback;
             
             t.innerHTML = `
                 <span>${msg}</span>
@@ -642,7 +635,7 @@
                 saveData();
                 window.renderList();
                 
-                showToast('עודכן', () => {
+                showToast('הפריט נערך', () => {
                     Object.assign(item, oldItem);
                     saveData();
                     window.renderList();
@@ -697,17 +690,16 @@
                 return txt.includes(search) && (!catFilter || i.category === catFilter);
             });
 
-            // Sort
+            // Sort logic - Newest = Top (1)
             displayList.sort((a, b) => {
                 if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
                 if (sort === 'date-new') return new Date(b.date || 0) - new Date(a.date || 0);
                 if (sort === 'date-old') return new Date(a.date || 0) - new Date(b.date || 0);
-                if (sort === 'name') return a.content.localeCompare(b.content, 'he'); // מיון שמי
+                if (sort === 'name') return a.content.localeCompare(b.content, 'he');
                 return 0;
             });
 
-            // Counter Update
-            document.getElementById('itemCount').textContent = `מציג ${displayList.length} מתוך ${window.items.length}`;
+            document.getElementById('itemCount').textContent = `מציג ${displayList.length} / ${window.items.length}`;
             container.innerHTML = '';
 
             const groups = {};
@@ -730,7 +722,7 @@
                 const grid = section.querySelector('.items-grid');
                 
                 groups[cat].forEach(item => {
-                    const visualIndex = displayList.indexOf(item) + 1;
+                    const visualIndex = displayList.indexOf(item) + 1; // #1 is first in filtered list
                     grid.innerHTML += getCardHTML(item, visualIndex);
                 });
                 
@@ -806,6 +798,11 @@
         window.downloadSource = () => {
             const b = new Blob([document.documentElement.outerHTML],{type:'text/plain'});
             const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='source.txt'; a.click();
+        };
+        window.downloadTxt = () => {
+            const txt = window.items.map(i => `${i.content} | ${i.description}`).join('\n');
+            const b = new Blob([txt],{type:'text/plain'});
+            const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='links.txt'; a.click();
         };
         function importJson(e) {
             const r = new FileReader();
