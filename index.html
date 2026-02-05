@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LinkMaster Pro - מנהל הקישורים</title>
+    <title>LinkMaster Pro - ניהול קישורים</title>
     
+    <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -15,13 +16,12 @@
             darkMode: 'class',
             theme: {
                 extend: {
-                    colors: {
-                        primary: '#3b82f6',
-                        darkBg: '#0f172a',
-                        cardDark: '#1e293b'
-                    },
-                    animation: { 'fade-in': 'fadeIn 0.3s ease-out' },
-                    keyframes: { fadeIn: { '0%': { opacity: '0', transform: 'translateY(10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } } }
+                    colors: { primary: '#3b82f6', darkBg: '#0f172a', cardDark: '#1e293b' },
+                    animation: { 'fade-in': 'fadeIn 0.3s ease-out', 'slide-up': 'slideUp 0.3s ease-out' },
+                    keyframes: { 
+                        fadeIn: { '0%': { opacity: '0', transform: 'scale(0.95)' }, '100%': { opacity: '1', transform: 'scale(1)' } },
+                        slideUp: { '0%': { transform: 'translateY(100%)' }, '100%': { transform: 'translateY(0)' } }
+                    }
                 }
             }
         }
@@ -33,7 +33,7 @@
         body { font-family: 'Heebo', sans-serif; -webkit-tap-highlight-color: transparent; }
         
         .glass {
-            background: rgba(30, 41, 59, 0.7);
+            background: rgba(30, 41, 59, 0.8);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.08);
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
@@ -43,25 +43,42 @@
         
         /* Pinned Card Style */
         .pinned-card {
-            border: 2px solid #eab308 !important; /* Gold Border */
-            background: linear-gradient(to bottom right, rgba(234, 179, 8, 0.1), rgba(30, 41, 59, 0.8)) !important;
-            box-shadow: 0 0 15px rgba(234, 179, 8, 0.15) !important;
-        }
-
-        @media (min-width: 768px) {
-            .desktop-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-                gap: 1.5rem;
-            }
+            border: 2px solid #eab308 !important;
+            background: linear-gradient(to bottom right, rgba(234, 179, 8, 0.1), rgba(30, 41, 59, 0.9)) !important;
+            box-shadow: 0 0 15px rgba(234, 179, 8, 0.2) !important;
         }
 
         /* Modal Animation */
-        .modal-enter { animation: slideUp 0.3s ease-out forwards; }
-        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .modal-content-mobile { animation: slideUp 0.3s ease-out forwards; }
+        .modal-content-desktop { animation: fadeIn 0.2s ease-out forwards; }
+
+        /* Toast Animation */
+        #undoToast { transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55); }
+        #undoToast.hidden-toast { transform: translate(-50%, 100px); opacity: 0; pointer-events: none; }
+        #undoToast.visible-toast { transform: translate(-50%, 0); opacity: 1; pointer-events: all; }
+
+        @media (min-width: 768px) {
+            .desktop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; }
+        }
     </style>
 </head>
 <body class="bg-[#0f172a] text-gray-100 min-h-screen pb-28">
+
+    <div id="undoToast" class="fixed bottom-24 left-1/2 z-50 w-[90%] max-w-sm bg-gray-900 text-white rounded-xl shadow-2xl border border-gray-700 overflow-hidden hidden-toast flex flex-col">
+        <div class="flex items-center justify-between px-5 py-4">
+            <div class="flex items-center gap-3">
+                <div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.6)]"></div>
+                <span id="toastMessage" class="text-sm font-medium tracking-wide">הפעולה בוצעה</span>
+            </div>
+            <button onclick="executeUndo()" class="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition group">
+                <span class="text-sm font-bold tracking-wider">UNDO</span>
+                <i class="fas fa-undo text-xs transform group-hover:-rotate-180 transition duration-500"></i>
+            </button>
+        </div>
+        <div class="h-1 w-full bg-gray-800"><div id="toastProgress" class="h-full bg-blue-500 w-full"></div></div>
+    </div>
+
+    <input type="file" id="importFile" class="hidden" accept=".json,.txt" onchange="handleImport(event)">
 
     <header class="glass sticky top-0 z-40 px-6 py-4 flex justify-between items-center shadow-lg">
         <div class="flex items-center gap-3">
@@ -74,42 +91,41 @@
             </div>
         </div>
         
-        <div class="flex gap-2">
-            <div class="relative">
-                <button onclick="toggleSortMenu()" class="w-10 h-10 rounded-full glass flex items-center justify-center text-gray-300 hover:text-white transition">
-                    <i class="fas fa-sort-amount-down"></i>
+        <div class="flex gap-2 relative">
+            <button onclick="toggleMenu('sortMenu', event)" class="w-10 h-10 rounded-full glass flex items-center justify-center text-gray-300 hover:text-white transition">
+                <i class="fas fa-sort-amount-down"></i>
+            </button>
+            <div id="sortMenu" class="hidden absolute top-12 left-0 bg-[#1e293b] border border-gray-700 rounded-xl shadow-xl w-48 overflow-hidden z-50">
+                <button onclick="setSort('newest')" class="w-full text-right px-4 py-3 text-sm hover:bg-gray-700 flex justify-between items-center border-b border-gray-700">
+                    <span>הכי חדש למעלה</span> <i class="fas fa-check text-blue-500 opacity-0" id="check-newest"></i>
                 </button>
-                <div id="sortMenu" class="hidden absolute top-12 left-0 bg-[#1e293b] border border-gray-700 rounded-xl shadow-xl w-48 overflow-hidden z-50">
-                    <button onclick="setSort('newest')" class="w-full text-right px-4 py-3 text-sm hover:bg-gray-700 flex justify-between items-center">
-                        <span>הכי חדש למעלה</span>
-                        <i class="fas fa-check text-blue-500 opacity-0" id="check-newest"></i>
-                    </button>
-                    <button onclick="setSort('oldest')" class="w-full text-right px-4 py-3 text-sm hover:bg-gray-700 flex justify-between items-center">
-                        <span>הכי ישן למעלה</span>
-                        <i class="fas fa-check text-blue-500 opacity-0" id="check-oldest"></i>
-                    </button>
-                    <button onclick="setSort('alpha')" class="w-full text-right px-4 py-3 text-sm hover:bg-gray-700 flex justify-between items-center">
-                        <span>לפי א-ב</span>
-                        <i class="fas fa-check text-blue-500 opacity-0" id="check-alpha"></i>
-                    </button>
-                </div>
+                <button onclick="setSort('oldest')" class="w-full text-right px-4 py-3 text-sm hover:bg-gray-700 flex justify-between items-center border-b border-gray-700">
+                    <span>הכי ישן למעלה</span> <i class="fas fa-check text-blue-500 opacity-0" id="check-oldest"></i>
+                </button>
+                <button onclick="setSort('alpha')" class="w-full text-right px-4 py-3 text-sm hover:bg-gray-700 flex justify-between items-center">
+                    <span>לפי א-ב</span> <i class="fas fa-check text-blue-500 opacity-0" id="check-alpha"></i>
+                </button>
             </div>
 
-            <button onclick="downloadData()" class="w-10 h-10 rounded-full glass flex items-center justify-center text-green-400 hover:bg-green-500/20 transition">
-                <i class="fas fa-download"></i>
+            <button onclick="toggleMenu('backupMenu', event)" class="w-10 h-10 rounded-full glass flex items-center justify-center text-blue-400 hover:bg-blue-500/20 transition">
+                <i class="fas fa-cloud-upload-alt"></i>
             </button>
-            <label class="w-10 h-10 rounded-full glass flex items-center justify-center text-blue-400 hover:bg-blue-500/20 transition cursor-pointer">
-                <i class="fas fa-upload"></i>
-                <input type="file" class="hidden" onchange="handleFileImport(event)">
-            </label>
+            <div id="backupMenu" class="hidden absolute top-12 left-0 bg-[#1e293b] border border-gray-700 rounded-xl shadow-xl w-48 overflow-hidden z-50">
+                <button onclick="downloadData()" class="w-full text-right px-4 py-3 text-sm hover:bg-gray-700 text-green-400 flex items-center gap-3 border-b border-gray-700">
+                    <i class="fas fa-download"></i> הורד גיבוי
+                </button>
+                <button onclick="document.getElementById('importFile').click()" class="w-full text-right px-4 py-3 text-sm hover:bg-gray-700 text-blue-400 flex items-center gap-3">
+                    <i class="fas fa-upload"></i> ייבא גיבוי
+                </button>
+            </div>
         </div>
     </header>
 
     <main class="container mx-auto px-4 pt-6 max-w-6xl">
         
         <div class="relative mb-6">
-            <input type="text" id="searchInput" onkeyup="renderItems()" placeholder="חפש קישור, כותרת או תיאור..." 
-                class="w-full bg-[#1e293b] border border-gray-700 text-white p-4 pr-12 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition shadow-sm">
+            <input type="text" id="searchInput" onkeyup="renderItems()" placeholder="חפש כותרת, קישור או תיאור..." 
+                class="w-full bg-[#1e293b] border border-gray-700 text-white p-4 pr-12 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition shadow-sm placeholder-gray-500">
             <i class="fas fa-search absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
         </div>
 
@@ -119,6 +135,7 @@
             <button onclick="setCategory('social')" class="category-chip px-5 py-2 rounded-full border border-gray-700 bg-[#1e293b] text-gray-300 text-sm font-medium whitespace-nowrap transition hover:bg-gray-700">📱 חברתי</button>
             <button onclick="setCategory('tools')" class="category-chip px-5 py-2 rounded-full border border-gray-700 bg-[#1e293b] text-gray-300 text-sm font-medium whitespace-nowrap transition hover:bg-gray-700">🛠️ כלים</button>
             <button onclick="setCategory('media')" class="category-chip px-5 py-2 rounded-full border border-gray-700 bg-[#1e293b] text-gray-300 text-sm font-medium whitespace-nowrap transition hover:bg-gray-700">🎬 מדיה</button>
+            <button onclick="setCategory('study')" class="category-chip px-5 py-2 rounded-full border border-gray-700 bg-[#1e293b] text-gray-300 text-sm font-medium whitespace-nowrap transition hover:bg-gray-700">🎓 לימודים</button>
         </div>
 
         <div id="itemsContainer" class="grid gap-4 desktop-grid pb-24">
@@ -132,35 +149,35 @@
 
     <div id="itemModal" class="fixed inset-0 z-50 hidden flex items-end md:items-center justify-center p-0 md:p-4">
         <div class="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity" onclick="closeModal()"></div>
-        <div class="relative w-full bg-[#1e293b] rounded-t-3xl md:rounded-3xl p-6 shadow-2xl border border-gray-700 md:max-w-lg transform transition-all modal-enter">
+        <div class="relative w-full bg-[#1e293b] rounded-t-3xl md:rounded-3xl p-6 shadow-2xl border border-gray-700 md:max-w-lg transform transition-all modal-content-mobile md:modal-content-desktop">
             
             <div class="w-12 h-1.5 bg-gray-600 rounded-full mx-auto mb-6 md:hidden"></div>
             <h3 class="text-2xl font-bold mb-6 text-center text-white" id="modalTitle">הוספת קישור</h3>
 
-            <form onsubmit="handleFormSubmit(event)" class="space-y-4">
+            <form onsubmit="handleFormSubmit(event)" class="space-y-5">
                 <input type="hidden" id="editId">
                 
-                <div class="relative">
-                    <label class="text-xs text-blue-400 font-bold absolute -top-2 right-3 bg-[#1e293b] px-1">כותרת</label>
+                <div>
+                    <label class="text-xs text-gray-400 block mb-1">כותרת</label>
                     <input type="text" id="inpTitle" placeholder="שם האתר / הקישור" required 
-                        class="w-full p-3.5 rounded-xl bg-[#0f172a] border border-gray-700 outline-none focus:border-blue-500 text-white transition">
+                        class="w-full p-3.5 rounded-xl bg-[#0f172a] border border-gray-700 outline-none focus:border-blue-500 text-white transition placeholder-gray-600">
                 </div>
 
-                <div class="relative">
-                    <label class="text-xs text-blue-400 font-bold absolute -top-2 right-3 bg-[#1e293b] px-1">כתובת הקישור (URL)</label>
+                <div>
+                    <label class="text-xs text-gray-400 block mb-1">כתובת (URL)</label>
                     <input type="url" id="inpUrl" placeholder="https://..." required dir="ltr"
-                        class="w-full p-3.5 rounded-xl bg-[#0f172a] border border-gray-700 outline-none focus:border-blue-500 text-white transition font-mono text-sm">
+                        class="w-full p-3.5 rounded-xl bg-[#0f172a] border border-gray-700 outline-none focus:border-blue-500 text-white transition font-mono text-sm placeholder-gray-600">
                 </div>
 
-                <div class="relative">
-                    <label class="text-xs text-gray-400 font-bold absolute -top-2 right-3 bg-[#1e293b] px-1">תיאור קצר (אופציונלי)</label>
+                <div>
+                    <label class="text-xs text-gray-400 block mb-1">תיאור קצר</label>
                     <input type="text" id="inpDesc" placeholder="למה הקישור הזה משמש?" 
-                        class="w-full p-3.5 rounded-xl bg-[#0f172a] border border-gray-700 outline-none focus:border-blue-500 text-white transition">
+                        class="w-full p-3.5 rounded-xl bg-[#0f172a] border border-gray-700 outline-none focus:border-blue-500 text-white transition placeholder-gray-600">
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
                     <div class="relative">
-                        <label class="text-xs text-gray-400 font-bold absolute -top-2 right-3 bg-[#1e293b] px-1">קטגוריה</label>
+                        <label class="text-xs text-gray-400 block mb-1">קטגוריה</label>
                         <select id="inpCategory" class="w-full p-3.5 rounded-xl bg-[#0f172a] border border-gray-700 outline-none focus:border-blue-500 text-white transition appearance-none">
                             <option value="general">📌 כללי</option>
                             <option value="work">💼 עבודה</option>
@@ -169,11 +186,11 @@
                             <option value="media">🎬 מדיה</option>
                             <option value="study">🎓 לימודים</option>
                         </select>
-                        <i class="fas fa-chevron-down absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs pointer-events-none"></i>
+                        <i class="fas fa-chevron-down absolute left-3 top-[65%] -translate-y-1/2 text-gray-500 text-xs pointer-events-none"></i>
                     </div>
                     
                     <div class="relative">
-                        <label class="text-xs text-gray-400 font-bold absolute -top-2 right-3 bg-[#1e293b] px-1">צבע כרטיס</label>
+                        <label class="text-xs text-gray-400 block mb-1">צבע כרטיס</label>
                         <select id="inpColor" class="w-full p-3.5 rounded-xl bg-[#0f172a] border border-gray-700 outline-none focus:border-blue-500 text-white transition appearance-none">
                             <option value="default">🌑 רגיל</option>
                             <option value="blue">🔵 כחול</option>
@@ -190,19 +207,20 @@
     </div>
 
     <script>
-        // --- State Management ---
+        // --- State ---
         let items = JSON.parse(localStorage.getItem('linkItems')) || [];
         let currentFilter = 'all';
         let currentSort = 'newest';
-        
-        // --- Init ---
+        let undoStack = null;
+        let undoTimeout = null;
+
         document.addEventListener('DOMContentLoaded', () => {
             renderItems();
             updateSortCheckmarks();
         });
 
         // --- Core Functions ---
-        function saveToLocal() {
+        function saveData() {
             localStorage.setItem('linkItems', JSON.stringify(items));
             renderItems();
         }
@@ -210,122 +228,89 @@
         function renderItems() {
             const container = document.getElementById('itemsContainer');
             container.innerHTML = '';
-            
             const search = document.getElementById('searchInput').value.toLowerCase();
             
-            // 1. Filter
             let filtered = items.filter(item => {
                 const matchesCat = currentFilter === 'all' || item.category === currentFilter;
-                const matchesSearch = (item.title?.toLowerCase().includes(search) || 
-                                     item.url?.toLowerCase().includes(search) || 
-                                     item.desc?.toLowerCase().includes(search));
+                const matchesSearch = (item.title?.toLowerCase().includes(search) || item.url?.toLowerCase().includes(search) || item.desc?.toLowerCase().includes(search));
                 return matchesCat && matchesSearch;
             });
 
-            // 2. Sort (Smart Sorting: Pinned -> Sort Criteria)
+            // Sorting: Pinned first, then by criteria
             filtered.sort((a, b) => {
-                // Priority to Pinned
                 if (a.isPinned && !b.isPinned) return -1;
                 if (!a.isPinned && b.isPinned) return 1;
-
-                // Then selected sort
-                if (currentSort === 'newest') return (b.id - a.id); // Assuming ID is timestamp
+                if (currentSort === 'newest') return (b.id - a.id);
                 if (currentSort === 'oldest') return (a.id - b.id);
                 if (currentSort === 'alpha') return a.title.localeCompare(b.title);
                 return 0;
             });
 
             if (filtered.length === 0) {
-                container.innerHTML = `
-                    <div class="col-span-full text-center py-20 opacity-40">
-                        <i class="fas fa-ghost text-6xl mb-4 text-gray-600"></i>
-                        <p class="text-xl">לא נמצאו קישורים</p>
-                    </div>`;
+                container.innerHTML = `<div class="col-span-full text-center py-20 opacity-40"><i class="fas fa-link text-6xl mb-4 text-gray-600"></i><p class="text-xl">אין קישורים להצגה</p></div>`;
                 return;
             }
 
             filtered.forEach(item => {
-                const domain = new URL(item.url).hostname.replace('www.', '');
+                const domain = new URL(item.url).hostname;
                 const favicon = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
                 
-                // Card Styling based on color selection
-                let colorClass = '';
+                let colorClass = 'border-gray-700';
                 if(item.color === 'blue') colorClass = 'border-l-4 border-l-blue-500';
-                else if(item.color === 'green') colorClass = 'border-l-4 border-l-green-500';
-                else if(item.color === 'purple') colorClass = 'border-l-4 border-l-purple-500';
-                else if(item.color === 'red') colorClass = 'border-l-4 border-l-red-500';
-                else colorClass = 'border border-gray-700';
+                if(item.color === 'green') colorClass = 'border-l-4 border-l-green-500';
+                if(item.color === 'purple') colorClass = 'border-l-4 border-l-purple-500';
+                if(item.color === 'red') colorClass = 'border-l-4 border-l-red-500';
 
-                // Pinned Logic
                 const pinnedClass = item.isPinned ? 'pinned-card' : '';
-                const pinIconClass = item.isPinned ? 'text-yellow-500' : 'text-gray-500 hover:text-white';
 
                 const html = `
-                <div class="glass p-5 rounded-2xl relative transition hover:-translate-y-1 hover:shadow-2xl flex flex-col group animate-fade-in ${colorClass} ${pinnedClass}">
-                    
+                <div class="glass p-5 rounded-2xl relative transition hover:-translate-y-1 hover:shadow-2xl flex flex-col group animate-fade-in border ${colorClass} ${pinnedClass}">
                     <div class="flex justify-between items-start mb-3">
                         <div class="flex items-center gap-3 overflow-hidden">
                             <div class="w-12 h-12 rounded-xl bg-gray-800 flex items-center justify-center flex-shrink-0 p-2 shadow-inner">
                                 <img src="${favicon}" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1006/1006771.png'" class="w-full h-full object-contain">
                             </div>
                             <div class="min-w-0">
-                                <h3 class="font-bold text-lg text-white truncate leading-tight">${item.title}</h3>
-                                <p class="text-xs text-gray-400 truncate mt-0.5">${domain}</p>
+                                <h3 class="font-bold text-lg text-white truncate leading-tight cursor-pointer hover:text-blue-400 transition" onclick="window.open('${item.url}', '_blank')">${item.title}</h3>
+                                <p class="text-xs text-gray-400 truncate mt-0.5" dir="ltr">${domain}</p>
                             </div>
                         </div>
-
                         <div class="relative">
-                            <button onclick="toggleMenu(${item.id}, event)" class="w-8 h-8 rounded-full hover:bg-gray-700 flex items-center justify-center text-gray-400 transition">
-                                <i class="fas fa-ellipsis-v"></i>
-                            </button>
+                            <button onclick="toggleMenu('menu-${item.id}', event)" class="w-8 h-8 rounded-full hover:bg-gray-700 flex items-center justify-center text-gray-400 transition"><i class="fas fa-ellipsis-v"></i></button>
                             <div id="menu-${item.id}" class="hidden absolute left-0 top-8 bg-[#1e293b] shadow-2xl rounded-xl z-20 w-40 border border-gray-700 overflow-hidden py-1">
-                                <button onclick="handlePin(${item.id})" class="w-full text-right px-4 py-2.5 text-sm hover:bg-gray-700 flex items-center gap-3 transition">
-                                    <i class="fas fa-thumbtack ${item.isPinned ? 'text-yellow-500' : 'text-gray-400'}"></i> ${item.isPinned ? 'בטל נעיצה' : 'נעץ בראש'}
-                                </button>
-                                <button onclick="openEdit(${item.id})" class="w-full text-right px-4 py-2.5 text-sm hover:bg-gray-700 flex items-center gap-3 text-blue-400 transition">
-                                    <i class="fas fa-pen"></i> ערוך
-                                </button>
-                                <button onclick="deleteItem(${item.id})" class="w-full text-right px-4 py-2.5 text-sm hover:bg-gray-700 flex items-center gap-3 text-red-400 transition">
-                                    <i class="fas fa-trash"></i> מחק
-                                </button>
+                                <button onclick="togglePin(${item.id})" class="w-full text-right px-4 py-2.5 text-sm hover:bg-gray-700 flex items-center gap-3 transition"><i class="fas fa-thumbtack ${item.isPinned ? 'text-yellow-500' : 'text-gray-400'}"></i> ${item.isPinned ? 'בטל נעיצה' : 'נעץ'}</button>
+                                <button onclick="openEdit(${item.id})" class="w-full text-right px-4 py-2.5 text-sm hover:bg-gray-700 flex items-center gap-3 text-blue-400 transition"><i class="fas fa-pen"></i> ערוך</button>
+                                <button onclick="deleteItem(${item.id})" class="w-full text-right px-4 py-2.5 text-sm hover:bg-gray-700 flex items-center gap-3 text-red-400 transition"><i class="fas fa-trash"></i> מחק</button>
                             </div>
                         </div>
                     </div>
-
                     ${item.desc ? `<p class="text-sm text-gray-400 mb-4 line-clamp-2">${item.desc}</p>` : '<div class="mb-4"></div>'}
-
                     <div class="mt-auto flex justify-between items-center pt-3 border-t border-gray-700/50">
                         <span class="text-[10px] bg-gray-800 px-2 py-1 rounded text-gray-400">${item.categoryText || 'כללי'}</span>
                         <div class="flex gap-2">
-                            <button onclick="copyLink('${item.url}')" class="w-9 h-9 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-300 flex items-center justify-center transition" title="העתק">
-                                <i class="far fa-copy text-sm"></i>
-                            </button>
-                            <a href="${item.url}" target="_blank" class="w-9 h-9 rounded-full bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center shadow-lg shadow-blue-500/30 transition">
-                                <i class="fas fa-external-link-alt text-sm"></i>
-                            </a>
+                            <button onclick="copyLink('${item.url}')" class="w-9 h-9 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-300 flex items-center justify-center transition" title="העתק"><i class="far fa-copy text-sm"></i></button>
+                            <a href="${item.url}" target="_blank" class="w-9 h-9 rounded-full bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center shadow-lg shadow-blue-500/30 transition"><i class="fas fa-external-link-alt text-sm"></i></a>
                         </div>
                     </div>
-                    
                     ${item.isPinned ? '<div class="absolute top-0 right-0 w-3 h-3 bg-yellow-500 rounded-full shadow-[0_0_10px_#eab308]"></div>' : ''}
                 </div>`;
-                
                 container.innerHTML += html;
             });
         }
 
-        // --- Interaction Logic ---
-
+        // --- Logic Handlers ---
         function handleFormSubmit(e) {
             e.preventDefault();
             const editId = document.getElementById('editId').value;
-            const categorySelect = document.getElementById('inpCategory');
-            
-            const newItem = {
+            const select = document.getElementById('inpCategory');
+            const backup = JSON.parse(JSON.stringify(items));
+
+            const itemData = {
                 title: document.getElementById('inpTitle').value,
                 url: document.getElementById('inpUrl').value,
                 desc: document.getElementById('inpDesc').value,
-                category: categorySelect.value,
-                categoryText: categorySelect.options[categorySelect.selectedIndex].text,
+                category: select.value,
+                categoryText: select.options[select.selectedIndex].text,
                 color: document.getElementById('inpColor').value,
                 isPinned: false
             };
@@ -333,60 +318,108 @@
             if (editId) {
                 const idx = items.findIndex(i => i.id == editId);
                 if (idx > -1) {
-                    newItem.id = parseInt(editId);
-                    newItem.isPinned = items[idx].isPinned; // Preserve pin state
-                    items[idx] = newItem;
+                    itemData.id = parseInt(editId);
+                    itemData.isPinned = items[idx].isPinned;
+                    items[idx] = itemData;
                 }
             } else {
-                newItem.id = Date.now();
-                items.unshift(newItem); // Add to beginning (Newest)
+                itemData.id = Date.now();
+                items.unshift(itemData);
             }
 
-            saveToLocal();
+            saveData();
             closeModal();
-        }
-
-        function handlePin(id) {
-            const idx = items.findIndex(i => i.id == id);
-            if (idx > -1) {
-                items[idx].isPinned = !items[idx].isPinned;
-                saveToLocal();
-            }
+            showUndoToast(editId ? 'הקישור עודכן' : 'קישור חדש נוסף', backup);
         }
 
         function deleteItem(id) {
-            if(confirm('למחוק את הקישור הזה?')) {
-                items = items.filter(i => i.id !== id);
-                saveToLocal();
+            const backup = JSON.parse(JSON.stringify(items));
+            items = items.filter(i => i.id !== id);
+            saveData();
+            showUndoToast('הקישור נמחק', backup);
+        }
+
+        function togglePin(id) {
+            const idx = items.findIndex(i => i.id == id);
+            if (idx > -1) {
+                items[idx].isPinned = !items[idx].isPinned;
+                saveData();
             }
         }
 
-        // --- Menu Handling (The Fix) ---
-        function toggleMenu(id, event) {
-            event.stopPropagation(); // Prevents clicking the card background
+        // --- Undo System ---
+        function showUndoToast(msg, oldState) {
+            undoStack = oldState;
+            const toast = document.getElementById('undoToast');
+            const progress = document.getElementById('toastProgress');
+            document.getElementById('toastMessage').innerText = msg;
             
-            // Close all other menus first
-            document.querySelectorAll('[id^="menu-"]').forEach(menu => {
-                if(menu.id !== `menu-${id}`) menu.classList.add('hidden');
+            clearTimeout(undoTimeout);
+            progress.style.transition = 'none';
+            progress.style.width = '100%';
+            
+            toast.classList.remove('hidden-toast');
+            toast.classList.add('visible-toast');
+            
+            requestAnimationFrame(() => {
+                progress.style.transition = 'width 5s linear';
+                progress.style.width = '0%';
             });
 
-            const menu = document.getElementById(`menu-${id}`);
-            menu.classList.toggle('hidden');
+            undoTimeout = setTimeout(() => {
+                toast.classList.remove('visible-toast');
+                toast.classList.add('hidden-toast');
+                undoStack = null;
+            }, 5000);
         }
 
-        function toggleSortMenu() {
-            const menu = document.getElementById('sortMenu');
-            menu.classList.toggle('hidden');
+        function executeUndo() {
+            if (undoStack) {
+                items = undoStack;
+                saveData();
+                document.getElementById('undoToast').classList.remove('visible-toast');
+                document.getElementById('undoToast').classList.add('hidden-toast');
+            }
+        }
+
+        // --- Menus & Modals ---
+        function toggleMenu(id, event) {
             event.stopPropagation();
+            document.querySelectorAll('[id^="menu-"], #sortMenu, #backupMenu').forEach(m => {
+                if (m.id !== id) m.classList.add('hidden');
+            });
+            document.getElementById(id).classList.toggle('hidden');
         }
 
-        // Global click to close menus
-        window.addEventListener('click', () => {
-            document.querySelectorAll('[id^="menu-"]').forEach(menu => menu.classList.add('hidden'));
-            document.getElementById('sortMenu').classList.add('hidden');
-        });
+        window.onclick = function(event) {
+            if (!event.target.closest('button')) {
+                document.querySelectorAll('[id^="menu-"], #sortMenu, #backupMenu').forEach(m => m.classList.add('hidden'));
+            }
+        }
 
-        // --- Sorting & Filtering ---
+        function openModal() {
+            document.getElementById('modalTitle').innerText = 'הוספת קישור חדש';
+            document.getElementById('editId').value = '';
+            document.querySelector('form').reset();
+            document.getElementById('itemModal').classList.remove('hidden');
+        }
+
+        function openEdit(id) {
+            const item = items.find(i => i.id == id);
+            if (!item) return;
+            document.getElementById('modalTitle').innerText = 'עריכת קישור';
+            document.getElementById('editId').value = item.id;
+            document.getElementById('inpTitle').value = item.title;
+            document.getElementById('inpUrl').value = item.url;
+            document.getElementById('inpDesc').value = item.desc || '';
+            document.getElementById('inpCategory').value = item.category;
+            document.getElementById('inpColor').value = item.color || 'default';
+            document.getElementById('itemModal').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('itemModal').classList.add('hidden'); }
+
+        // --- Filtering & Sorting ---
         function setCategory(cat) {
             currentFilter = cat;
             document.querySelectorAll('.category-chip').forEach(btn => {
@@ -400,57 +433,30 @@
 
         function setSort(type) {
             currentSort = type;
-            updateSortCheckmarks();
+            document.querySelectorAll('#sortMenu .fa-check').forEach(el => el.style.opacity = '0');
+            document.getElementById(`check-${type}`).style.opacity = '1';
             renderItems();
         }
 
-        function updateSortCheckmarks() {
-            document.getElementById('check-newest').style.opacity = currentSort === 'newest' ? '1' : '0';
-            document.getElementById('check-oldest').style.opacity = currentSort === 'oldest' ? '1' : '0';
-            document.getElementById('check-alpha').style.opacity = currentSort === 'alpha' ? '1' : '0';
-        }
-
-        // --- Utils ---
-        function openModal() {
-            resetForm();
-            document.getElementById('itemModal').classList.remove('hidden');
-        }
-        function closeModal() { document.getElementById('itemModal').classList.add('hidden'); }
-        
-        function openEdit(id) {
-            const item = items.find(i => i.id == id);
-            if(!item) return;
-            document.getElementById('modalTitle').innerText = 'עריכת קישור';
-            document.getElementById('editId').value = item.id;
-            document.getElementById('inpTitle').value = item.title;
-            document.getElementById('inpUrl').value = item.url;
-            document.getElementById('inpDesc').value = item.desc || '';
-            document.getElementById('inpCategory').value = item.category || 'general';
-            document.getElementById('inpColor').value = item.color || 'default';
-            document.getElementById('itemModal').classList.remove('hidden');
-        }
-
-        function resetForm() {
-            document.getElementById('modalTitle').innerText = 'הוספת קישור חדש';
-            document.getElementById('editId').value = '';
-            document.querySelector('form').reset();
-        }
+        function updateSortCheckmarks() { setSort(currentSort); }
 
         function copyLink(url) {
             navigator.clipboard.writeText(url);
-            alert('הקישור הועתק!');
+            // Could add small toast here
         }
 
-        // --- Import/Export ---
+        // --- Import / Export ---
         function downloadData() {
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(items, null, 2));
-            const dlAnchorElem = document.createElement('a');
-            dlAnchorElem.setAttribute("href", dataStr);
-            dlAnchorElem.setAttribute("download", "linkmaster_backup.json");
-            dlAnchorElem.click();
+            const node = document.createElement('a');
+            node.setAttribute("href", dataStr);
+            node.setAttribute("download", `linkmaster_backup_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(node);
+            node.click();
+            node.remove();
         }
 
-        function handleFileImport(event) {
+        function handleImport(event) {
             const file = event.target.files[0];
             if (!file) return;
             const reader = new FileReader();
@@ -458,12 +464,13 @@
                 try {
                     const imported = JSON.parse(e.target.result);
                     if (Array.isArray(imported)) {
-                        // Merge strategies (prevent duplicates by URL)
+                        const backup = JSON.parse(JSON.stringify(items));
+                        // Merge avoiding duplicates by URL
                         const existingUrls = new Set(items.map(i => i.url));
                         const newItems = imported.filter(i => !existingUrls.has(i.url));
                         items = [...newItems, ...items];
-                        saveToLocal();
-                        alert(`יובאו ${newItems.length} קישורים חדשים`);
+                        saveData();
+                        showUndoToast(`יובאו ${newItems.length} קישורים`, backup);
                     }
                 } catch(err) { alert('קובץ לא תקין'); }
             };
