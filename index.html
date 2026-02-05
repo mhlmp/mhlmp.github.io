@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Link Manager Pro - Category Sort Fix</title>
+    <title>מנהל הקישורים Pro - Fixed Categories</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
@@ -340,7 +340,7 @@
 <body class="dark-mode">
 
     <header>
-        <h1>Link Manager Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Ultimate V5)</span></h1>
+        <h1>מנהל הקישורים Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Ultimate V6)</span></h1>
         <div id="itemCount">טוען נתונים...</div>
     </header>
 
@@ -452,7 +452,6 @@
         import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // === Configuration ===
         const firebaseConfig = {
             apiKey: "AIzaSyBnRk-Os6EvJcFIdpl-lICc9w-E4pQ74nE",
             authDomain: "linkmanager-fdac5.firebaseapp.com",
@@ -463,7 +462,7 @@
             measurementId: "G-NVN4E8TDGE"
         };
 
-        const STORAGE_KEY = 'LinkManager_Pro_V5';
+        const STORAGE_KEY = 'LinkManager_Pro_V6';
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
         
         const state = {
@@ -477,7 +476,6 @@
 
         let app, auth, db;
 
-        // === Initialization ===
         try {
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
@@ -494,7 +492,6 @@
             setupFirebaseListeners();
         });
 
-        // === Event Listeners ===
         function setupEventListeners() {
             document.querySelectorAll('.drop-trigger').forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -538,7 +535,6 @@
             document.getElementById('downloadSourceBtn')?.addEventListener('click', downloadSource);
         }
 
-        // === Core Logic ===
         function loadLocalData() {
             try {
                 const embedded = document.getElementById('app-state').textContent;
@@ -575,7 +571,6 @@
             if(state.trash.length !== initialLen) saveData();
         }
 
-        // === Firebase ===
         function setupFirebaseListeners() {
             if (!auth) return;
             onAuthStateChanged(auth, (user) => {
@@ -594,6 +589,7 @@
                                 state.items = d.items || [];
                                 state.trash = d.trash || [];
                                 saveData(true);
+                                updateCategoryDropdowns(); // FORCE UPDATE ON CLOUD SYNC
                                 renderList();
                             }
                             updateSyncStatus('online');
@@ -636,27 +632,38 @@
             el.innerHTML = `<span class="status-dot ${status}"></span> ${status === 'online' ? 'מחובר' : status === 'syncing' ? 'מסנכרן...' : 'שגיאה'}`;
         }
 
-        // === Helpers ===
         function escapeHtml(text) { return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : ''; }
         function closeAllMenus() { document.querySelectorAll('.dropdown-content, .drop-trigger').forEach(el => el.classList.remove('show', 'active')); }
 
+        // === FIXED CATEGORY UPDATE ===
         function updateCategoryDropdowns() {
             const cats = new Set(state.items.map(i => i.category));
             const select = document.getElementById('categoryFilter');
             const datalist = document.getElementById('categoriesDatalist');
+            
+            if(!select || !datalist) return;
+
+            // Preserve current selection if possible
             const currentVal = select.value;
+            
             let html = '<option value="">📂 כל הקטגוריות</option>';
             let listHtml = '';
+            
             [...cats].sort().forEach(c => {
                 const s = escapeHtml(c);
                 html += `<option value="${s}">${s}</option>`;
                 listHtml += `<option value="${s}">`;
             });
-            if (select.innerHTML !== html) { select.innerHTML = html; select.value = currentVal; }
+
+            // FORCE UPDATE every time
+            select.innerHTML = html;
             datalist.innerHTML = listHtml;
+            
+            // Restore selection
+            if(currentVal && cats.has(currentVal)) select.value = currentVal;
+            else select.value = "";
         }
 
-        // === Render Logic ===
         function renderList() {
             const container = document.getElementById('listContainer');
             if(!container) return;
@@ -666,24 +673,19 @@
             const catFilter = document.getElementById('categoryFilter')?.value || '';
             const sort = document.getElementById('sortOrder')?.value || 'date-new';
 
-            // 1. Prepare Full List with Visual Indices (PRE-CALCULATION)
             let sortedFullList = [...state.items];
-            
-            // Sort to determine what #ID corresponds to which item
             const baseSort = (a, b) => {
                 if (sort === 'name') return a.content.localeCompare(b.content);
-                return b.date.localeCompare(a.date); // Default: Newest first
+                return b.date.localeCompare(a.date); 
             };
             sortedFullList.sort(baseSort);
 
-            // Assign "Visual ID" based on this sort
             const total = sortedFullList.length;
             sortedFullList.forEach((item, index) => {
                 if (sort === 'date-new') item.visualIndex = total - index;
                 else item.visualIndex = index + 1;
             });
 
-            // 2. Filter
             const seen = new Set(), dups = new Set();
             sortedFullList.forEach(i => {
                 const k = i.content.toLowerCase().trim();
@@ -691,7 +693,6 @@
             });
             sortedFullList.forEach(i => { if(dups.has(i.content.toLowerCase().trim())) i.isDup = true; });
 
-            // Detect if search is for a specific number (e.g., "#12")
             const isHashSearch = /^#\s*\d+$/.test(query);
             const searchNum = isHashSearch ? parseInt(query.replace(/\D/g, '')) : null;
 
@@ -714,19 +715,14 @@
 
             document.getElementById('itemCount').textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
 
-            // 3. Separate Pinned
             const pinnedItems = filtered.filter(i => i.isPinned);
             const regularItems = filtered.filter(i => !i.isPinned);
-
-            // They are already sorted by baseSort because sortedFullList was sorted
 
             if (filtered.length === 0) {
                 container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-secondary);">לא נמצאו תוצאות</div>';
                 return;
             }
 
-            // 4. Render Groups
-            // Pinned
             if (pinnedItems.length > 0) {
                 const section = document.createElement('div');
                 section.className = 'category-block';
@@ -742,25 +738,18 @@
                 container.appendChild(section);
             }
 
-            // Regular Categories
             const groups = {};
             regularItems.forEach(i => {
                 if(!groups[i.category]) groups[i.category] = [];
                 groups[i.category].push(i);
             });
 
-            // === CRITICAL FIX: Sort Categories by NEWEST ITEM ===
-            // Instead of sorting alphabetically, we sort by the date of the FIRST item in the group
-            // (Since items are already sorted by date-new, the first item is the newest in that category)
             const sortedCategories = Object.keys(groups).sort((catA, catB) => {
                 if (sort === 'date-new') {
-                    // Get the top item from each group
                     const itemA = groups[catA][0];
                     const itemB = groups[catB][0];
-                    // Compare their dates (descending)
                     return itemB.date.localeCompare(itemA.date);
                 } else {
-                    // Fallback to alphabetical for name sort
                     return catA.localeCompare(catB);
                 }
             });
@@ -819,7 +808,6 @@
             return div;
         }
 
-        // === Actions ===
         function handleAdd(e) {
             e.preventDefault();
             const content = document.getElementById('itemContent').value.trim();
@@ -836,7 +824,7 @@
                 isPinned: false
             };
             
-            state.items.unshift(newItem); // Add to top of array
+            state.items.unshift(newItem); 
             onDataChange();
             e.target.reset();
             
@@ -889,7 +877,6 @@
 
         function onDataChange() { saveData(); updateCategoryDropdowns(); renderList(); }
 
-        // === Toast Logic ===
         function showToast(msg, undoCallback) {
             const t = document.getElementById('toast');
             const progress = document.getElementById('toastProgress');
@@ -923,7 +910,6 @@
             }
         }
 
-        // === Trash & Import/Export ===
         function openTrashModal() {
             const list = document.getElementById('trashList');
             list.innerHTML = '';
