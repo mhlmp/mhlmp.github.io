@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>מנהל הקישורים Pro - Ultimate Glass</title>
+    <title>מנהל הקישורים Pro - Fixed Glass</title>
     <style>
         :root {
-            /* --- משתני העיצוב המקוריים (Glass) --- */
+            /* --- משתני העיצוב (Glassmorphism) --- */
             --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
             --glass-bg: rgba(255, 255, 255, 0.85);
             --glass-border: rgba(255, 255, 255, 0.6);
@@ -18,7 +18,7 @@
             --primary-color: #0066cc;
             --primary-glow: rgba(0, 102, 204, 0.2);
             
-            --radius: 12px;
+            --radius: 16px; /* רדיוס מהקוד החדש */
             --accent-green: #00a651;
             --accent-red: #d93025;
             --accent-gold: #f59e0b;
@@ -196,7 +196,10 @@
             box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
         }
 
-        /* === The NEW Card Behavior (From Clean Build) === */
+        /* ========================================================================== */
+        /* === THE NEW OBJECT CARDS (Strictly copied from Clean Build + Glass BG) === */
+        /* ========================================================================== */
+        
         .category-block { margin-bottom: 35px; }
         .category-header {
             display: flex; align-items: center; justify-content: space-between;
@@ -213,29 +216,30 @@
         .items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
         
         .card {
+            /* Glass Background */
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
             border-radius: var(--radius);
+            
             position: relative;
             display: flex; flex-direction: column;
             
-            /* The Clean Build Animation */
+            /* THE KEY: No Layout Shift Transitions */
             transition: transform 0.2s, box-shadow 0.2s, z-index 0s;
             box-shadow: var(--glass-shadow);
         }
         
-        /* Hover Effect - ONLY when menu is NOT open (Prevents Jitter) */
+        /* HOVER: Only works if menu is NOT active */
         .card:not(.menu-active):hover {
             transform: translateY(-5px);
             box-shadow: 0 15px 30px rgba(0,0,0,0.15);
-            border-color: rgba(255,255,255,0.4);
             z-index: 10;
         }
 
-        /* LOCKED STATE - When menu is open (The Fix) */
+        /* LOCKED STATE: When menu is active */
         .card.menu-active {
             z-index: 100 !important; /* Force on top */
-            transform: none !important; /* Lock position */
+            transform: none !important; /* NO MOVEMENT */
             box-shadow: 0 0 0 3px var(--primary-color) !important; /* Highlight */
             border-color: var(--primary-color) !important;
         }
@@ -245,30 +249,25 @@
             box-shadow: var(--gold-glow);
         }
         
-        .card-index {
-            position: absolute; top: 12px; left: 12px; 
-            background: rgba(127,127,127,0.1);
-            color: var(--text-secondary); font-size: 11px; padding: 3px 8px;
-            border-radius: 6px; font-family: monospace; 
-        }
+        .card-body { padding: 20px; padding-top: 40px; flex: 1; }
+        .card-index { position: absolute; top: 12px; left: 12px; font-size: 0.75rem; color: var(--text-secondary); opacity: 0.7; }
         
-        .card-body { padding: 20px; padding-top: 40px; flex-grow: 1; }
-        .card-link {
+        .card-link { 
             display: block; color: var(--primary-color); font-weight: 700; text-decoration: none;
             margin-bottom: 10px; word-break: break-all; font-size: 16px; line-height: 1.4;
         }
         .card-text-content {
-            background: rgba(127,127,127,0.05); padding: 12px; border-radius: 8px;
-            font-family: monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all;
-            border: 1px solid var(--glass-border);
+             display: block; color: var(--text-primary); font-weight: 500;
+             margin-bottom: 10px; word-break: break-all; font-size: 16px; line-height: 1.4;
         }
-        .card-desc { font-size: 15px; color: var(--text-primary); opacity: 0.9; margin-top: 8px; line-height: 1.5; }
+
+        .card-desc { font-size: 15px; color: var(--text-primary); opacity: 0.9; margin-top: 8px; line-height: 1.5; margin-bottom: 10px;}
+        
         .card-note {
             margin-top: 12px; padding: 10px; background-color: var(--note-bg);
             color: #4a3b10; font-size: 13px; border-radius: 8px;
             border-right: 4px solid var(--accent-gold); display: flex; gap: 8px;
         }
-        .card-note::before { content: '📝'; }
 
         .card-footer {
             padding: 12px 20px; border-top: 1px solid var(--glass-border);
@@ -292,28 +291,30 @@
         .icon-btn:hover { color: var(--primary-color); background: rgba(127,127,127,0.1); }
         .pin-btn.active { color: var(--accent-gold); transform: rotate(45deg); }
 
-        /* --- Popover Menu (Stable) --- */
-        .card-menu-popover {
-            display: none; position: absolute; 
+        /* THE NEW POPUP MENU (Stable) */
+        .popup-menu {
+            display: none; position: absolute;
             background: var(--glass-bg);
             backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border); 
-            box-shadow: 0 10px 40px rgba(0,0,0,0.4); z-index: 2000;
-            left: 10px; bottom: 50px; /* Anchored */
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5); z-index: 200;
+            left: 10px; bottom: 50px;
             border-radius: 12px; min-width: 150px;
             overflow: hidden;
-            animation: popIn 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            animation: fadeIn 0.1s ease-out;
         }
+        .popup-menu.show { display: block; }
         
-        .card-menu-popover.show { display: block; }
-        .card-menu-popover button {
+        .popup-menu button {
             display: flex; align-items: center; gap: 10px;
             width: 100%; text-align: right; padding: 14px 16px;
             background: none; border: none; cursor: pointer; 
             color: var(--accent-red); font-weight: 600; font-size: 0.9rem;
             transition: background 0.2s;
         }
-        .card-menu-popover button:hover { background: rgba(239, 68, 68, 0.1); }
+        .popup-menu button:hover { background: rgba(239, 68, 68, 0.1); }
+
+        /* ========================================================================== */
 
         .duplicate-badge { color: var(--accent-red); font-weight: bold; font-size: 12px; display: none; margin-left: 5px; background: rgba(239,68,68,0.1); padding: 2px 6px; border-radius: 4px; }
         input[type="file"] { display: none; }
@@ -329,13 +330,12 @@
         #toast button { background: none; border: none; color: var(--accent-green); font-weight: bold; cursor: pointer; font-size: 15px; }
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes popIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
     </style>
 </head>
 <body class="dark-mode">
 
     <header>
-        <h1>מנהל הקישורים Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Ultimate Glass)</span></h1>
+        <h1>מנהל הקישורים Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Fixed Glass)</span></h1>
         <div id="itemCount">טוען נתונים...</div>
     </header>
 
@@ -569,7 +569,7 @@
     </script>
 
     <script>
-        const STORAGE_KEY = 'LinkManager_Glass_Stable_V4';
+        const STORAGE_KEY = 'LinkManager_Glass_Fixed_Final';
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
         
         const rawData = `
@@ -607,7 +607,7 @@
             // Global click to close menus
             window.addEventListener('click', (e) => {
                 // If click is INSIDE a dropdown content or popover, do nothing
-                if (e.target.closest('.dropdown-content') || e.target.closest('.card-menu-popover')) {
+                if (e.target.closest('.dropdown-content') || e.target.closest('.popup-menu')) {
                     return;
                 }
                 closeAllMenus();
@@ -643,13 +643,14 @@
             document.getElementById('undoBtn').addEventListener('click', executeUndo);
         }
 
+        // === THE FIX: Use "menu-active" class to LOCK cards ===
         function closeAllMenus() {
             // Close header dropdowns
             document.querySelectorAll('.dropdown-content').forEach(m => m.classList.remove('show'));
             document.querySelectorAll('.drop-trigger').forEach(b => b.classList.remove('active'));
             
             // Close card menus and UNLOCK cards
-            document.querySelectorAll('.card-menu-popover').forEach(m => m.classList.remove('show'));
+            document.querySelectorAll('.popup-menu').forEach(m => m.classList.remove('show'));
             document.querySelectorAll('.card').forEach(c => c.classList.remove('menu-active'));
         }
 
@@ -722,7 +723,6 @@
 
             const sortedCategories = Object.keys(groups).sort();
             
-            // Adjust counter direction based on sort
             const isDescending = (sort === 'index-new' || sort === 'date-new');
             let visualCounter = isDescending ? filtered.length : 1;
             const counterStep = isDescending ? -1 : 1;
@@ -756,9 +756,10 @@
             }
         }
 
+        // === THIS IS THE "CLEAN BUILD" CARD STRUCTURE ADAPTED ===
         function createCard(item, displayNum) {
             const div = document.createElement('div');
-            // 'menu-active' is handled via JS, 'pinned' via class
+            // We use 'menu-active' (JS) for the fix
             div.className = `card ${item.isPinned ? 'pinned' : ''}`;
             
             const contentHtml = item.type === 'link' 
@@ -783,10 +784,10 @@
                         <button class="icon-btn btn-copy" title="העתק">📋</button>
                         <button class="icon-btn btn-edit" title="ערוך">✏️</button>
                         <button class="icon-btn pin-btn ${item.isPinned ? 'active' : ''}" title="${item.isPinned ? 'בטל נעיצה' : 'נעץ בראש הרשימה'}">📌</button>
-                        <button class="icon-btn btn-menu" title="פעולות">⋮</button>
+                        <button class="icon-btn btn-menu" style="color:var(--accent-red)" title="פעולות">⋮</button>
                     </div>
                 </div>
-                <div class="card-menu-popover">
+                <div id="menu-${item.id}" class="popup-menu">
                     <button class="btn-delete">🗑️ מחק פריט</button>
                 </div>
             `;
@@ -795,15 +796,17 @@
             div.querySelector('.btn-edit').onclick = () => editItem(item);
             div.querySelector('.pin-btn').onclick = () => togglePin(item.id);
             
+            // Delete Logic
             div.querySelector('.btn-delete').onclick = (e) => {
                 e.stopPropagation();
                 deleteItem(item.id);
             };
 
+            // Menu Logic (The Fix)
             const menuBtn = div.querySelector('.btn-menu');
             menuBtn.onclick = (e) => {
                 e.stopPropagation();
-                const menu = div.querySelector('.card-menu-popover');
+                const menu = div.querySelector('.popup-menu');
                 const wasOpen = menu.classList.contains('show');
                 
                 closeAllMenus(); // Close other menus
