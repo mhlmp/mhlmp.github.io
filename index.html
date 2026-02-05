@@ -3,454 +3,528 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>מנהל הקישורים - גרסה יציבה</title>
+    <title>מנהל הקישורים Pro - Exact Design</title>
     <style>
         :root {
-            /* משתני העיצוב המקוריים שלך */
-            --bg-color: #f4f7f6;
-            --card-bg: #ffffff;
-            --primary-text: #1c1e21;
-            --secondary-text: #606770;
-            --primary-color: #007bff;
-            --primary-hover: #0056b3;
-            --accent-color: #28a745;
-            --accent-hover: #1e7e34;
-            --danger-color: #d93025;
-            --warn-color: #ffc107;
-            --border-color: #ddd;
-            --card-shadow: 0 2px 5px rgba(0, 0, 0, 0.07);
-            --card-hover-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            --light-note-bg: #fffbe6;
-            --light-note-border: #ffe58f;
-            --form-bg: #fcfcfc;
-            --code-bg: #f8f8f8;
-            --footer-bg: #f9f9f9;
-            --category-bg: #e6f2ff;
+            /* צבעים מתוך התמונה ששלחת */
+            --bg-body: #0f172a;      /* כחול עמוק מאוד */
+            --bg-card: #1e293b;      /* צבע הכרטיסים והפאנלים */
+            --border-color: #334155; /* גבולות */
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            
+            /* כפתורים מהתמונה */
+            --btn-purple: #4f46e5;
+            --btn-teal: #0d9488;
+            --btn-blue: #2563eb;
+            
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-gold: #f59e0b;
+            
+            --radius: 8px;
         }
-        .dark-mode {
-            --bg-color: #121212;
-            --card-bg: #1e1e1e;
-            --primary-text: #ffffff;
-            --secondary-text: #b0b3b8;
-            --primary-color: #4da6ff;
-            --primary-hover: #1e90ff;
-            --accent-color: #66bb6a;
-            --accent-hover: #388e3c;
-            --danger-color: #ff7043;
-            --warn-color: #ffeb3b;
-            --border-color: #363636;
-            --card-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-            --card-hover-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-            --light-note-bg: #33331a;
-            --light-note-border: #808020;
-            --form-bg: #2c2c2c;
-            --code-bg: #2c2c2c;
-            --footer-bg: #252525;
-            --category-bg: #1e3a5f;
-        }
-        
+
+        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--primary-text);
+            background-color: var(--bg-body);
+            color: var(--text-main);
             margin: 0;
-            padding: 10px;
-            transition: background-color 0.3s ease, color 0.3s ease;
-            overflow-x: hidden; /* מניעת גלילה אופקית מיותרת */
+            padding: 20px;
+            padding-bottom: 100px;
+            min-height: 100vh;
         }
 
-        h1 {
-            text-align: center; font-size: 1.8rem; font-weight: 700;
-            color: var(--primary-color); text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
-            margin-bottom: 10px; margin-top: 10px;
-        }
-
+        /* --- Header --- */
+        header { text-align: center; margin-bottom: 25px; }
+        h1 { margin: 0 0 10px 0; font-size: 2rem; font-weight: 800; color: white; }
+        
         #itemCount {
-            font-size: 0.9rem; font-weight: 600; color: var(--primary-text);
-            background-color: var(--card-bg); padding: 5px 12px; border-radius: 8px;
-            display: block; margin: 10px auto; text-align: center;
-            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
-            width: fit-content; max-width: 95%;
+            display: inline-block; padding: 4px 16px; border-radius: 20px; 
+            font-size: 0.9rem; background: #1e293b; border: 1px solid var(--border-color); color: var(--text-muted);
+        }
+
+        /* --- Google Login Button (Centered like image) --- */
+        #userSection { display: flex; justify-content: center; margin-bottom: 25px; gap: 10px; }
+        .btn-google {
+            background: #2563eb; color: white; border: none; padding: 10px 30px; 
+            border-radius: 30px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 10px;
+            font-size: 1rem; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+        .user-info-display { display: flex; align-items: center; gap: 10px; background: var(--bg-card); padding: 5px 15px; border-radius: 30px; border: 1px solid var(--border-color); }
+        .avatar { width: 32px; height: 32px; border-radius: 50%; }
+
+        /* --- Controls Container (The Image Layout) --- */
+        .controls-wrapper {
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: var(--radius); padding: 20px; margin-bottom: 20px;
+            display: flex; flex-direction: column; gap: 15px;
+        }
+
+        /* Search */
+        .search-row input {
+            width: 100%; padding: 12px 15px; background: #0f172a;
+            border: 1px solid var(--border-color); border-radius: 6px;
+            color: white; font-size: 16px;
+        }
+
+        /* Filters Row */
+        .filters-row { display: flex; gap: 10px; }
+        .filters-row select {
+            flex: 1; padding: 10px; background: #0f172a; color: white;
+            border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;
+        }
+
+        /* Buttons Row - Colored Buttons */
+        .buttons-row { display: flex; gap: 10px; align-items: stretch; }
+        
+        .icon-btn-small {
+            width: 48px; border-radius: 6px; border: none; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+            background: #0f172a; color: #fbbf24; border: 1px solid var(--border-color); transition: 0.2s;
+        }
+        .icon-btn-small:hover { background: #334155; }
+
+        .manager-group { flex: 1; display: flex; gap: 10px; }
+        
+        .manager-btn {
+            flex: 1; border: none; padding: 12px; border-radius: 6px;
+            color: white; font-weight: bold; cursor: pointer; position: relative;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: opacity 0.2s; font-size: 0.95rem;
+        }
+        .manager-btn:hover { opacity: 0.9; }
+        
+        .btn-purple { background-color: var(--btn-purple); }
+        .btn-teal { background-color: var(--btn-teal); }
+        .btn-blue { background-color: var(--btn-blue); }
+
+        /* Dropdowns for Manager Buttons */
+        .dropdown-menu {
+            display: none; position: absolute; top: 100%; left: 0; width: 100%;
+            background: #1e293b; border: 1px solid var(--border-color);
+            border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            z-index: 100; margin-top: 5px; overflow: hidden;
+        }
+        .dropdown-menu.show { display: block; animation: fadeIn 0.2s; }
+        .dropdown-menu button, .dropdown-menu label {
+            display: block; width: 100%; padding: 12px; text-align: right;
+            background: none; border: none; color: white; cursor: pointer;
+            font-size: 0.9rem; transition: background 0.2s; border-bottom: 1px solid #334155;
+        }
+        .dropdown-menu button:last-child { border-bottom: none; }
+        .dropdown-menu button:hover { background: #334155; }
+
+        /* --- Add Item Bar --- */
+        .add-bar-wrapper { margin-bottom: 25px; }
+        .btn-add-bar {
+            width: 100%; background: #1e293b; border: 1px solid #334155; color: #60a5fa;
+            padding: 15px; font-weight: bold; border-radius: 8px; cursor: pointer;
+            transition: background 0.2s; text-align: center;
+        }
+        .btn-add-bar:hover { background: #334155; }
+        
+        #addItemContainer {
+            display: none; background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: var(--radius); padding: 20px; margin-top: 10px;
+            flex-direction: column; gap: 12px;
+        }
+        #addItemContainer.show { display: flex; }
+        #addItemContainer input, #addItemContainer textarea {
+            padding: 12px; background: #0f172a; border: 1px solid var(--border-color);
+            border-radius: 6px; color: white; width: 100%;
+        }
+        #addItemContainer button {
+            background: var(--btn-blue); color: white; padding: 12px; border: none;
+            border-radius: 6px; font-weight: bold; cursor: pointer;
+        }
+
+        /* --- Cards (Stable Grid) --- */
+        .category-header {
+            display: flex; justify-content: space-between; padding: 5px;
+            margin: 20px 0 10px; border-bottom: 1px solid var(--border-color);
+            color: var(--text-muted); font-size: 1rem; font-weight: bold;
+        }
+
+        .items-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;
+        }
+
+        .card {
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: 8px; position: relative;
+            display: flex; flex-direction: column; min-height: 140px;
+            /* YAZIVUT: Only opacity/color transitions */
+            transition: border-color 0.2s; 
+        }
+        .card:hover { border-color: var(--btn-blue); }
+        .card.pinned { border: 1px solid var(--accent-gold); background: rgba(245, 158, 11, 0.05); }
+
+        .card-index { 
+            position: absolute; top: 12px; left: 12px; font-size: 0.75rem; 
+            color: var(--text-muted); font-family: monospace; opacity: 0.7;
+        }
+
+        .card-body { padding: 20px; padding-top: 35px; flex-grow: 1; text-align: center; }
+        
+        .card-link {
+            display: block; color: var(--btn-blue); text-decoration: none;
+            font-weight: 700; font-size: 1.1rem; margin-bottom: 8px; word-break: break-all;
+            direction: ltr; 
+        }
+        .card-text {
+            background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px;
+            font-family: monospace; font-size: 0.9rem; word-break: break-all; display: inline-block;
         }
         
-        /* --- Controls --- */
-        #controls {
-            background-color: var(--card-bg); padding: 15px; border-radius: 8px;
-            box-shadow: var(--card-shadow); margin-bottom: 20px;
-            display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--border-color);
+        .card-desc { font-size: 0.95rem; color: var(--text-main); opacity: 0.9; margin-top: 8px; }
+        .card-note {
+            margin-top: 12px; padding: 6px 10px; background: rgba(245, 158, 11, 0.1);
+            color: #fbbf24; font-size: 0.85rem; border-radius: 6px; display: inline-block;
         }
 
-        .controls-top { display: flex; gap: 10px; width: 100%; }
-        .controls-bottom { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: center; }
-
-        #searchInput {
-            flex-grow: 2; padding: 10px 15px; border: 1px solid var(--border-color);
-            border-radius: 6px; font-size: 16px; background-color: var(--form-bg);
-            color: var(--primary-text); min-width: 0;
-        }
-        
-        #categoryFilter, #sortOrder {
-            flex-grow: 1; padding: 10px; border: 1px solid var(--border-color);
-            border-radius: 6px; font-size: 14px; background-color: var(--form-bg);
-            color: var(--primary-text); max-width: 140px; cursor: pointer;
-        }
-
-        /* Buttons Style */
-        #controls button, #importButtonLabel {
-            color: white; border: none; padding: 10px 14px; border-radius: 6px;
-            cursor: pointer; font-size: 13px; font-weight: 600;
-            display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-            flex-grow: 1; transition: transform 0.1s, opacity 0.2s;
-        }
-        #controls button:active { transform: scale(0.98); }
-        #controls button:hover { opacity: 0.9; }
-
-        #exportBtn { background-color: var(--primary-color); }
-        #toggleDarkModeBtn { background-color: #343a40; flex-grow: 0; }
-        #importButtonLabel { background-color: var(--accent-color); margin: 0; }
-        #exportTxtBtn { background-color: #17a2b8; }
-        #downloadHtmlBtn { background-color: #6f42c1; }
-        #downloadSourceTxtBtn { background-color: #fd7e14; }
-        #toggleDuplicatesBtn { background-color: var(--warn-color); color: #333; }
-        #deleteDuplicatesBtn { background-color: var(--danger-color); }
-        #recycleBinBtn { background-color: #d63384; } /* כפתור סל מחזור */
-        
-        #importFile { display: none; }
-
-        /* --- Add Form --- */
-        #formSection {
-            background-color: var(--card-bg); border-radius: 8px;
-            box-shadow: var(--card-shadow); margin-bottom: 20px;
-            border: 1px solid var(--border-color); overflow: hidden;
-        }
-        #formSection summary {
-            font-size: 1.1rem; font-weight: 600; padding: 15px;
-            cursor: pointer; outline: none; user-select: none;
-            color: var(--primary-color);
-        }
-        #addItemForm {
-            display: grid; grid-template-columns: 1fr; gap: 15px; padding: 0 15px 15px 15px;
-        }
-        @media (min-width: 600px) {
-            #addItemForm { grid-template-columns: 1fr 1fr; }
-            .form-group.full-width { grid-column: 1 / -1; }
-        }
-
-        .form-group { display: flex; flex-direction: column; gap: 5px; }
-        .form-group label { font-weight: 500; font-size: 14px; }
-        .form-group input, .form-group textarea {
-            padding: 10px; border: 1px solid var(--border-color);
-            border-radius: 6px; font-size: 16px; background-color: var(--form-bg);
-            color: var(--primary-text); font-family: inherit;
-        }
-        #addItemForm button {
-            background-color: var(--accent-color); color: white; border: none;
-            padding: 12px; border-radius: 6px; cursor: pointer;
-            font-weight: 600; width: 100%; grid-column: 1 / -1;
-        }
-
-        /* --- List & Cards --- */
-        .category-group { margin-bottom: 20px; }
-        .category-title {
-            font-size: 1.3rem; font-weight: 700; color: var(--primary-text);
-            border-bottom: 2px solid var(--primary-color);
-            padding-bottom: 5px; margin-bottom: 10px;
-            display: flex; justify-content: space-between;
-        }
-        
-        .link-list {
-            list-style-type: none; padding: 0; margin: 0;
-            display: grid; gap: 10px; grid-template-columns: 1fr;
-        }
-        @media (min-width: 768px) {
-            .link-list { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
-        }
-
-        .list-item {
-            background-color: var(--card-bg); border-radius: 8px;
-            box-shadow: var(--card-shadow); border: 1px solid var(--border-color);
-            display: flex; flex-direction: column; position: relative;
-            /* שינוי: רק צל משתנה ב-Hover למניעת רעידות */
-            transition: box-shadow 0.2s; 
-        }
-        .list-item:hover { box-shadow: var(--card-hover-shadow); }
-        
-        .list-item.pinned { border-right: 4px solid var(--accent-color); background-color: var(--bg-color); }
-        .list-item.duplicate { border-right: 4px solid var(--danger-color); }
-        
-        .item-header {
-            display: flex; justify-content: space-between; align-items: flex-start;
-            padding: 12px 12px 5px 12px; gap: 8px;
-        }
-        .item-content { flex-grow: 1; overflow: hidden; word-break: break-all; }
-        
-        .item-link {
-            font-size: 16px; color: var(--primary-color); text-decoration: none;
-            font-weight: 600; display: block; line-height: 1.3;
-        }
-        .item-text {
-            font-size: 14px; background: var(--code-bg); padding: 8px;
-            border-radius: 4px; white-space: pre-wrap; word-break: break-all; margin: 0;
-        }
-        .item-date { font-size: 0.75rem; color: var(--secondary-text); margin-top: 4px; display: block; }
-        .item-index { 
-            font-size: 0.75rem; background: var(--border-color); color: var(--primary-text);
-            padding: 1px 6px; border-radius: 4px; margin-right: 5px; font-weight: bold;
-        }
-
-        .item-body { padding: 0 12px 10px 12px; flex-grow: 1; }
-        .item-description { font-size: 14px; color: var(--secondary-text); margin-top: 5px; }
-        .item-note {
-            font-size: 13px; background-color: var(--light-note-bg);
-            border-right: 3px solid var(--light-note-border);
-            padding: 6px 10px; margin-top: 8px; border-radius: 4px;
-            color: #5d4037;
-        }
-
-        .item-footer {
-            padding: 8px 12px; background-color: var(--footer-bg);
-            border-top: 1px solid var(--border-color); border-radius: 0 0 8px 8px;
+        .card-footer {
+            padding: 10px 15px; background: rgba(0,0,0,0.2);
+            border-radius: 0 0 8px 8px;
             display: flex; justify-content: space-between; align-items: center;
         }
-        .item-category {
-            font-size: 11px; font-weight: 500; background-color: var(--category-bg);
-            padding: 2px 8px; border-radius: 10px; color: var(--primary-color);
-        }
+        .tag { font-size: 0.8rem; color: var(--text-muted); }
 
-        /* כפתורים בכרטיס */
-        .item-actions { display: flex; gap: 5px; flex-shrink: 0; }
+        /* --- Actions (Stable, No Menu) --- */
+        .card-actions { display: flex; gap: 10px; }
         .icon-btn {
-            background: none; border: none; cursor: pointer;
-            font-size: 18px; padding: 4px; width: 32px; height: 32px;
-            display: flex; align-items: center; justify-content: center;
-            border-radius: 50%; color: var(--secondary-text); transition: background 0.2s;
+            background: none; border: none; cursor: pointer; font-size: 1.1rem;
+            color: var(--text-muted); transition: color 0.2s; padding: 4px;
         }
-        .icon-btn:hover { background-color: rgba(0,0,0,0.05); color: var(--primary-text); }
-        .icon-btn.active { color: var(--accent-color); }
-        .icon-btn.delete-btn:hover { color: var(--danger-color); background-color: rgba(217, 48, 37, 0.1); }
+        .icon-btn:hover { color: white; }
+        .icon-btn.active { color: var(--accent-gold); }
+        .icon-btn.delete { color: var(--accent-red); } 
+        .icon-btn.delete:hover { transform: scale(1.1); }
 
         /* Recycle Bin Modal */
         .modal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); z-index: 2000;
+            align-items: center; justify-content: center;
         }
         .modal.show { display: flex; }
-        .modal-content {
-            background: var(--card-bg); width: 90%; max-width: 600px; max-height: 80vh;
-            border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); display: flex; flex-direction: column;
+        .modal-box {
+            background: #1e293b; width: 90%; max-width: 600px; border-radius: 12px;
+            border: 1px solid var(--border-color); box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+            max-height: 80vh; display: flex; flex-direction: column;
         }
         .modal-header { padding: 15px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
         .modal-body { padding: 15px; overflow-y: auto; }
         .deleted-item {
-            padding: 10px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px; background: rgba(255,255,255,0.05); margin-bottom: 8px; border-radius: 6px;
         }
 
         #toast {
-            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-            background-color: #333; color: white; padding: 10px 20px; border-radius: 20px;
-            z-index: 3000; opacity: 0; pointer-events: none; transition: opacity 0.3s;
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px);
+            background: var(--btn-blue); color: white; padding: 10px 24px; border-radius: 30px;
+            font-weight: bold; transition: 0.3s; z-index: 3000;
         }
-        #toast.show { opacity: 1; }
+        #toast.show { transform: translateX(-50%) translateY(0); }
 
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
-    <h1>מנהל הקישורים <span id="itemCount">טוען...</span></h1>
-    
-    <div id="controls">
-        <div class="controls-top">
-            <input type="search" id="searchInput" placeholder="חפש קישור, תיאור, #מספר...">
-            <select id="categoryFilter"><option value="">כל הקטגוריות</option></select>
-            <select id="sortOrder">
-                <option value="date-new">תאריך (חדש-ישן)</option>
-                <option value="date-old">תאריך (ישן-חדש)</option>
-                <option value="name">שם (א-ת)</option>
-            </select>
+
+    <header>
+        <h1>מנהל הקישורים <span class="sub-title">Pro</span></h1>
+        <div id="itemCount">טוען...</div>
+    </header>
+
+    <div id="userSection">
+        <div id="loggedOutView">
+            <button id="googleLoginBtn" class="btn-google">
+                <svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M21.35,11.1H12.18V13.83H18.69C18.36,17.64 15.19,19.27 12.19,19.27C8.36,19.27 5,16.25 5,12C5,7.9 8.2,4.73 12.2,4.73C15.29,4.73 17.1,6.7 17.1,6.7L19,4.72C19,4.72 16.56,2 12.1,2C6.42,2 2.03,6.8 2.03,12C2.03,17.05 6.16,22 12.25,22C17.6,22 21.5,18.33 21.5,12.91C21.5,11.76 21.35,11.1 21.35,11.1V11.1Z"/></svg>
+                התחבר עם Google
+            </button>
         </div>
-        
-        <div class="controls-bottom">
-            <label for="importFile" id="importButtonLabel">📥 ייבוא JSON</label>
-            <input type="file" id="importFile" accept=".json">
-            <button id="exportBtn">📤 ייצוא JSON</button>
-            <button id="exportTxtBtn">📄 ייצוא TXT</button>
-            <button id="downloadHtmlBtn">💾 שמור אתר (HTML)</button>
-            <button id="downloadSourceTxtBtn">📜 קוד מקור (TXT)</button>
-            <button id="toggleDuplicatesBtn">⚠️ כפילויות</button>
-            <button id="deleteDuplicatesBtn">🗑️ מחק כפילויות</button>
-            <button id="recycleBinBtn">🗑️ סל מחזור</button>
-            <button id="toggleDarkModeBtn">☀️/🌙</button>
+        <div id="loggedInView" style="display:none; width:100%; justify-content:space-between; align-items:center; width:100%; max-width:800px;">
+            <div class="user-info-display">
+                <img id="userAvatar" src="" class="avatar">
+                <div>
+                    <div id="userName" style="font-weight:bold">משתמש</div>
+                    <div id="syncStatus" style="font-size:0.8rem; color:#10b981">מחובר</div>
+                </div>
+            </div>
+            <button id="logoutBtn" style="background:none; border:1px solid #334155; color:white; padding:5px 15px; border-radius:6px; cursor:pointer;">יציאה</button>
         </div>
     </div>
 
-    <details id="formSection">
-        <summary>➕ הוסף פריט חדש</summary>
-        <form id="addItemForm">
-            <div class="form-group full-width">
-                <label>תוכן (קישור/פקודה) *</label>
-                <textarea id="itemContent" rows="2" required placeholder="הדבק כאן..."></textarea>
+    <div class="controls-wrapper">
+        <div class="search-row">
+            <input type="text" id="searchInput" placeholder="חפש קישור, תיאור או קטגוריה...">
+        </div>
+
+        <div class="filters-row">
+            <select id="sortOrder">
+                <option value="date-new">תאריך (הכי חדש למעלה #1)</option>
+                <option value="name">שם (א-ת)</option>
+            </select>
+            <select id="categoryFilter">
+                <option value="">📂 כל הקטגוריות</option>
+            </select>
+        </div>
+
+        <div class="buttons-row">
+            <button class="icon-btn-small" id="themeBtn">☀️</button>
+            <button class="icon-btn-small" id="dupBtn" style="color:var(--accent-red)">⚠️</button>
+            
+            <div class="manager-group">
+                <div style="position:relative; flex:1;">
+                    <button class="manager-btn btn-purple" onclick="toggleMenu('siteMenu')">
+                        ▼ ניהול אתר 🖥️
+                    </button>
+                    <div id="siteMenu" class="dropdown-menu">
+                        <button onclick="downloadHtml()">🌍 שמור אתר (HTML)</button>
+                        <button onclick="downloadSource()">📜 קוד מקור (Source)</button>
+                        <button onclick="openRecycleBin()" style="color:var(--accent-red)">🗑️ סל מחזור</button>
+                    </div>
+                </div>
+
+                <div style="position:relative; flex:1;">
+                    <button class="manager-btn btn-teal" onclick="toggleMenu('txtMenu')">
+                        ▼ ניהול טקסט 📄
+                    </button>
+                    <div id="txtMenu" class="dropdown-menu">
+                        <button onclick="exportTxt()">📤 ייצוא TXT</button>
+                    </div>
+                </div>
+
+                <div style="position:relative; flex:1;">
+                    <button class="manager-btn btn-blue" onclick="toggleMenu('jsonMenu')">
+                        ▼ ניהול JSON 💾
+                    </button>
+                    <div id="jsonMenu" class="dropdown-menu">
+                        <button onclick="exportJson()">📤 ייצוא JSON</button>
+                        <label for="importFile">📥 ייבוא JSON</label>
+                        <input type="file" id="importFile" accept=".json" style="display:none">
+                    </div>
+                </div>
             </div>
-            <div class="form-group full-width">
-                <label>תיאור</label>
-                <input type="text" id="itemDescription">
-            </div>
-            <div class="form-group">
-                <label>קטגוריה</label>
-                <input type="text" id="itemCategory" list="categoryList">
-                <datalist id="categoryList"></datalist>
-            </div>
-            <div class="form-group">
-                <label>הערה</label>
-                <input type="text" id="itemNote">
-            </div>
-            <button type="submit">הוסף למאגר</button>
-        </form>
-    </details>
+        </div>
+    </div>
+
+    <div class="add-bar-wrapper">
+        <button class="btn-add-bar" onclick="document.getElementById('addItemContainer').classList.toggle('show')">
+            ➕ הוספת פריט חדש ידנית
+        </button>
+    </div>
+    
+    <div id="addItemContainer">
+        <textarea id="inpContent" rows="2" placeholder="הדבק כאן קישור או טקסט..." required></textarea>
+        <input type="text" id="inpDesc" placeholder="תיאור">
+        <input type="text" id="inpCat" list="catList" placeholder="קטגוריה">
+        <datalist id="catList"></datalist>
+        <input type="text" id="inpNote" placeholder="הערה">
+        <button onclick="addItem()">הוסף</button>
+    </div>
 
     <div id="listContainer"></div>
 
     <div id="recycleBinModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-box">
             <div class="modal-header">
-                <h3>סל מחזור (30 יום)</h3>
-                <button onclick="document.getElementById('recycleBinModal').classList.remove('show')" style="background:none;border:none;font-size:1.5rem;cursor:pointer;">×</button>
+                <h3>🗑️ סל מחזור (30 יום)</h3>
+                <button onclick="closeRecycleBin()" style="background:none;border:none;color:white;font-size:1.5rem;cursor:pointer;">×</button>
             </div>
-            <div class="modal-body" id="recycleBinBody"></div>
+            <div class="modal-body" id="recycleBinList"></div>
         </div>
     </div>
 
     <div id="toast">הודעה</div>
 
-    <script id="app-state" type="application/json">[]</script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+        const firebaseConfig = {
+            apiKey: "AIzaSyBnRk-Os6EvJcFIdpl-lICc9w-E4pQ74nE",
+            authDomain: "linkmanager-fdac5.firebaseapp.com",
+            projectId: "linkmanager-fdac5",
+            storageBucket: "linkmanager-fdac5.firebasestorage.app",
+            messagingSenderId: "532683691813",
+            appId: "1:532683691813:web:5cf639e32a715c626eeccc"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const provider = new GoogleAuthProvider();
+
+        window.handleAuth = async () => {
+            if (auth.currentUser) {
+                await signOut(auth); location.reload();
+            } else {
+                try { await signInWithPopup(auth, provider); } catch(e) { alert(e.message); }
+            }
+        };
+
+        onAuthStateChanged(auth, user => {
+            const loginDiv = document.getElementById('loggedOutView');
+            const userDiv = document.getElementById('loggedInView');
+            
+            if (user) {
+                loginDiv.style.display = 'none';
+                userDiv.style.display = 'flex';
+                document.getElementById('userName').textContent = user.displayName;
+                document.getElementById('userAvatar').src = user.photoURL;
+
+                onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        if (data.items) { window.items = data.items; window.renderList(); }
+                        if (data.recycleBin) window.recycleBin = data.recycleBin;
+                    }
+                });
+            } else {
+                loginDiv.style.display = 'block';
+                userDiv.style.display = 'none';
+            }
+        });
+
+        window.saveToCloud = async () => {
+            if (auth.currentUser) {
+                await setDoc(doc(db, "users", auth.currentUser.uid), {
+                    items: window.items,
+                    recycleBin: window.recycleBin,
+                    updated: new Date().toISOString()
+                });
+            }
+        };
+    </script>
+
+    <script id="app-state" type="application/json">[]</script>
     <script>
-        const KEY = 'LinkManager_Source_Stable';
-        const BIN_KEY = 'LinkManager_Bin';
-        
-        let items = [];
-        let recycleBin = [];
+        const KEY = 'LinkManager_Ultimate_Fixed';
+        window.items = [];
+        window.recycleBin = [];
         let hideDups = false;
 
         document.addEventListener('DOMContentLoaded', () => {
-            // טעינה
+            // טעינת נתונים
             try {
                 const local = localStorage.getItem(KEY);
                 if (local) {
                     const data = JSON.parse(local);
-                    items = data.items || [];
-                    recycleBin = data.recycleBin || [];
+                    window.items = data.items || [];
+                    window.recycleBin = data.recycleBin || [];
                 } else {
-                    // Fallback לנתונים מוטמעים ב-HTML אם יש
                     const embedded = document.getElementById('app-state').textContent;
-                    if(embedded.length > 5) items = JSON.parse(embedded);
+                    if (embedded.length > 5) window.items = JSON.parse(embedded);
                 }
-            } catch(e) { console.error(e); }
-
-            // מצב כהה
-            if (localStorage.getItem('darkMode') === 'true') document.body.classList.add('dark-mode');
-
+            } catch(e) {}
+            
             cleanupBin();
             renderList();
 
-            // === Event Delegation (הליבה היציבה) ===
+            // Event Delegation (המפתח ליציבות)
             document.getElementById('listContainer').addEventListener('click', (e) => {
                 const btn = e.target.closest('button');
                 if (!btn) return;
-                const card = btn.closest('.list-item');
+                const card = btn.closest('.card');
                 if (!card) return;
                 const id = parseFloat(card.dataset.id);
 
-                if (btn.classList.contains('delete-btn')) moveToTrash(id);
-                if (btn.classList.contains('copy-btn')) copyText(id);
-                if (btn.classList.contains('edit-btn')) editItem(id);
-                if (btn.classList.contains('pin-btn')) togglePin(id);
+                if (btn.classList.contains('delete')) moveToTrash(id);
+                if (btn.classList.contains('copy')) copyText(id);
+                if (btn.classList.contains('edit')) editItem(id);
+                if (btn.classList.contains('pin')) togglePin(id);
+            });
+
+            // Close menus on click outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.manager-group')) {
+                    document.querySelectorAll('.dropdown-menu').forEach(el => el.classList.remove('show'));
+                }
             });
 
             // Listeners
-            document.getElementById('addItemForm').addEventListener('submit', addItem);
+            document.getElementById('googleLoginBtn').addEventListener('click', () => window.handleAuth());
+            document.getElementById('logoutBtn').addEventListener('click', () => window.handleAuth());
             document.getElementById('searchInput').addEventListener('input', () => renderList());
             document.getElementById('categoryFilter').addEventListener('change', () => renderList());
             document.getElementById('sortOrder').addEventListener('change', () => renderList());
-            document.getElementById('toggleDarkModeBtn').addEventListener('click', () => {
-                document.body.classList.toggle('dark-mode');
-                localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
-            });
-            document.getElementById('recycleBinBtn').addEventListener('click', openBin);
-            document.getElementById('toggleDuplicatesBtn').addEventListener('click', () => {
-                hideDups = !hideDups;
-                renderList();
-            });
-            document.getElementById('deleteDuplicatesBtn').addEventListener('click', deleteDups);
-            
-            // Export/Import Listeners
-            document.getElementById('exportBtn').addEventListener('click', () => downloadFile('links.json', JSON.stringify({items, recycleBin}), 'application/json'));
-            document.getElementById('exportTxtBtn').addEventListener('click', () => {
-                const txt = items.map(i => `${i.content} | ${i.description}`).join('\n');
-                downloadFile('links.txt', txt, 'text/plain');
-            });
-            document.getElementById('downloadHtmlBtn').addEventListener('click', () => {
-                document.getElementById('app-state').textContent = JSON.stringify(items);
-                downloadFile('Manager.html', document.documentElement.outerHTML, 'text/html');
-            });
-            document.getElementById('downloadSourceTxtBtn').addEventListener('click', () => {
-                downloadFile('source.txt', document.documentElement.outerHTML, 'text/plain');
-            });
-            document.getElementById('importFile').addEventListener('change', importFile);
+            document.getElementById('themeBtn').addEventListener('click', () => document.body.classList.toggle('dark-mode')); // Fake toggle since design is dark by default
+            document.getElementById('dupBtn').addEventListener('click', () => { hideDups = !hideDups; renderList(); });
+            document.getElementById('importFile').addEventListener('change', importJson);
         });
 
-        // --- Logic ---
+        function toggleMenu(id) {
+            document.querySelectorAll('.dropdown-menu').forEach(el => {
+                if(el.id !== id) el.classList.remove('show');
+            });
+            document.getElementById(id).classList.toggle('show');
+        }
+
         function saveData() {
-            localStorage.setItem(KEY, JSON.stringify({items, recycleBin}));
+            localStorage.setItem(KEY, JSON.stringify({items: window.items, recycleBin: window.recycleBin}));
+            if (window.saveToCloud) window.saveToCloud();
         }
 
         function cleanupBin() {
             const now = Date.now();
-            recycleBin = recycleBin.filter(i => (now - i.deletedAt) < 30*24*60*60*1000);
-            saveData();
+            window.recycleBin = window.recycleBin.filter(i => (now - i.deletedAt) < 30*24*60*60*1000);
         }
 
-        function addItem(e) {
-            e.preventDefault();
-            const content = document.getElementById('itemContent').value.trim();
-            if (!content) return;
-
-            items.unshift({
+        function addItem() {
+            const content = document.getElementById('inpContent').value;
+            if(!content) return;
+            
+            // New items are always first (#1)
+            window.items.unshift({
                 id: Date.now(),
                 content: content,
-                description: document.getElementById('itemDescription').value.trim(),
-                category: document.getElementById('itemCategory').value.trim() || 'כללי',
-                note: document.getElementById('itemNote').value.trim(),
+                description: document.getElementById('inpDesc').value,
+                category: document.getElementById('inpCat').value || 'כללי',
+                note: document.getElementById('inpNote').value,
                 date: new Date().toISOString(),
                 pinned: false
             });
             saveData();
             renderList();
-            e.target.reset();
-            showToast('נוסף בהצלחה');
+            
+            // Reset form
+            document.getElementById('inpContent').value = '';
+            document.getElementById('inpDesc').value = '';
+            document.getElementById('inpCat').value = '';
+            document.getElementById('inpNote').value = '';
+            
+            showToast("נוסף בהצלחה");
         }
 
         function moveToTrash(id) {
-            if (!confirm('להעביר לסל המחזור?')) return;
-            const idx = items.findIndex(i => i.id === id);
-            if (idx > -1) {
-                const item = items[idx];
+            if(!confirm("להעביר לסל המחזור?")) return;
+            const idx = window.items.findIndex(i => i.id === id);
+            if(idx > -1) {
+                const item = window.items[idx];
                 item.deletedAt = Date.now();
-                recycleBin.unshift(item);
-                items.splice(idx, 1);
+                window.recycleBin.unshift(item);
+                window.items.splice(idx, 1);
                 saveData();
                 renderList();
-                showToast('הועבר לסל');
+                showToast("הועבר לסל");
             }
         }
 
         function togglePin(id) {
-            const item = items.find(i => i.id === id);
+            const item = window.items.find(i => i.id === id);
             item.pinned = !item.pinned;
             saveData();
             renderList();
         }
 
         function editItem(id) {
-            const item = items.find(i => i.id === id);
+            const item = window.items.find(i => i.id === id);
             const c = prompt("ערוך תוכן:", item.content);
             if(c !== null) {
                 item.content = c;
@@ -463,184 +537,175 @@
         }
 
         function copyText(id) {
-            const item = items.find(i => i.id === id);
+            const item = window.items.find(i => i.id === id);
             navigator.clipboard.writeText(item.content);
-            showToast('הועתק!');
+            showToast("הועתק!");
         }
 
-        function deleteDups() {
-            if(!confirm('למחוק כפילויות?')) return;
-            const seen = new Set();
-            const newItems = [];
-            items.forEach(i => {
-                const k = i.content.toLowerCase().trim();
-                if(!seen.has(k)) { seen.add(k); newItems.push(i); }
-                else { i.deletedAt = Date.now(); recycleBin.unshift(i); }
-            });
-            items = newItems;
-            saveData();
-            renderList();
-            showToast('כפילויות נוקו');
-        }
-
-        // --- Rendering ---
         function renderList() {
             const container = document.getElementById('listContainer');
             const search = document.getElementById('searchInput').value.toLowerCase();
             const cat = document.getElementById('categoryFilter').value;
             const sort = document.getElementById('sortOrder').value;
 
-            // Categories
-            const cats = [...new Set(items.map(i => i.category))].sort();
+            // Update Categories
+            const cats = [...new Set(window.items.map(i => i.category))].sort();
             const sel = document.getElementById('categoryFilter');
-            if(sel.options.length === 1) {
+            if(sel.options.length === 1) { 
                 cats.forEach(c => sel.innerHTML += `<option value="${c}">${c}</option>`);
-                document.getElementById('categoryList').innerHTML = cats.map(c => `<option value="${c}">`).join('');
+                document.getElementById('catList').innerHTML = cats.map(c => `<option value="${c}">`).join('');
             }
 
             // Filter
-            let filtered = items.filter(i => {
+            let filtered = window.items.filter(i => {
                 const txt = (i.content + i.description + i.category + i.note).toLowerCase();
                 return txt.includes(search) && (!cat || i.category === cat);
             });
 
-            // Handle #123 Search
-            const numMatch = search.match(/^#(\d+)$/);
-            
-            // Sort
+            if (hideDups) {
+                const seen = new Set();
+                filtered = filtered.filter(i => {
+                    const k = i.content.trim();
+                    return seen.has(k) ? false : seen.add(k);
+                });
+            }
+
+            // Sort (Newest = Top = #1)
             filtered.sort((a, b) => {
-                if(a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-                if(sort === 'date-new') return new Date(b.date) - new Date(a.date);
-                if(sort === 'date-old') return new Date(a.date) - new Date(b.date);
-                return a.content.localeCompare(b.content);
+                if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+                
+                if (sort === 'date-new') {
+                    return new Date(b.date) - new Date(a.date);
+                } else if (sort === 'name') {
+                    return a.content.localeCompare(b.content);
+                }
+                return 0;
             });
 
-            // If number search, limit to that index
-            if(numMatch) {
-                const idx = parseInt(numMatch[1]) - 1;
-                if(filtered[idx]) filtered = [filtered[idx]];
+            // Handle #123 Search
+            const indexMatch = search.match(/^#(\d+)$/);
+            if (indexMatch) {
+                const idx = parseInt(indexMatch[1]) - 1;
+                if (filtered[idx]) filtered = [filtered[idx]];
                 else filtered = [];
             }
 
-            if(hideDups) {
-                const seen = new Set();
-                filtered = filtered.filter(i => seen.has(i.content) ? false : seen.add(i.content));
-            }
-
-            // Stats
-            document.getElementById('itemCount').textContent = `מציג ${filtered.length} מתוך ${items.length}`;
+            document.getElementById('itemCount').textContent = `מציג ${filtered.length} מתוך ${window.items.length}`;
             container.innerHTML = '';
 
-            // Grouping
+            // Group by Category
             const groups = {};
             filtered.forEach(i => {
-                if(!groups[i.category]) groups[i.category] = [];
-                groups[i.category].push(i);
+                const c = i.category;
+                if(!groups[c]) groups[c] = [];
+                groups[c].push(i);
             });
 
-            Object.keys(groups).sort().forEach(key => {
+            Object.keys(groups).sort().forEach(c => {
                 const div = document.createElement('div');
-                div.className = 'category-group';
-                div.innerHTML = `<h2 class="category-title">${key} (${groups[key].length})</h2>`;
-                const ul = document.createElement('ul');
-                ul.className = 'link-list';
+                div.className = 'category-block';
+                div.innerHTML = `<div class="category-header"><h2>${c}</h2><span>${groups[c].length}</span></div>`;
+                const grid = document.createElement('div');
+                grid.className = 'items-grid';
                 
-                groups[key].forEach(item => {
-                    // האינדקס האמיתי ברשימה המסוננת
-                    const realIndex = filtered.indexOf(item) + 1; 
-                    ul.innerHTML += getCardHTML(item, realIndex);
+                groups[c].forEach(item => {
+                    // Visual index based on sorted list
+                    const visualIndex = filtered.indexOf(item) + 1;
+                    grid.innerHTML += getCardHTML(item, visualIndex);
                 });
                 
-                div.appendChild(ul);
+                div.appendChild(grid);
                 container.appendChild(div);
             });
         }
 
         function getCardHTML(item, index) {
             const isLink = /^(http|t\.me)/.test(item.content);
-            const content = isLink 
-                ? `<a href="${item.content}" target="_blank" class="item-link">${item.content}</a>`
-                : `<pre class="item-text">${item.content}</pre>`;
+            const display = isLink ? `<a href="${item.content}" target="_blank" class="card-link">${item.content}</a>` : `<div class="card-text">${item.content}</div>`;
             
             return `
-            <li class="list-item ${item.pinned ? 'pinned' : ''}" data-id="${item.id}">
-                <div class="item-header">
-                    <div class="item-content">
-                        <span class="item-index">#${index}</span>
-                        ${content}
-                        <span class="item-date">${new Date(item.date).toLocaleDateString()}</span>
+            <div class="card ${item.pinned ? 'pinned' : ''}" data-id="${item.id}">
+                <div class="card-index">#${index}</div>
+                <div class="card-body">
+                    ${display}
+                    <div class="card-desc">${item.description}</div>
+                    ${item.note ? `<div class="card-note">📝 ${item.note}</div>` : ''}
+                </div>
+                <div class="card-footer">
+                    <span class="tag">${item.category}</span>
+                    <div class="card-actions">
+                        <button class="icon-btn copy" title="העתק">📋</button>
+                        <button class="icon-btn edit" title="ערוך">✏️</button>
+                        <button class="icon-btn pin ${item.pinned?'active':''}" title="נעץ">📌</button>
+                        <button class="icon-btn delete" title="מחק">🗑️</button>
                     </div>
-                    <div class="item-actions">
-                        <button class="icon-btn copy-btn" title="העתק">📋</button>
-                        <button class="icon-btn pin-btn ${item.pinned?'active':''}" title="הצמד">📌</button>
-                        <button class="icon-btn edit-btn" title="ערוך">✏️</button>
-                        <button class="icon-btn delete-btn" title="מחק">🗑️</button>
-                    </div>
                 </div>
-                <div class="item-body">
-                    <div class="item-description">${item.description}</div>
-                    ${item.note ? `<div class="item-note">${item.note}</div>` : ''}
-                </div>
-                <div class="item-footer">
-                    <span class="item-category">${item.category}</span>
-                </div>
-            </li>`;
+            </div>`;
         }
 
-        // --- Recycle Bin UI ---
-        function openBin() {
-            const body = document.getElementById('recycleBinBody');
-            body.innerHTML = recycleBin.length ? '' : '<div style="text-align:center">ריק</div>';
-            recycleBin.forEach(i => {
-                body.innerHTML += `
+        // --- Recycle Bin ---
+        window.openRecycleBin = () => {
+            const l = document.getElementById('recycleBinList');
+            l.innerHTML = window.recycleBin.length ? '' : 'הסל ריק';
+            window.recycleBin.forEach(i => {
+                l.innerHTML += `
                 <div class="deleted-item">
-                    <div>
-                        <b>${i.content.substring(0,30)}...</b><br>
-                        <small>נמחק: ${new Date(i.deletedAt).toLocaleDateString()}</small>
-                    </div>
+                    <div>${i.content.substring(0,30)}...</div>
                     <div>
                         <button onclick="restore(${i.id})">♻️</button>
-                        <button onclick="permDel(${i.id})" style="color:red">❌</button>
+                        <button onclick="permDelete(${i.id})" style="color:red">❌</button>
                     </div>
                 </div>`;
             });
             document.getElementById('recycleBinModal').classList.add('show');
-        }
-        window.restore = (id) => {
-            const idx = recycleBin.findIndex(i => i.id === id);
-            delete recycleBin[idx].deletedAt;
-            items.unshift(recycleBin[idx]);
-            recycleBin.splice(idx, 1);
-            saveData(); renderList(); openBin();
         };
-        window.permDel = (id) => {
+        window.closeRecycleBin = () => document.getElementById('recycleBinModal').classList.remove('show');
+        window.restore = (id) => {
+            const idx = window.recycleBin.findIndex(i => i.id === id);
+            window.items.unshift(window.recycleBin[idx]);
+            window.recycleBin.splice(idx,1);
+            saveData(); renderList(); window.openRecycleBin();
+        };
+        window.permDelete = (id) => {
             if(confirm('למחוק?')) {
-                recycleBin = recycleBin.filter(i => i.id !== id);
-                saveData(); openBin();
+                window.recycleBin = window.recycleBin.filter(i => i.id !== id);
+                saveData(); window.openRecycleBin();
             }
         };
 
-        // --- Utils ---
-        function downloadFile(name, content, type) {
-            const blob = new Blob([content], {type});
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = name;
-            a.click();
-        }
-        function importFile(e) {
+        // --- Export/Import ---
+        window.downloadHtml = () => {
+            document.getElementById('app-state').textContent = JSON.stringify(window.items);
+            const html = document.documentElement.outerHTML;
+            const b = new Blob([html],{type:'text/html'});
+            const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='Manager.html'; a.click();
+        };
+        window.exportJson = () => {
+            const b = new Blob([JSON.stringify(window.items,null,2)],{type:'application/json'});
+            const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='data.json'; a.click();
+        };
+        window.exportTxt = () => {
+            const t = window.items.map(i=>`${i.content} | ${i.description}`).join('\n');
+            const b = new Blob([t],{type:'text/plain'});
+            const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='data.txt'; a.click();
+        };
+        window.downloadSource = () => {
+            const b = new Blob([document.documentElement.outerHTML],{type:'text/plain'});
+            const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='source.txt'; a.click();
+        };
+        function importJson(e) {
             const r = new FileReader();
             r.onload = ev => {
-                const d = JSON.parse(ev.target.result);
-                items = d.items || d; 
+                window.items = JSON.parse(ev.target.result);
                 saveData(); renderList();
             };
             r.readAsText(e.target.files[0]);
         }
+
         function showToast(m) {
             const t = document.getElementById('toast');
             t.textContent = m; t.classList.add('show');
-            setTimeout(() => t.classList.remove('show'), 3000);
+            setTimeout(()=>t.classList.remove('show'),3000);
         }
     </script>
 </body>
