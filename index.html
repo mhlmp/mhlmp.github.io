@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>מנהל הקישורים Pro - Fixed Glass</title>
+    <title>מנהל הקישורים Pro - Stable Fixed</title>
     <style>
         :root {
-            /* --- משתני העיצוב (Glassmorphism) --- */
+            /* --- משתני עיצוב Glassmorphism --- */
             --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
             --glass-bg: rgba(255, 255, 255, 0.85);
             --glass-border: rgba(255, 255, 255, 0.6);
@@ -16,9 +16,8 @@
             --text-primary: #1a1a1a;
             --text-secondary: #555555;
             --primary-color: #0066cc;
-            --primary-glow: rgba(0, 102, 204, 0.2);
             
-            --radius: 16px; /* רדיוס מהקוד החדש */
+            --radius: 16px;
             --accent-green: #00a651;
             --accent-red: #d93025;
             --accent-gold: #f59e0b;
@@ -36,7 +35,6 @@
             --text-primary: #f1f5f9;
             --text-secondary: #cbd5e1;
             --primary-color: #60a5fa;
-            --primary-glow: rgba(96, 165, 250, 0.2);
             --note-bg: rgba(60, 50, 30, 0.8);
         }
 
@@ -117,7 +115,7 @@
             background: rgba(127,127,127,0.1); color: var(--text-primary);
             transition: 0.2s;
         }
-        .search-container input:focus { border-color: var(--primary-color); background: rgba(127,127,127,0.15); box-shadow: 0 0 0 2px var(--primary-glow); }
+        .search-container input:focus { border-color: var(--primary-color); background: rgba(127,127,127,0.15); box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.2); }
 
         .filters-container { display: flex; gap: 10px; flex-wrap: wrap; }
         .filters-container select {
@@ -132,7 +130,7 @@
         .filters-container select option { background: #1e293b; color: white; }
         body:not(.dark-mode) .filters-container select option { background: #ffffff; color: black; }
 
-        /* --- Buttons & Header Menus --- */
+        /* --- Buttons --- */
         .actions-container { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
         .dropdown { position: relative; display: inline-block; flex-grow: 1; }
         
@@ -197,7 +195,7 @@
         }
 
         /* ========================================================================== */
-        /* === THE NEW OBJECT CARDS (Strictly copied from Clean Build + Glass BG) === */
+        /* === כרטיסים - תיקון רעידות ויציבות (Professional Fix) === */
         /* ========================================================================== */
         
         .category-block { margin-bottom: 35px; }
@@ -216,32 +214,29 @@
         .items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
         
         .card {
-            /* Glass Background */
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
             border-radius: var(--radius);
-            
             position: relative;
             display: flex; flex-direction: column;
             
-            /* THE KEY: No Layout Shift Transitions */
-            transition: transform 0.2s, box-shadow 0.2s, z-index 0s;
+            /* שינוי קריטי: ביטול אנימציות של גודל/מיקום כדי למנוע רעידות */
+            transition: box-shadow 0.2s ease, border-color 0.2s ease;
             box-shadow: var(--glass-shadow);
         }
         
-        /* HOVER: Only works if menu is NOT active */
-        .card:not(.menu-active):hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 30px rgba(0,0,0,0.15);
-            z-index: 10;
+        /* HOVER: רק צל וגבול, ללא תזוזה (translateY) */
+        .card:hover {
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            border-color: rgba(127, 127, 127, 0.4);
+            /* z-index מועלה ב-JS כשהתפריט נפתח, לא כאן כדי למנוע הבהובים */
         }
 
-        /* LOCKED STATE: When menu is active */
+        /* מצב "נעול" כשהתפריט פתוח */
         .card.menu-active {
-            z-index: 100 !important; /* Force on top */
-            transform: none !important; /* NO MOVEMENT */
-            box-shadow: 0 0 0 3px var(--primary-color) !important; /* Highlight */
+            z-index: 1000 !important; /* שם את הכרטיס מעל הכל */
             border-color: var(--primary-color) !important;
+            box-shadow: 0 0 0 2px var(--primary-color), 0 15px 40px rgba(0,0,0,0.3) !important;
         }
 
         .card.pinned {
@@ -250,7 +245,7 @@
         }
         
         .card-body { padding: 20px; padding-top: 40px; flex: 1; }
-        .card-index { position: absolute; top: 12px; left: 12px; font-size: 0.75rem; color: var(--text-secondary); opacity: 0.7; }
+        .card-index { position: absolute; top: 12px; left: 12px; font-size: 0.75rem; color: var(--text-secondary); opacity: 0.7; font-family: monospace; }
         
         .card-link { 
             display: block; color: var(--primary-color); font-weight: 700; text-decoration: none;
@@ -268,6 +263,7 @@
             color: #4a3b10; font-size: 13px; border-radius: 8px;
             border-right: 4px solid var(--accent-gold); display: flex; gap: 8px;
         }
+        .card-note::before { content: '📝'; }
 
         .card-footer {
             padding: 12px 20px; border-top: 1px solid var(--glass-border);
@@ -291,14 +287,15 @@
         .icon-btn:hover { color: var(--primary-color); background: rgba(127,127,127,0.1); }
         .pin-btn.active { color: var(--accent-gold); transform: rotate(45deg); }
 
-        /* THE NEW POPUP MENU (Stable) */
+        /* תפריט נשלף (Fixed & Stable) */
         .popup-menu {
             display: none; position: absolute;
             background: var(--glass-bg);
             backdrop-filter: blur(20px);
             border: 1px solid var(--glass-border);
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5); z-index: 200;
-            left: 10px; bottom: 50px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5); 
+            z-index: 2000; /* גבוה מאוד */
+            left: 10px; bottom: 50px; /* מיקום קבוע יחסית לכרטיס */
             border-radius: 12px; min-width: 150px;
             overflow: hidden;
             animation: fadeIn 0.1s ease-out;
@@ -335,7 +332,7 @@
 <body class="dark-mode">
 
     <header>
-        <h1>מנהל הקישורים Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Fixed Glass)</span></h1>
+        <h1>מנהל הקישורים Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Stable Fix)</span></h1>
         <div id="itemCount">טוען נתונים...</div>
     </header>
 
@@ -569,7 +566,7 @@
     </script>
 
     <script>
-        const STORAGE_KEY = 'LinkManager_Glass_Fixed_Final';
+        const STORAGE_KEY = 'LinkManager_Glass_Fixed_Stable';
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
         
         const rawData = `
@@ -643,13 +640,11 @@
             document.getElementById('undoBtn').addEventListener('click', executeUndo);
         }
 
-        // === THE FIX: Use "menu-active" class to LOCK cards ===
+        // === CRITICAL FIX: Close everything and clean up classes ===
         function closeAllMenus() {
-            // Close header dropdowns
             document.querySelectorAll('.dropdown-content').forEach(m => m.classList.remove('show'));
             document.querySelectorAll('.drop-trigger').forEach(b => b.classList.remove('active'));
             
-            // Close card menus and UNLOCK cards
             document.querySelectorAll('.popup-menu').forEach(m => m.classList.remove('show'));
             document.querySelectorAll('.card').forEach(c => c.classList.remove('menu-active'));
         }
@@ -756,10 +751,9 @@
             }
         }
 
-        // === THIS IS THE "CLEAN BUILD" CARD STRUCTURE ADAPTED ===
         function createCard(item, displayNum) {
             const div = document.createElement('div');
-            // We use 'menu-active' (JS) for the fix
+            // 'menu-active' is handled via JS, 'pinned' via class
             div.className = `card ${item.isPinned ? 'pinned' : ''}`;
             
             const contentHtml = item.type === 'link' 
@@ -802,10 +796,10 @@
                 deleteItem(item.id);
             };
 
-            // Menu Logic (The Fix)
+            // Menu Logic (FIXED FOR STABILITY)
             const menuBtn = div.querySelector('.btn-menu');
             menuBtn.onclick = (e) => {
-                e.stopPropagation();
+                e.stopPropagation(); // Don't trigger window close
                 const menu = div.querySelector('.popup-menu');
                 const wasOpen = menu.classList.contains('show');
                 
@@ -813,7 +807,7 @@
                 
                 if (!wasOpen) {
                     menu.classList.add('show');
-                    div.classList.add('menu-active'); // LOCK THIS CARD
+                    div.classList.add('menu-active'); // LOCK THIS CARD (Z-Index + Border)
                 }
             };
             
