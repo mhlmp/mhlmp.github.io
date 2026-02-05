@@ -3,35 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>מנהל הקישורים Pro - Stable & Secure</title>
+    <title>מנהל הקישורים Pro - Ultimate Edition</title>
     <style>
         :root {
-            /* עיצוב Glassmorphism */
-            --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
-            --glass-bg: rgba(255, 255, 255, 0.9);
+            /* --- משתני עיצוב (Glassmorphism) --- */
+            --bg-gradient: linear-gradient(135deg, #f6d365 0%, #fda085 100%); /* ברירת מחדל חמה */
+            --glass-bg: rgba(255, 255, 255, 0.70);
             --glass-border: rgba(255, 255, 255, 0.5);
-            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
-            --backdrop: blur(12px);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+            --backdrop: blur(8px);
             
-            --text-primary: #1a1a1a;
-            --text-secondary: #555555;
-            --primary-color: #0066cc;
-            --accent-green: #00a651;
-            --accent-red: #d93025;
-            --accent-gold: #f59e0b;
+            --text-primary: #2d3436;
+            --text-secondary: #636e72;
+            --primary-color: #0984e3;
+            --accent-green: #00b894;
+            --accent-red: #d63031;
+            --accent-gold: #fdcb6e;
             
-            --radius: 12px;
+            --radius: 16px;
         }
 
         body.dark-mode {
-            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            --glass-bg: rgba(30, 41, 59, 0.85); 
+            --bg-gradient: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+            --glass-bg: rgba(16, 20, 24, 0.8); 
             --glass-border: rgba(255, 255, 255, 0.08);
-            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
             
-            --text-primary: #f1f5f9;
-            --text-secondary: #cbd5e1;
-            --primary-color: #60a5fa;
+            --text-primary: #dfe6e9;
+            --text-secondary: #b2bec3;
+            --primary-color: #74b9ff;
         }
 
         * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
@@ -43,12 +43,12 @@
             color: var(--text-primary);
             margin: 0;
             padding: 15px;
-            padding-bottom: 80px;
+            padding-bottom: 100px;
             min-height: 100vh;
             transition: color 0.3s;
         }
 
-        /* Container & Panels */
+        /* --- רכיב Glass גנרי --- */
         .glass-panel {
             background: var(--glass-bg);
             backdrop-filter: var(--backdrop);
@@ -58,172 +58,201 @@
             border-radius: var(--radius);
         }
 
+        /* --- כותרת ומשתמש --- */
         header { text-align: center; margin-bottom: 20px; }
-        h1 { margin: 5px 0; font-size: 1.8rem; font-weight: 800; color: var(--text-primary); }
+        h1 { margin: 5px 0; font-size: 2rem; font-weight: 800; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         
-        /* User Bar */
         #userSection {
-            padding: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 20px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center;
         }
-        .user-info { display: flex; align-items: center; gap: 10px; }
-        .user-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid var(--glass-border); }
-        .btn-google { background: #4285F4; color: white; border: none; padding: 8px 16px; border-radius: 20px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ccc; margin-right: 5px; }
-        .status-dot.online { background: var(--accent-green); box-shadow: 0 0 5px var(--accent-green); }
+        .user-info { display: flex; align-items: center; gap: 12px; }
+        .user-avatar { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid var(--glass-border); }
+        .btn-google { background: #4285F4; color: white; border: none; padding: 8px 20px; border-radius: 50px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3); }
+        .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #bdc3c7; margin-inline-end: 6px; }
+        .status-dot.online { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
         .status-dot.syncing { background: var(--accent-gold); animation: pulse 1s infinite; }
 
-        /* Controls */
+        /* --- אזור שליטה (חיפוש ופילטרים) --- */
         #controlsArea {
-            padding: 16px; margin-bottom: 25px; display: flex; flex-direction: column; gap: 14px;
+            padding: 20px; margin-bottom: 30px; display: flex; flex-direction: column; gap: 15px;
             position: relative; z-index: 10;
         }
 
         .search-container input {
-            width: 100%; padding: 12px 16px; font-size: 16px;
+            width: 100%; padding: 14px 20px; font-size: 16px;
             border: 1px solid var(--glass-border); border-radius: var(--radius);
             background: rgba(127,127,127,0.05); color: var(--text-primary);
+            transition: all 0.3s;
         }
+        .search-container input:focus { background: rgba(127,127,127,0.1); border-color: var(--primary-color); }
 
-        .filters-container { display: flex; gap: 10px; flex-wrap: wrap; }
-        .filters-container select {
-            flex: 1; height: 44px; padding: 0 12px; font-size: 15px;
+        .filters-row { display: flex; gap: 10px; flex-wrap: wrap; }
+        .filters-row select {
+            flex: 1; height: 48px; padding: 0 15px; font-size: 15px;
             background: var(--glass-bg); color: var(--text-primary);
             border: 1px solid var(--glass-border); border-radius: var(--radius); cursor: pointer;
         }
-        .filters-container select option { background: #fff; color: #000; }
-        body.dark-mode .filters-container select option { background: #1e293b; color: #fff; }
+        .filters-row select option { background: #fff; color: #000; }
+        body.dark-mode .filters-row select option { background: #2d3436; color: #fff; }
 
-        .actions-container { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+        .actions-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 5px; }
         .action-btn {
-            flex: 1; height: 44px; border: none; border-radius: var(--radius); cursor: pointer;
-            color: white; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 5px;
-            transition: opacity 0.2s; font-size: 0.9rem;
+            flex: 1; min-width: 120px; height: 44px; border: none; border-radius: var(--radius); cursor: pointer;
+            color: white; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: transform 0.2s, opacity 0.2s; font-size: 0.95rem; text-shadow: 0 1px 2px rgba(0,0,0,0.2);
         }
+        .action-btn:active { transform: scale(0.96); }
         .action-btn:hover { opacity: 0.9; }
-        .btn-blue { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
-        .btn-cyan { background: linear-gradient(135deg, #06b6d4, #0891b2); }
-        .btn-red { background: linear-gradient(135deg, #e53e3e, #c53030); }
-        .btn-toggle { flex: 0 0 44px; background: rgba(127,127,127,0.2); color: var(--text-primary); }
+        
+        .btn-blue { background: linear-gradient(135deg, #0984e3, #74b9ff); }
+        .btn-cyan { background: linear-gradient(135deg, #00cec9, #81ecec); }
+        .btn-red { background: linear-gradient(135deg, #d63031, #ff7675); }
+        .btn-toggle { flex: 0 0 44px; background: rgba(127,127,127,0.2); color: var(--text-primary); min-width: auto; }
 
-        /* Form */
-        details { margin-bottom: 25px; }
+        /* --- טופס הוספה --- */
+        details { margin-bottom: 30px; }
         summary { 
             padding: 15px; cursor: pointer; font-weight: 700; text-align: center;
-            color: var(--primary-color); list-style: none;
+            color: var(--primary-color); list-style: none; background: rgba(127,127,127,0.05);
+            border-radius: var(--radius); transition: background 0.2s;
         }
-        #addItemForm { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        summary:hover { background: rgba(127,127,127,0.1); }
+        
+        #addItemForm { padding: 25px; display: flex; flex-direction: column; gap: 15px; }
         #addItemForm input, #addItemForm textarea {
-            padding: 12px; border: 1px solid var(--glass-border); border-radius: var(--radius);
-            background: rgba(127,127,127,0.05); color: var(--text-primary); width: 100%;
+            padding: 14px; border: 1px solid var(--glass-border); border-radius: var(--radius);
+            background: rgba(127,127,127,0.05); color: var(--text-primary); width: 100%; font-family: inherit;
         }
         #addItemForm button {
-            background: var(--accent-green); color: white; padding: 14px; border: none;
-            border-radius: var(--radius); font-weight: bold; cursor: pointer; font-size: 16px;
+            background: var(--accent-green); color: white; padding: 16px; border: none;
+            border-radius: var(--radius); font-weight: 800; cursor: pointer; font-size: 1.1rem;
+            box-shadow: 0 4px 15px rgba(0, 184, 148, 0.3);
         }
 
-        /* Grid */
-        .items-grid {
-            display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;
-        }
+        /* --- הגריד והכרטיסים (החלק החשוב ליציבות) --- */
+        .category-block { margin-bottom: 40px; }
         .category-header {
-            padding: 10px 5px; margin: 20px 0 10px 0;
+            padding: 10px 5px; margin-bottom: 15px;
             border-bottom: 2px solid rgba(127,127,127,0.1);
             display: flex; justify-content: space-between; align-items: center;
         }
+        .category-header h2 { margin: 0; font-size: 1.4rem; color: var(--text-primary); }
+        .category-count { background: rgba(127,127,127,0.1); padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; }
 
-        /* === STABLE CARD DESIGN === */
+        .items-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;
+        }
+
+        /* === עיצוב כרטיס יציב ללא רעידות === */
         .card {
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
             border-radius: var(--radius);
             position: relative;
             display: flex; flex-direction: column;
-            /* שינוי קריטי: רק צבע וצל משתנים, שום דבר פיזי לא זז */
-            transition: border-color 0.2s, box-shadow 0.2s;
+            /* הסוד ליציבות: שינוי רק של צל ומיקום עדין, בלי שינוי גודל */
+            transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.2s;
+            overflow: hidden; /* מונע גלישה */
         }
 
         .card:hover {
-            border-color: var(--primary-color);
-            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            transform: translateY(-4px); /* תזוזה למעלה */
+            box-shadow: 0 12px 30px rgba(0,0,0,0.15); /* צל עמוק יותר */
+            border-color: rgba(255,255,255,0.8);
         }
 
-        .card.pinned { border: 2px solid var(--accent-gold); }
+        .card.pinned {
+            border: 2px solid var(--accent-gold);
+            background: rgba(253, 203, 110, 0.05);
+        }
 
-        .card-body { padding: 16px; padding-top: 35px; flex-grow: 1; }
+        .card-body { padding: 20px; padding-top: 45px; flex-grow: 1; }
+        
         .card-index { 
-            position: absolute; top: 10px; left: 10px; font-size: 0.75rem; 
+            position: absolute; top: 15px; left: 15px; font-size: 0.8rem; 
             color: var(--text-secondary); background: rgba(127,127,127,0.1);
-            padding: 2px 6px; border-radius: 4px;
+            padding: 3px 8px; border-radius: 6px; font-family: monospace; font-weight: bold;
         }
 
         .card-link {
             display: block; color: var(--primary-color); font-weight: 700; text-decoration: none;
-            margin-bottom: 8px; word-break: break-all; font-size: 1.05rem; line-height: 1.4;
+            margin-bottom: 10px; word-break: break-all; font-size: 1.1rem; line-height: 1.4;
         }
-        .card-text { font-family: monospace; background: rgba(127,127,127,0.05); padding: 8px; border-radius: 6px; word-break: break-all; }
-        .card-desc { font-size: 0.9rem; color: var(--text-primary); opacity: 0.8; margin-top: 5px; }
+        .card-text { 
+            background: rgba(127,127,127,0.06); padding: 12px; border-radius: 8px; 
+            word-break: break-all; font-family: monospace; font-size: 0.95rem; border: 1px solid rgba(127,127,127,0.1);
+        }
+        .card-desc { font-size: 0.95rem; color: var(--text-primary); opacity: 0.9; margin-top: 10px; line-height: 1.5; }
         
         .card-note {
-            margin-top: 10px; padding: 8px; background: rgba(255, 255, 0, 0.1);
-            color: #b7791f; font-size: 0.85rem; border-radius: 6px;
-            border-right: 3px solid var(--accent-gold);
+            margin-top: 15px; padding: 10px; background: rgba(253, 203, 110, 0.15);
+            color: #d35400; font-size: 0.9rem; border-radius: 8px;
+            border-right: 4px solid var(--accent-gold); display: flex; gap: 8px; font-weight: 500;
         }
-        body.dark-mode .card-note { color: #f6e05e; background: rgba(255, 215, 0, 0.15); }
+        body.dark-mode .card-note { color: #ffeaa7; background: rgba(253, 203, 110, 0.1); }
 
         .card-footer {
-            padding: 10px 16px; border-top: 1px solid var(--glass-border);
+            padding: 12px 20px; border-top: 1px solid rgba(127,127,127,0.1);
             background: rgba(127,127,127,0.03);
             display: flex; justify-content: space-between; align-items: center;
-            border-bottom-left-radius: var(--radius); border-bottom-right-radius: var(--radius);
         }
+        
+        .tag-cat { font-size: 0.8rem; opacity: 0.7; font-weight: 600; }
 
-        .card-actions { display: flex; gap: 4px; }
+        .card-actions { display: flex; gap: 8px; }
         .icon-btn {
-            background: none; border: none; cursor: pointer; font-size: 1.1rem;
-            width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            color: var(--text-secondary); transition: background 0.2s;
+            background: transparent; border: none; cursor: pointer; font-size: 1.1rem;
+            width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            color: var(--text-secondary); transition: all 0.2s;
         }
-        .icon-btn:hover { background: rgba(127,127,127,0.15); color: var(--primary-color); }
+        .icon-btn:hover { background: rgba(127,127,127,0.15); color: var(--primary-color); transform: scale(1.1); }
         .icon-btn.active { color: var(--accent-gold); }
         
-        /* כפתור מחיקה מיוחד */
-        .btn-delete:hover { color: var(--accent-red) !important; background: rgba(229, 62, 62, 0.15) !important; }
+        /* כפתור המחיקה הישיר */
+        .btn-delete:hover { color: var(--accent-red) !important; background: rgba(214, 48, 49, 0.1) !important; }
 
-        /* Recycle Bin Modal */
+        /* === Recycle Bin Modal === */
         .modal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); backdrop-filter: blur(5px); z-index: 3000;
-            align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); z-index: 5000;
+            align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s;
         }
-        .modal.show { display: flex; animation: fadeIn 0.2s; }
+        .modal.show { display: flex; opacity: 1; }
         
         .modal-content {
             background: var(--glass-bg); border: 1px solid var(--glass-border);
-            width: 90%; max-width: 600px; max-height: 80vh; border-radius: 16px;
-            display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            width: 95%; max-width: 600px; max-height: 85vh; border-radius: 20px;
+            display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+            transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
+        .modal.show .modal-content { transform: scale(1); }
+
         .modal-header {
-            padding: 15px 20px; border-bottom: 1px solid var(--glass-border);
+            padding: 20px; border-bottom: 1px solid var(--glass-border);
             display: flex; justify-content: space-between; align-items: center;
         }
-        .close-modal { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); }
+        .modal-header h2 { margin: 0; font-size: 1.3rem; }
+        .close-modal { background: none; border: none; font-size: 2rem; cursor: pointer; color: var(--text-secondary); line-height: 1; }
+        
         .modal-body { padding: 20px; overflow-y: auto; }
         
         .deleted-item {
             background: rgba(127,127,127,0.05); border: 1px solid var(--glass-border);
-            padding: 10px; border-radius: 8px; margin-bottom: 10px;
+            padding: 12px; border-radius: 12px; margin-bottom: 12px;
             display: flex; justify-content: space-between; align-items: center;
         }
+        .deleted-info { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 60%; }
 
+        /* Toast */
         #toast {
             position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px);
-            background: #333; color: white; padding: 12px 24px; border-radius: 30px;
-            transition: transform 0.3s; z-index: 4000;
+            background: #2d3436; color: white; padding: 12px 28px; border-radius: 50px;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 6000;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3); font-weight: 600;
         }
         #toast.show { transform: translateX(-50%) translateY(0); }
 
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1); } }
     </style>
 </head>
 <body class="dark-mode">
@@ -237,29 +266,27 @@
         <div id="loggedOutView" style="display:none; width:100%; justify-content:center;">
             <button id="googleLoginBtn" class="btn-google">
                 <svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M21.35,11.1H12.18V13.83H18.69C18.36,17.64 15.19,19.27 12.19,19.27C8.36,19.27 5,16.25 5,12C5,7.9 8.2,4.73 12.2,4.73C15.29,4.73 17.1,6.7 17.1,6.7L19,4.72C19,4.72 16.56,2 12.1,2C6.42,2 2.03,6.8 2.03,12C2.03,17.05 6.16,22 12.25,22C17.6,22 21.5,18.33 21.5,12.91C21.5,11.76 21.35,11.1 21.35,11.1V11.1Z"/></svg>
-                התחבר עם Google לגיבוי
+                התחבר עם Google לגיבוי בענן
             </button>
         </div>
         <div id="loggedInView" style="display:none; width:100%; justify-content:space-between;">
             <div class="user-info">
                 <img id="userAvatar" src="" class="user-avatar" alt="Avatar">
                 <div>
-                    <div id="userName" style="font-weight:bold; font-size:0.95rem;"></div>
-                    <div id="syncStatus" style="font-size:0.8rem; color:var(--text-secondary);"><span class="status-dot"></span>מנותק</div>
+                    <div id="userName" style="font-weight:bold;"></div>
+                    <div id="syncStatus" style="font-size:0.85rem; color:var(--text-secondary);"><span class="status-dot"></span>מנותק</div>
                 </div>
             </div>
-            <div>
-                <button id="logoutBtn" style="background:transparent; border:1px solid var(--glass-border); color:var(--text-primary); padding:5px 10px; border-radius:8px; cursor:pointer;">יציאה</button>
-            </div>
+            <button id="logoutBtn" style="background:transparent; border:1px solid var(--glass-border); color:var(--text-primary); padding:6px 12px; border-radius:8px; cursor:pointer;">יציאה</button>
         </div>
     </div>
 
     <div id="controlsArea" class="glass-panel">
         <div class="search-container">
-            <input type="search" id="searchInput" placeholder="🔍 חפש קישור, תיאור או קטגוריה...">
+            <input type="search" id="searchInput" placeholder="🔍 חיפוש מהיר (תוכן, תיאור, קטגוריה)...">
         </div>
 
-        <div class="filters-container">
+        <div class="filters-row">
             <select id="categoryFilter"><option value="">📂 כל הקטגוריות</option></select>
             <select id="sortOrder">
                 <option value="date-new">📅 תאריך (חדש לישן)</option>
@@ -267,7 +294,7 @@
             </select>
         </div>
 
-        <div class="actions-container">
+        <div class="actions-row">
             <button class="action-btn btn-blue" onclick="exportJson()">💾 JSON</button>
             <button class="action-btn btn-cyan" onclick="downloadHtml()">🌍 אתר</button>
             <button class="action-btn btn-red" onclick="openRecycleBin()">🗑️ סל מחזור</button>
@@ -278,12 +305,12 @@
     <details class="glass-panel">
         <summary>➕ הוספת פריט חדש</summary>
         <form id="addItemForm">
-            <textarea id="inpContent" rows="2" placeholder="הדבק כאן קישור..." required></textarea>
-            <input type="text" id="inpDesc" placeholder="תיאור">
-            <input type="text" id="inpCat" list="catList" placeholder="קטגוריה">
+            <textarea id="inpContent" rows="2" placeholder="הדבק כאן קישור או טקסט..." required></textarea>
+            <input type="text" id="inpDesc" placeholder="תיאור (אופציונלי)">
+            <input type="text" id="inpCat" list="catList" placeholder="קטגוריה (לדוגמה: עבודה)">
             <datalist id="catList"></datalist>
-            <input type="text" id="inpNote" placeholder="הערה">
-            <button type="submit">הוסף</button>
+            <input type="text" id="inpNote" placeholder="הערה צהובה (אופציונלי)">
+            <button type="submit">הוסף למאגר</button>
         </form>
     </details>
 
@@ -292,7 +319,7 @@
     <div id="recycleBinModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>🗑️ סל מחזור (30 יום)</h2>
+                <h2>🗑️ סל מחזור (נמחק אוטומטית אחרי 30 יום)</h2>
                 <button class="close-modal" onclick="closeRecycleBin()">×</button>
             </div>
             <div class="modal-body" id="recycleBinList"></div>
@@ -312,8 +339,7 @@
             projectId: "linkmanager-fdac5",
             storageBucket: "linkmanager-fdac5.firebasestorage.app",
             messagingSenderId: "532683691813",
-            appId: "1:532683691813:web:5cf639e32a715c626eeccc",
-            measurementId: "G-NVN4E8TDGE"
+            appId: "1:532683691813:web:5cf639e32a715c626eeccc"
         };
 
         let app, auth, db, currentUser;
@@ -327,7 +353,7 @@
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
 
-        // פונקציות גלובליות לחלון כדי שהכפתורים יכירו אותן
+        // פונקציות גלובליות
         window.cloudLogin = async () => {
             try { await signInWithPopup(auth, provider); } 
             catch (error) { alert("שגיאה בהתחברות: " + error.message); }
@@ -351,19 +377,24 @@
                     
                     updateSyncStatus('syncing');
                     
-                    // סנכרון בזמן אמת
+                    // סנכרון בזמן אמת - חד צדדי (ענן -> לקוח) בשינוי
                     onSnapshot(doc(db, "users", user.uid), (docSnap) => {
                         if (docSnap.exists()) {
                             const data = docSnap.data();
-                            if (data.items) {
+                            let updated = false;
+                            
+                            // בדיקה אם המידע בענן חדש יותר או שונה
+                            if (data.items && JSON.stringify(data.items) !== JSON.stringify(window.items)) {
                                 window.items = data.items;
-                                window.renderList(); // קריאה לפונקציה הגלובלית
                                 localStorage.setItem('LinkManager_Pro_Data', JSON.stringify(window.items));
+                                updated = true;
                             }
-                            if (data.recycleBin) {
+                            if (data.recycleBin && JSON.stringify(data.recycleBin) !== JSON.stringify(window.recycleBin)) {
                                 window.recycleBin = data.recycleBin;
                                 localStorage.setItem('LinkManager_RecycleBin', JSON.stringify(window.recycleBin));
                             }
+                            
+                            if (updated) window.renderList();
                             updateSyncStatus('online');
                         }
                     }, (error) => {
@@ -379,7 +410,7 @@
             });
         }
 
-        // פונקציה לשמירה בענן (תיקרא ע"י saveData)
+        // שמירה לענן
         window.pushToCloud = async () => {
             if (!currentUser || !db) return;
             updateSyncStatus('syncing');
@@ -414,15 +445,17 @@
     </script>
 
     <script>
+        // --- ניהול משתנים ---
         const STORAGE_KEY = 'LinkManager_Pro_Data';
         const BIN_KEY = 'LinkManager_RecycleBin';
         window.items = [];
         window.recycleBin = [];
 
+        // --- אתחול ---
         document.addEventListener('DOMContentLoaded', () => {
             loadData();
             cleanupRecycleBin();
-            window.renderList(); // רינדור ראשוני
+            window.renderList();
             
             // חיבור אירועים
             document.getElementById('addItemForm').addEventListener('submit', handleAdd);
@@ -433,21 +466,18 @@
             document.getElementById('googleLoginBtn').addEventListener('click', () => window.cloudLogin && window.cloudLogin());
             document.getElementById('logoutBtn').addEventListener('click', () => window.cloudLogout && window.cloudLogout());
 
-            // === Event Delegation (הפתרון ליציבות) ===
-            // במקום להוסיף מאזין לכל כפתור, אנחנו מאזינים לרשימה כולה
+            // === EVENT DELEGATION ===
+            // המפתח ליציבות - מאזין אחד לכל הרשימה
             document.getElementById('listContainer').addEventListener('click', (e) => {
-                // בדיקה אם נלחץ כפתור בתוך הרשימה
                 const btn = e.target.closest('button');
                 if (!btn) return;
 
-                // מציאת ה-ID של הכרטיס
                 const card = btn.closest('.card');
                 if (!card) return;
                 
                 const id = parseFloat(card.dataset.id);
                 const action = btn.dataset.action;
 
-                // ניתוב הפעולה
                 if (action === 'delete') moveToTrash(id);
                 if (action === 'copy') copyText(id);
                 if (action === 'edit') editItem(id);
@@ -455,7 +485,7 @@
             });
         });
 
-        // --- ניהול נתונים ---
+        // --- נתונים ---
         function loadData() {
             try {
                 const local = localStorage.getItem(STORAGE_KEY);
@@ -470,9 +500,8 @@
             localStorage.setItem(STORAGE_KEY, JSON.stringify(window.items));
             localStorage.setItem(BIN_KEY, JSON.stringify(window.recycleBin));
             
-            // קריאה לפונקציית הענן אם קיימת
-            if (window.renderList) window.renderList();
-            if (window.pushToCloud) window.pushToCloud();
+            if (window.renderList) window.renderList(); // רענון מקומי
+            if (window.pushToCloud) window.pushToCloud(); // סנכרון ענן
         }
 
         function cleanupRecycleBin() {
@@ -489,18 +518,19 @@
             }
         }
 
-        // --- פעולות ---
+        // --- פעולות על כרטיסים ---
         function moveToTrash(id) {
-            if (confirm('להעביר לסל המחזור?')) {
-                const idx = window.items.findIndex(i => i.id === id);
-                if (idx > -1) {
-                    const item = window.items[idx];
-                    item.deletedAt = Date.now();
-                    window.recycleBin.unshift(item);
-                    window.items.splice(idx, 1);
-                    saveData(); // זה כבר ירענן את המסך
-                    showToast('הועבר לסל המחזור');
-                }
+            // הוספת מנגנון אישור לפני מחיקה
+            if (!confirm('האם להעביר את הפריט לסל המחזור?')) return;
+
+            const idx = window.items.findIndex(i => i.id === id);
+            if (idx > -1) {
+                const item = window.items[idx];
+                item.deletedAt = Date.now();
+                window.recycleBin.unshift(item);
+                window.items.splice(idx, 1);
+                saveData();
+                showToast('הפריט הועבר לסל המחזור');
             }
         }
 
@@ -535,7 +565,7 @@
         function editItem(id) {
             const item = window.items.find(i => i.id === id);
             if (!item) return;
-            const newVal = prompt('ערוך קישור/תוכן:', item.content);
+            const newVal = prompt('ערוך תוכן:', item.content);
             if (newVal !== null) {
                 item.content = newVal;
                 item.desc = prompt('תיאור:', item.desc) || '';
@@ -553,8 +583,7 @@
             }
         }
 
-        // --- רינדור (תצוגה) ---
-        // הוגדר כ-Global Window Function כדי שפיירבייס יוכל לקרוא לו
+        // --- רינדור (Rendering) ---
         window.renderList = function() {
             const container = document.getElementById('listContainer');
             if (!container) return;
@@ -563,7 +592,6 @@
             const catFilter = document.getElementById('categoryFilter').value;
             const sort = document.getElementById('sortOrder').value;
 
-            // עדכון רשימת קטגוריות
             updateCategories();
 
             let filtered = window.items.filter(i => {
@@ -571,7 +599,6 @@
                 return text.includes(search) && (!catFilter || i.cat === catFilter);
             });
 
-            // מיון
             filtered.sort((a, b) => {
                 if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
                 if (sort === 'date-new') return b.date.localeCompare(a.date);
@@ -582,7 +609,6 @@
             document.getElementById('itemCount').textContent = `מציג ${filtered.length}`;
             container.innerHTML = '';
 
-            // קיבוץ
             const groups = {};
             filtered.forEach(i => {
                 const c = i.cat || 'כללי';
@@ -590,14 +616,13 @@
                 groups[c].push(i);
             });
 
-            // בניית HTML
             Object.keys(groups).sort().forEach(cat => {
                 const section = document.createElement('div');
                 section.className = 'category-block';
                 section.innerHTML = `
                     <div class="category-header">
                         <h2>${cat}</h2>
-                        <span style="opacity:0.6; font-size:0.9rem;">${groups[cat].length}</span>
+                        <span class="category-count">${groups[cat].length}</span>
                     </div>
                     <div class="items-grid">
                         ${groups[cat].map((item, idx) => getCardHTML(item, idx + 1)).join('')}
@@ -612,9 +637,9 @@
             const mainContent = isLink 
                 ? `<a href="${item.content}" target="_blank" class="card-link">${item.content}</a>`
                 : `<div class="card-text">${item.content}</div>`;
-            const note = item.note ? `<div class="card-note">${item.note}</div>` : '';
+            const note = item.note ? `<div class="card-note">📝 ${item.note}</div>` : '';
 
-            // שימו לב: data-id ו-data-action הם המפתח ליציבות הכפתורים
+            // הכפתור האחרון כאן הוא כפתור המחיקה הישיר
             return `
                 <div class="card ${item.pinned ? 'pinned' : ''}" data-id="${item.id}">
                     <div class="card-index">#${index}</div>
@@ -624,12 +649,12 @@
                         ${note}
                     </div>
                     <div class="card-footer">
-                        <span style="font-size:0.8rem; opacity:0.7">${item.cat}</span>
+                        <span class="tag-cat">${item.cat}</span>
                         <div class="card-actions">
                             <button class="icon-btn" data-action="copy" title="העתק">📋</button>
                             <button class="icon-btn" data-action="edit" title="ערוך">✏️</button>
                             <button class="icon-btn ${item.pinned?'active':''}" data-action="pin" title="נעץ">📌</button>
-                            <button class="icon-btn btn-delete" data-action="delete" title="מחק">🗑️</button>
+                            <button class="icon-btn btn-delete" data-action="delete" title="מחק לפח">🗑️</button>
                         </div>
                     </div>
                 </div>
@@ -652,22 +677,22 @@
             select.value = current;
         }
 
-        // --- סל מחזור UI ---
+        // --- סל מחזור ---
         window.openRecycleBin = () => {
             const list = document.getElementById('recycleBinList');
-            list.innerHTML = window.recycleBin.length === 0 ? '<div style="text-align:center;color:gray;">ריק</div>' : '';
+            list.innerHTML = window.recycleBin.length === 0 ? '<div style="text-align:center;color:gray;">הסל ריק</div>' : '';
             
             window.recycleBin.forEach(item => {
                 const date = new Date(item.deletedAt).toLocaleDateString();
                 list.innerHTML += `
                     <div class="deleted-item">
-                        <div>
-                            <div><b>${item.content.substring(0,30)}...</b></div>
+                        <div style="width:70%;">
+                            <div class="deleted-info"><b>${item.content}</b></div>
                             <div style="font-size:0.8rem; opacity:0.7">נמחק: ${date}</div>
                         </div>
                         <div style="display:flex; gap:10px;">
-                            <button class="icon-btn" onclick="restoreItem(${item.id})">♻️</button>
-                            <button class="icon-btn" onclick="permDelete(${item.id})" style="color:var(--accent-red)">❌</button>
+                            <button class="icon-btn" onclick="restoreItem(${item.id})" title="שחזר">♻️</button>
+                            <button class="icon-btn" onclick="permDelete(${item.id})" style="color:var(--accent-red)" title="מחק סופית">❌</button>
                         </div>
                     </div>
                 `;
@@ -687,13 +712,13 @@
                 window.items.unshift(item);
                 window.recycleBin.splice(idx, 1);
                 saveData();
-                window.openRecycleBin(); // רענון הסל
+                window.openRecycleBin();
                 showToast('שוחזר');
             }
         };
 
         window.permDelete = (id) => {
-            if (confirm('למחוק לצמיתות? לא ניתן לשחזר.')) {
+            if (confirm('מחיקה סופית - לא ניתן לשחזר. להמשיך?')) {
                 window.recycleBin = window.recycleBin.filter(i => i.id !== id);
                 saveData();
                 window.openRecycleBin();
@@ -722,7 +747,7 @@
         };
 
         window.downloadHtml = () => {
-            document.getElementById('app-state').textContent = JSON.stringify(window.items);
+            document.getElementById('app-state').textContent = JSON.stringify(window.items); // גיבוי מצב נוכחי
             const html = document.documentElement.outerHTML;
             const blob = new Blob([html], {type: 'text/html'});
             const a = document.createElement('a');
