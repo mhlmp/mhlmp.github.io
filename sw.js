@@ -1,10 +1,9 @@
 const CACHE_NAME = 'linkmaster-v1';
 const urlsToCache = [
+  './',
   './index.html',
   './manifest.json',
-  'https://cdn.tailwindcss.com',
-  'https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
+  './icon.png'
 ];
 
 self.addEventListener('install', event => {
@@ -20,3 +19,4 @@ self.addEventListener('fetch', event => {
       .then(response => response || fetch(event.request))
   );
 });
+
