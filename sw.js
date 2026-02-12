@@ -1,4 +1,4 @@
-const CACHE_NAME = 'LinkManager-Cloud-v4';
+const CACHE_NAME = 'LinkManager-Cloud-v5';
 const urlsToCache = [
   './',
   './index.html',
@@ -6,7 +6,6 @@ const urlsToCache = [
   './icon.jpg'
 ];
 
-// התקנה: שמירת קבצי המערכת בלבד (ללא דאטה)
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
@@ -15,7 +14,6 @@ self.addEventListener('install', event => {
   );
 });
 
-// אקטיבציה: ניקוי גרסאות ישנות
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -31,16 +29,13 @@ self.addEventListener('activate', event => {
   return self.clients.claim();
 });
 
-// שליפת נתונים
 self.addEventListener('fetch', event => {
-  // 1. התעלמות מוחלטת מבקשות Firebase/Google (כדי למנוע שמירת מידע אישי ב-Cache)
   if (event.request.url.includes('firestore.googleapis.com') || 
       event.request.url.includes('googleapis.com') ||
       event.request.url.includes('firebase')) {
-      return; // תן לרשת לטפל בזה ישירות
+      return;
   }
 
-  // 2. עבור קובץ ה-HTML - תמיד נסה רשת קודם (כדי לקבל עדכוני קוד)
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => caches.match('./index.html'))
@@ -48,7 +43,6 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 3. קבצים סטטיים אחרים - נסה מה-Cache קודם
   event.respondWith(
     caches.match(event.request).then(response => response || fetch(event.request))
   );
