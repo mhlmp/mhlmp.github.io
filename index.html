@@ -18,7 +18,6 @@
             --text-primary: #1a1a1a;
             --text-secondary: #555555;
             --primary-color: #0066cc;
-            --primary-glow: rgba(0, 102, 204, 0.2);
             --radius: 12px;
             --accent-green: #00a651;
             --accent-red: #d93025;
@@ -35,7 +34,6 @@
             --text-primary: #f1f5f9;
             --text-secondary: #cbd5e1;
             --primary-color: #60a5fa;
-            --primary-glow: rgba(96, 165, 250, 0.2);
             --note-bg: rgba(60, 50, 30, 0.8);
         }
 
@@ -46,51 +44,37 @@
             background: var(--bg-gradient);
             background-attachment: fixed;
             color: var(--text-primary);
-            margin: 0;
-            padding: 15px;
-            padding-bottom: 100px;
-            min-height: 100vh;
-            transition: color 0.3s;
+            margin: 0; padding: 15px; padding-bottom: 100px;
+            min-height: 100vh; transition: color 0.3s;
         }
 
         .glass-panel {
-            background: var(--glass-bg);
-            backdrop-filter: var(--glass-blur);
-            -webkit-backdrop-filter: var(--glass-blur);
-            border: 1px solid var(--glass-border);
-            box-shadow: var(--glass-shadow);
-            border-radius: var(--radius);
+            background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); border-radius: var(--radius);
         }
 
         header { text-align: center; margin-bottom: 25px; }
-        h1 { margin: 5px 0; font-size: 1.8rem; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        h1 { margin: 5px 0; font-size: 1.8rem; font-weight: 800; }
         
         #itemCount {
-            display: inline-block; 
-            background: rgba(127, 127, 127, 0.1); 
-            padding: 4px 15px;
+            display: inline-block; background: rgba(127, 127, 127, 0.1); padding: 4px 15px;
             border-radius: 20px; font-size: 0.9rem; color: var(--text-secondary);
             border: 1px solid var(--glass-border); font-weight: 600;
         }
 
-        /* User Section */
-        #userSection {
-            padding: 12px; margin-bottom: 20px;
-            display: flex; justify-content: space-between; align-items: center;
-        }
+        /* User UI */
+        #userSection { padding: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
         .user-info { display: flex; align-items: center; gap: 12px; }
         .user-avatar { width: 42px; height: 42px; border-radius: 50%; border: 2px solid var(--glass-border); object-fit: cover; }
         .user-name { font-weight: 700; font-size: 1rem; }
-        .cloud-status { font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; font-weight: 500; }
-        
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; display: inline-block; transition: 0.3s; }
+        .cloud-status { font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; display: inline-block; }
         .status-dot.online { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
-        .status-dot.syncing { background: #ffbb00; animation: pulse 1s infinite; }
-        
-        .btn-login { background: var(--google-btn); color: white; border: none; padding: 10px 24px; border-radius: 30px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 0.95rem; transition: 0.2s; box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3); }
-        .btn-action-sm { background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; margin-left: 5px; transition: 0.2s; }
 
-        /* Welcome Screen */
+        .btn-login { background: var(--google-btn); color: white; border: none; padding: 10px 24px; border-radius: 30px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+        .btn-action-sm { background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 8px 14px; border-radius: 8px; cursor: pointer; margin-left: 5px; }
+
+        /* Welcome & Locked */
         #welcomeScreen { display: none; flex-direction: column; align-items: center; text-align: center; padding: 40px 20px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border); margin-top: 20px; }
         #welcomeScreen.visible { display: flex; }
         .lock-icon { font-size: 4rem; margin-bottom: 20px; opacity: 0.8; }
@@ -98,89 +82,120 @@
         .auth-required.locked { display: none !important; }
 
         /* Controls */
-        #controlsArea { padding: 16px; margin-bottom: 25px; display: flex; flex-direction: column; gap: 14px; position: relative; z-index: 100; }
-
-        .search-container input { width: 100%; padding: 12px 16px; font-size: 16px; border: 1px solid var(--glass-border); border-radius: var(--radius); background: rgba(127,127,127,0.1); color: var(--text-primary); transition: 0.2s; }
-        
+        #controlsArea { padding: 16px; margin-bottom: 25px; display: flex; flex-direction: column; gap: 14px; z-index: 100; position: relative; }
+        .search-container input { width: 100%; padding: 12px 16px; font-size: 16px; border: 1px solid var(--glass-border); border-radius: var(--radius); background: rgba(127,127,127,0.1); color: var(--text-primary); }
         .filters-container { display: flex; gap: 10px; flex-wrap: wrap; }
-        .filters-container select { flex: 1; min-width: 140px; height: 44px; padding: 0 12px; font-size: 15px; background: rgba(127,127,127,0.1); color: var(--text-primary); border: 1px solid var(--glass-border); border-radius: var(--radius); cursor: pointer; }
+        .filters-container select { flex: 1; min-width: 140px; height: 44px; padding: 0 12px; background: rgba(127,127,127,0.1); color: var(--text-primary); border: 1px solid var(--glass-border); border-radius: var(--radius); }
         .filters-container select option { background: #1e293b; color: white; }
 
-        /* Dropdowns & Actions */
+        /* Action Buttons & Dropdowns */
         .actions-container { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
         .dropdown { position: relative; display: inline-block; flex-grow: 1; }
-        
-        .action-btn { width: 100%; height: 44px; padding: 0 12px; font-size: 14px; font-weight: 600; color: white; border: none; border-radius: var(--radius); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        .action-btn { width: 100%; height: 44px; color: white; border: none; border-radius: var(--radius); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; }
         
         .btn-json { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
         .btn-txt { background: linear-gradient(135deg, #06b6d4, #0891b2); }
         .btn-site { background: linear-gradient(135deg, #6366f1, #4f46e5); } 
         .btn-trash-view { background: linear-gradient(135deg, #64748b, #475569); }
-        .btn-toggle { background: rgba(127,127,127,0.1); color: var(--text-primary); border: 1px solid var(--glass-border); flex-grow: 0 !important; width: 44px; font-size: 1.2rem; box-shadow: none; }
+        .btn-toggle { background: rgba(127,127,127,0.1); color: var(--text-primary); border: 1px solid var(--glass-border); flex-grow: 0 !important; width: 44px; font-size: 1.2rem; }
 
-        .dropdown-content { display: none; position: absolute; background: var(--glass-bg); backdrop-filter: blur(20px); min-width: 240px; box-shadow: 0 15px 40px rgba(0,0,0,0.3); border-radius: var(--radius); border: 1px solid var(--glass-border); z-index: 2000; right: 0; top: calc(100% + 8px); padding: 8px 0; animation: fadeIn 0.2s ease; }
+        .dropdown-content { display: none; position: absolute; background: var(--glass-bg); backdrop-filter: blur(20px); min-width: 240px; box-shadow: 0 15px 40px rgba(0,0,0,0.3); border-radius: var(--radius); border: 1px solid var(--glass-border); z-index: 2000; right: 0; top: calc(100% + 8px); padding: 8px 0; }
         .dropdown-content.show { display: block; }
-        .dropdown-content button, .dropdown-content label { color: var(--text-primary); padding: 12px 20px; text-decoration: none; display: block; background: none; border: none; width: 100%; text-align: right; cursor: pointer; font-size: 14px; font-weight: 500; transition: background 0.2s; }
+        .dropdown-content button, .dropdown-content label { color: var(--text-primary); padding: 12px 20px; display: block; background: none; border: none; width: 100%; text-align: right; cursor: pointer; font-size: 14px; }
         .dropdown-content button:hover, .dropdown-content label:hover { background-color: rgba(127,127,127,0.1); color: var(--primary-color); }
+        input[type="file"] { display: none; }
         .dropdown-divider { border-top: 1px solid var(--glass-border); margin: 6px 0; }
 
         /* Add Item */
-        details { margin-bottom: 25px; transition: 0.3s; }
-        summary { padding: 16px; cursor: pointer; font-weight: 700; color: var(--primary-color); background: rgba(127,127,127,0.05); border-bottom: 1px solid transparent; list-style: none; display: flex; align-items: center; justify-content: center; }
-        details[open] summary { border-bottom: 1px solid var(--glass-border); }
+        details { margin-bottom: 25px; }
+        summary { padding: 16px; cursor: pointer; font-weight: 700; color: var(--primary-color); background: rgba(127,127,127,0.05); list-style: none; display: flex; justify-content: center; border-radius: var(--radius); }
         #addItemForm { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
-        #addItemForm input, #addItemForm textarea { padding: 12px; border: 1px solid var(--glass-border); border-radius: var(--radius); background: rgba(127,127,127,0.05); color: var(--text-primary); width: 100%; font-size: 15px; }
-        #addItemForm button { background: var(--accent-green); color: white; padding: 14px; border: none; border-radius: var(--radius); font-weight: bold; cursor: pointer; font-size: 16px; }
+        #addItemForm input, #addItemForm textarea { padding: 12px; border: 1px solid var(--glass-border); border-radius: var(--radius); background: rgba(127,127,127,0.05); color: var(--text-primary); width: 100%; }
+        #addItemForm button { background: var(--accent-green); color: white; padding: 14px; border: none; border-radius: var(--radius); font-weight: bold; cursor: pointer; }
 
         /* Grid & Cards */
         .category-block { margin-bottom: 35px; }
         .category-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 5px; margin-bottom: 15px; border-bottom: 2px solid rgba(127,127,127,0.1); }
         .category-header h2 { margin: 0; font-size: 1.4rem; font-weight: 700; }
-        .category-badge { background: rgba(127,127,127,0.1); color: var(--text-primary); font-size: 0.85rem; padding: 4px 12px; border-radius: 12px; font-weight: 600; border: 1px solid var(--glass-border); }
-
+        .category-badge { background: rgba(127,127,127,0.1); padding: 4px 12px; border-radius: 12px; font-weight: 600; font-size: 0.85rem; border: 1px solid var(--glass-border); }
+        
         .items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
         
-        .card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius); position: relative; display: flex; flex-direction: column; transition: box-shadow 0.2s, transform 0.1s; }
-        .card:hover { box-shadow: 0 10px 30px rgba(0,0,0,0.15); transform: translateY(-2px); }
+        .card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius); position: relative; display: flex; flex-direction: column; transition: transform 0.2s; }
+        .card:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
         .card.pinned { border: 2px solid var(--accent-gold); background: rgba(255, 255, 0, 0.05); }
         
-        .card-index { position: absolute; top: 12px; left: 12px; background: rgba(127,127,127,0.1); color: var(--text-secondary); font-size: 11px; padding: 3px 8px; border-radius: 6px; font-family: monospace; }
-        
+        .card-index { position: absolute; top: 12px; left: 12px; background: rgba(127,127,127,0.1); font-size: 11px; padding: 3px 8px; border-radius: 6px; font-family: monospace; color: var(--text-secondary); }
         .card-body { padding: 20px; padding-top: 40px; flex-grow: 1; }
         .card-link { display: block; color: var(--primary-color); font-weight: 700; text-decoration: none; margin-bottom: 10px; word-break: break-all; font-size: 16px; line-height: 1.4; }
         .card-text-content { background: rgba(127,127,127,0.05); padding: 12px; border-radius: 8px; font-family: monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; border: 1px solid var(--glass-border); }
-        .card-desc { font-size: 15px; color: var(--text-primary); opacity: 0.9; margin-top: 8px; line-height: 1.5; margin-bottom: 10px; }
+        .card-desc { font-size: 15px; opacity: 0.9; margin-bottom: 10px; line-height: 1.5; }
         .card-note { margin-top: 12px; padding: 10px; background-color: var(--note-bg); color: #4a3b10; font-size: 13px; border-radius: 8px; border-right: 4px solid var(--accent-gold); display: flex; gap: 8px; }
-
-        .card-footer { padding: 12px 20px; border-top: 1px solid var(--glass-border); background: rgba(127,127,127,0.05); display: flex; justify-content: space-between; align-items: center; border-bottom-left-radius: var(--radius); border-bottom-right-radius: var(--radius); }
-        .tag-category { font-size: 11px; background: rgba(127,127,127,0.1); color: var(--text-primary); padding: 4px 10px; border-radius: 12px; border: 1px solid var(--glass-border); font-weight: 600; }
+        
+        .card-footer { padding: 12px 20px; border-top: 1px solid var(--glass-border); background: rgba(127,127,127,0.05); display: flex; justify-content: space-between; align-items: center; border-radius: 0 0 var(--radius) var(--radius); }
+        .tag-category { font-size: 11px; background: rgba(127,127,127,0.1); padding: 4px 10px; border-radius: 12px; border: 1px solid var(--glass-border); font-weight: 600; }
+        .duplicate-badge { color: var(--accent-red); font-weight: bold; font-size: 12px; display: none; margin-left: 5px; background: rgba(239,68,68,0.1); padding: 2px 6px; border-radius: 4px; }
 
         .card-actions { display: flex; gap: 4px; }
         .icon-btn { background: transparent; border: none; cursor: pointer; font-size: 18px; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); transition: all 0.2s; }
         .icon-btn:hover { color: var(--primary-color); background: rgba(127,127,127,0.1); }
         .pin-btn.active { color: var(--accent-gold); transform: rotate(45deg); opacity: 1; }
-        
-        .duplicate-badge { color: var(--accent-red); font-weight: bold; font-size: 12px; display: none; margin-left: 5px; background: rgba(239,68,68,0.1); padding: 2px 6px; border-radius: 4px; }
-        input[type="file"] { display: none; }
 
         /* Trash Modal */
-        #trashModal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 3000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+        #trashModal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
         #trashModal.open { display: flex; }
-        .modal-content { background: var(--glass-bg); width: 90%; max-width: 600px; max-height: 80vh; border-radius: var(--radius); border: 1px solid var(--glass-border); display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--glass-shadow); }
+        .modal-content { background: var(--glass-bg); width: 90%; max-width: 600px; max-height: 80vh; border-radius: var(--radius); border: 1px solid var(--glass-border); display: flex; flex-direction: column; overflow: hidden; }
         .modal-header { padding: 15px 20px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center; }
-        .modal-body { padding: 20px; overflow-y: auto; flex-grow: 1; }
+        .modal-body { padding: 20px; overflow-y: auto; }
         .trash-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: rgba(127,127,127,0.05); margin-bottom: 8px; border-radius: 8px; border: 1px solid var(--glass-border); }
 
-        /* Toast with UNDO */
-        #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px); background: rgba(30, 41, 59, 0.95); color: white; padding: 12px 24px; border-radius: 12px; box-shadow: 0 15px 40px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: space-between; gap: 20px; z-index: 9999; transition: transform 0.4s, opacity 0.3s; opacity: 0; border: 1px solid rgba(255,255,255,0.1); min-width: 300px; }
+        /* TOAST WITH PROGRESS - FIXED */
+        #toast {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px);
+            background: rgba(30, 41, 59, 0.95); color: white;
+            border-radius: 12px; box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+            z-index: 9999;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s;
+            opacity: 0;
+            border: 1px solid rgba(255,255,255,0.1);
+            overflow: hidden; /* For progress bar */
+            display: flex; flex-direction: column;
+            min-width: 320px;
+        }
         #toast.visible { transform: translateX(-50%) translateY(0); opacity: 1; }
-        #undoBtn { background: transparent; border: 1px solid var(--accent-gold); color: var(--accent-gold); padding: 4px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.9rem; transition: 0.2s; display: none; }
+
+        .toast-content {
+            padding: 14px 20px;
+            display: flex; align-items: center; justify-content: space-between; gap: 15px;
+        }
+
+        #undoBtn {
+            background: rgba(255,255,255,0.1); border: 1px solid var(--accent-gold);
+            color: var(--accent-gold); padding: 5px 12px; border-radius: 6px;
+            cursor: pointer; font-weight: bold; font-size: 0.85rem;
+            transition: 0.2s; white-space: nowrap;
+        }
         #undoBtn:hover { background: var(--accent-gold); color: #000; }
-        
-        /* Scroll To Top */
+
+        /* Progress Bar Animation */
+        .toast-progress {
+            height: 4px;
+            background: var(--accent-green);
+            width: 100%;
+            transform-origin: right;
+            transform: scaleX(1);
+        }
+        .toast-progress.animating {
+            animation: countdown 10s linear forwards;
+        }
+        @keyframes countdown {
+            from { transform: scaleX(1); }
+            to { transform: scaleX(0); }
+        }
+
+        /* Scroll Top */
         #scrollTopBtn { position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; border-radius: 50%; background: var(--primary-color); color: white; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 2000; opacity: 0; visibility: hidden; transition: 0.3s; display: flex; align-items: center; justify-content: center; }
         #scrollTopBtn.show { opacity: 1; visibility: visible; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="dark-mode">
@@ -202,11 +217,11 @@
                 <img id="userAvatar" src="" class="user-avatar" alt="Avatar">
                 <div>
                     <div id="userName" class="user-name">שם משתמש</div>
-                    <div id="syncStatus" class="cloud-status"><span class="status-dot online"></span> פרטי (ענן בלבד)</div>
+                    <div class="cloud-status"><span class="status-dot online"></span> מחובר (ענן)</div>
                 </div>
             </div>
             <div>
-                <button id="switchAccountBtn" class="btn-action-sm">🔄 החלף חשבון</button>
+                <button id="switchAccountBtn" class="btn-action-sm">🔄 החלף</button>
                 <button id="logoutBtn" class="btn-action-sm">יציאה</button>
             </div>
         </div>
@@ -215,8 +230,8 @@
     <div id="welcomeScreen" class="visible">
         <div class="lock-icon">🔒</div>
         <h2>הנתונים מוגנים</h2>
-        <p>כדי לשמור על פרטיותך, הקישורים והמידע נטענים ישירות מהענן.</p>
-        <p>בעת יציאה (Logout) הנתונים נמחקים לחלוטין מהמכשיר.</p>
+        <p>כדי לשמור על פרטיותך, הקישורים נטענים מהענן בלבד.</p>
+        <p>בעת יציאה (Logout) הכל נמחק מהמכשיר.</p>
     </div>
 
     <div id="protectedContent" class="auth-required locked">
@@ -228,7 +243,7 @@
             <div class="filters-container">
                 <select id="categoryFilter"><option value="">📂 כל הקטגוריות</option></select>
                 <select id="sortOrder">
-                    <option value="date-new" selected>📅 תאריך (הכי חדש = הכי גבוה)</option>
+                    <option value="date-new" selected>📅 תאריך (חדש לישן)</option>
                     <option value="name">🔤 שם (א-ת)</option>
                     <option value="index-asc">🔢 מספר (1 עד אחרון)</option>
                     <option value="index-desc">🔢 מספר (אחרון עד 1)</option>
@@ -288,7 +303,7 @@
     <div id="trashModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>🗑️ סל מחזור (נשמר ל-30 יום)</h3>
+                <h3>🗑️ סל מחזור</h3>
                 <button class="btn-close-modal">✖</button>
             </div>
             <div id="trashList" class="modal-body"></div>
@@ -296,8 +311,11 @@
     </div>
 
     <div id="toast">
-        <span id="toastMsg">הודעה</span>
-        <button id="undoBtn">↪ בטל</button>
+        <div class="toast-content">
+            <span id="toastMsg">הודעה</span>
+            <button id="undoBtn">↪ בטל (Undo)</button>
+        </div>
+        <div id="toastProgress" class="toast-progress"></div>
     </div>
 
     <button id="scrollTopBtn" title="גלול למעלה">⬆️</button>
@@ -307,7 +325,7 @@
         import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // === Configuration ===
+        // === Config ===
         const firebaseConfig = {
             apiKey: "AIzaSyDwofGCJUWkdLGWyXK7_UBAbbC39FXnAmI",
             authDomain: "linkmeir-dada4.firebaseapp.com",
@@ -322,7 +340,6 @@
         let app, auth, db;
         let toastTimeout;
         
-        // State
         let state = {
             items: [],
             trash: [], 
@@ -331,7 +348,6 @@
             showDuplicates: true
         };
 
-        // Initialize Firebase
         try {
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
@@ -350,9 +366,7 @@
             if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(console.error);
         }
 
-        // === Event Listeners ===
         function setupEventListeners() {
-            // Dropdowns logic
             document.querySelectorAll('.drop-trigger').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -365,7 +379,6 @@
             });
             window.addEventListener('click', () => closeAllMenus());
 
-            // Controls
             document.getElementById('searchInput')?.addEventListener('input', () => window.requestAnimationFrame(renderList));
             document.getElementById('categoryFilter')?.addEventListener('change', renderList);
             document.getElementById('sortOrder')?.addEventListener('change', renderList);
@@ -373,16 +386,13 @@
             document.getElementById('toggleDarkModeBtn')?.addEventListener('click', toggleTheme);
             document.getElementById('toggleDuplicatesBtn')?.addEventListener('click', toggleDuplicates);
             
-            // Auth & Account Switching
             document.getElementById('googleLoginBtn')?.addEventListener('click', cloudLogin);
             document.getElementById('logoutBtn')?.addEventListener('click', cloudLogout);
             document.getElementById('switchAccountBtn')?.addEventListener('click', switchAccount);
-
-            // Trash
+            
             document.getElementById('trashBtn')?.addEventListener('click', openTrashModal);
             document.querySelector('.btn-close-modal')?.addEventListener('click', closeTrashModal);
 
-            // Import/Export
             ['importJsonInput', 'smartImportInput'].forEach(id => {
                 const el = document.getElementById(id);
                 if(el) {
@@ -396,17 +406,15 @@
             document.getElementById('downloadSourceBtn')?.addEventListener('click', downloadSource);
         }
 
-        // === Firebase Auth & Sync ===
+        // === Firebase ===
         function setupFirebaseListeners() {
             onAuthStateChanged(auth, (user) => {
                 if (user) {
-                    // Logged In
                     state.user = user;
                     toggleAppInterface(true);
                     document.getElementById('userName').textContent = user.displayName;
                     document.getElementById('userAvatar').src = user.photoURL;
 
-                    // Sync from Cloud
                     const userDoc = doc(db, "users", user.uid);
                     state.unsubscribe = onSnapshot(userDoc, (docSnap) => {
                         if (docSnap.exists()) {
@@ -416,12 +424,10 @@
                             updateCategoryDropdowns();
                             renderList();
                         } else {
-                            // New User
                             pushToCloud();
                         }
                     });
                 } else {
-                    // Logged Out - CRITICAL: Wipe data
                     state.user = null;
                     state.items = [];
                     state.trash = [];
@@ -439,25 +445,17 @@
             if (!isLoggedIn) document.getElementById('itemCount').textContent = "ממתין להתחברות...";
         }
 
-        async function cloudLogin() {
-            try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (e) { alert(e.message); }
-        }
-        
+        async function cloudLogin() { try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (e) { alert(e.message); } }
+        async function cloudLogout() { await signOut(auth); window.location.reload(); }
         async function switchAccount() {
             try {
-                // Sign out current user first
                 await signOut(auth);
-                // Create provider with prompt param to force account picker
                 const provider = new GoogleAuthProvider();
                 provider.setCustomParameters({ prompt: 'select_account' });
                 await signInWithPopup(auth, provider);
             } catch (e) { alert(e.message); }
         }
 
-        async function cloudLogout() {
-            await signOut(auth);
-            window.location.reload(); 
-        }
         async function pushToCloud() {
             if (!state.user) return;
             try {
@@ -465,7 +463,7 @@
             } catch (e) { showToast('שגיאה בסנכרון לענן'); }
         }
 
-        // === Core Logic ===
+        // === Logic ===
         function renderList() {
             if (!state.user) return;
             const container = document.getElementById('listContainer');
@@ -475,32 +473,21 @@
             const catFilter = document.getElementById('categoryFilter').value;
             const sort = document.getElementById('sortOrder').value;
 
-            // Sort & Index Calculation
-            let sortedFullList = [...state.items];
-            
-            // Calculate base order (Chronological) for "Iron Numbers"
-            // We want item #1 to always be the oldest item, #2 second oldest, etc.
+            // Iron Numbers Calculation
             const chronologicalList = [...state.items].sort((a, b) => a.date.localeCompare(b.date));
             const indexMap = new Map();
-            chronologicalList.forEach((item, index) => {
-                indexMap.set(item.id, index + 1);
-            });
-            
-            // Apply Display Sort
+            chronologicalList.forEach((item, index) => indexMap.set(item.id, index + 1));
+
+            let sortedFullList = [...state.items];
             sortedFullList.sort((a, b) => {
                 if (sort === 'name') return a.content.localeCompare(b.content);
                 if (sort === 'index-asc') return indexMap.get(a.id) - indexMap.get(b.id);
                 if (sort === 'index-desc') return indexMap.get(b.id) - indexMap.get(a.id);
-                // Default: date-new (newest first)
                 return b.date.localeCompare(a.date); 
             });
 
-            // Assign Visual Index
-            sortedFullList.forEach(item => {
-                item.visualIndex = indexMap.get(item.id);
-            });
+            sortedFullList.forEach(item => item.visualIndex = indexMap.get(item.id));
 
-            // Duplicates Logic
             const seen = new Set(), dups = new Set();
             sortedFullList.forEach(i => {
                 const k = i.content.toLowerCase().trim();
@@ -508,28 +495,19 @@
             });
             sortedFullList.forEach(i => { if(dups.has(i.content.toLowerCase().trim())) i.isDup = true; });
 
-            // Search Logic
             const isHashSearch = /^#\s*\d+$/.test(query);
             const searchNum = isHashSearch ? parseInt(query.replace(/\D/g, '')) : null;
 
             let filtered = sortedFullList.filter(i => {
                 if (isHashSearch) return i.visualIndex === searchNum;
-                
                 if (!state.showDuplicates && i.isDup && state.items.indexOf(i) !== state.items.findIndex(x => x.content.toLowerCase() === i.content.toLowerCase())) return false;
-                
-                const matchesSearch = !query || 
-                                      i.content.toLowerCase().includes(query) || 
-                                      i.description.toLowerCase().includes(query) || 
-                                      i.category.toLowerCase().includes(query) || 
-                                      (i.note && i.note.toLowerCase().includes(query));
-                
+                const matchesSearch = !query || i.content.toLowerCase().includes(query) || i.description.toLowerCase().includes(query) || i.category.toLowerCase().includes(query) || (i.note && i.note.toLowerCase().includes(query));
                 const matchesCat = !catFilter || i.category === catFilter;
                 return matchesSearch && matchesCat;
             });
 
             document.getElementById('itemCount').textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
 
-            // Group & Render
             const pinnedItems = filtered.filter(i => i.isPinned);
             const regularItems = filtered.filter(i => !i.isPinned);
 
@@ -546,21 +524,14 @@
                 groups[i.category].push(i);
             });
 
-            const sortedCategories = Object.keys(groups).sort();
-            sortedCategories.forEach(cat => renderGroup(container, cat, groups[cat], false));
+            Object.keys(groups).sort().forEach(cat => renderGroup(container, cat, groups[cat], false));
         }
 
         function renderGroup(container, title, items, isPinned) {
             const section = document.createElement('div');
             section.className = 'category-block';
             const headerStyle = isPinned ? 'style="border-bottom: 2px solid var(--accent-gold); color: var(--accent-gold);"' : '';
-            section.innerHTML = `
-                <div class="category-header" ${headerStyle}>
-                    <h2>${escapeHtml(title)}</h2>
-                    <span class="category-badge">${items.length}</span>
-                </div>
-                <div class="items-grid"></div>
-            `;
+            section.innerHTML = `<div class="category-header" ${headerStyle}><h2>${escapeHtml(title)}</h2><span class="category-badge">${items.length}</span></div><div class="items-grid"></div>`;
             const grid = section.querySelector('.items-grid');
             items.forEach(i => grid.appendChild(createCard(i)));
             container.appendChild(section);
@@ -583,10 +554,7 @@
                     ${noteHtml}
                 </div>
                 <div class="card-footer">
-                    <div>
-                        <span class="tag-category">${escapeHtml(item.category)}</span>
-                        <span class="duplicate-badge" style="display:${item.isDup ? 'inline' : 'none'}">כפול</span>
-                    </div>
+                    <div><span class="tag-category">${escapeHtml(item.category)}</span><span class="duplicate-badge" style="display:${item.isDup ? 'inline' : 'none'}">כפול</span></div>
                     <div class="card-actions">
                         <button class="icon-btn btn-share" title="שתף">📤</button>
                         <button class="icon-btn btn-copy" title="העתק">📋</button>
@@ -605,6 +573,7 @@
             return div;
         }
 
+        // === ACTIONS WITH RELIABLE UNDO ===
         function handleAdd(e) {
             e.preventDefault();
             const content = document.getElementById('itemContent').value.trim();
@@ -625,31 +594,35 @@
             pushToCloud();
             e.target.reset();
             
-            // Undo Logic: Remove the added item
+            // Undo: Delete specific ID
             showToast('פריט נוסף', () => {
-                state.items.shift();
-                pushToCloud();
+                const idx = state.items.findIndex(i => i.id === newItem.id);
+                if (idx > -1) {
+                    state.items.splice(idx, 1);
+                    pushToCloud();
+                }
             });
         }
 
-        // === Actions with UNDO ===
         function moveToTrash(id) {
             const idx = state.items.findIndex(i => i.id === id);
             if(idx === -1) return;
-            const item = state.items[idx];
             
-            // Save state for undo
-            const originalItems = [...state.items];
-            const originalTrash = [...state.trash];
-
-            item.deletedAt = new Date().toISOString();
-            state.trash.unshift(item);
+            // DEEP COPY FOR UNDO
+            const itemToTrash = JSON.parse(JSON.stringify(state.items[idx]));
+            
+            state.items[idx].deletedAt = new Date().toISOString();
+            state.trash.unshift(state.items[idx]);
             state.items.splice(idx, 1);
             pushToCloud();
             
             showToast('הועבר לסל המחזור', () => {
-                state.items = originalItems;
-                state.trash = originalTrash;
+                // Restore exact object
+                state.items.splice(idx, 0, itemToTrash); 
+                // Remove from trash
+                const trashIdx = state.trash.findIndex(t => t.id === id);
+                if (trashIdx > -1) state.trash.splice(trashIdx, 1);
+                
                 pushToCloud();
             });
         }
@@ -660,18 +633,19 @@
                 item.isPinned = !item.isPinned; 
                 pushToCloud();
                 showToast(item.isPinned ? 'ננעץ' : 'שוחרר', () => {
-                    item.isPinned = !item.isPinned;
-                    pushToCloud();
+                    // Undo logic: simply toggle back
+                    const currentItem = state.items.find(i => i.id === id);
+                    if (currentItem) {
+                        currentItem.isPinned = !currentItem.isPinned;
+                        pushToCloud();
+                    }
                 });
             }
         }
 
         function editItem(item) {
-            const oldContent = item.content;
-            const oldDesc = item.description;
-            const oldCat = item.category;
-            const oldNote = item.note;
-            const oldType = item.type;
+            // DEEP COPY FOR UNDO
+            const originalItem = JSON.parse(JSON.stringify(item));
 
             const c = prompt('תוכן:', item.content);
             if (c === null) return;
@@ -685,12 +659,16 @@
             pushToCloud();
             
             showToast('עודכן בהצלחה', () => {
-                item.content = oldContent;
-                item.description = oldDesc;
-                item.category = oldCat;
-                item.note = oldNote;
-                item.type = oldType;
-                pushToCloud();
+                // Restore exact properties to the live object
+                const currentItem = state.items.find(i => i.id === originalItem.id);
+                if (currentItem) {
+                    currentItem.content = originalItem.content;
+                    currentItem.description = originalItem.description;
+                    currentItem.category = originalItem.category;
+                    currentItem.note = originalItem.note;
+                    currentItem.type = originalItem.type;
+                    pushToCloud();
+                }
             });
         }
 
@@ -698,14 +676,11 @@
             if (navigator.share) {
                 try {
                     await navigator.share({
-                        title: item.description || 'Link Manager Item',
-                        text: item.note || item.description,
+                        title: 'Link Manager',
+                        text: `${item.description}\n${item.content}`,
                         url: item.type === 'link' ? item.content : null
                     });
-                } catch (err) {
-                    // Fallback if sharing text failed or cancelled
-                    copyText(item.content);
-                }
+                } catch (err) { copyText(item.content); }
             } else {
                 copyText(item.content);
             }
@@ -713,21 +688,20 @@
 
         function toggleDuplicates() { state.showDuplicates = !state.showDuplicates; renderList(); }
 
-        // === Import/Export Logic ===
+        // === Import/Export ===
         function importJson(e) {
-            const f = e.target.files[0];
-            if(!f) return;
+            const f = e.target.files[0]; if(!f) return;
             const r = new FileReader();
             r.onload = ev => { 
                 try { 
                     const d = JSON.parse(ev.target.result);
-                    if(confirm('האם להחליף את כל הנתונים הקיימים?')) {
-                        const oldState = { items: [...state.items], trash: [...state.trash] };
+                    if(confirm('האם להחליף את כל הנתונים?')) {
+                        const backup = JSON.parse(JSON.stringify(state)); // Backup state
                         if(Array.isArray(d)) state.items = d; else { state.items = d.items||[]; state.trash = d.trash||[]; }
                         pushToCloud(); closeAllMenus(); 
                         showToast('נטען בהצלחה!', () => {
-                            state.items = oldState.items;
-                            state.trash = oldState.trash;
+                            state.items = backup.items;
+                            state.trash = backup.trash;
                             pushToCloud();
                         });
                     }
@@ -737,13 +711,12 @@
         }
 
         function smartImport(e) {
-            const f = e.target.files[0];
-            if (!f) return;
+            const f = e.target.files[0]; if (!f) return;
             const r = new FileReader();
             r.onload = (ev) => {
                 const lines = ev.target.result.split('\n');
                 let added = 0;
-                const oldItems = [...state.items];
+                const backupItems = JSON.parse(JSON.stringify(state.items));
                 
                 const map = new Map(state.items.map(i => [i.content.toLowerCase().trim(), i]));
                 lines.forEach(l => {
@@ -758,7 +731,7 @@
                 if(added > 0) { 
                     pushToCloud(); 
                     showToast(`נוספו ${added} פריטים`, () => {
-                        state.items = oldItems;
+                        state.items = backupItems;
                         pushToCloud();
                     });
                 } else { alert('לא נמצאו פריטים חדשים'); }
@@ -769,21 +742,12 @@
 
         function exportJson() { downloadFile('backup.json', JSON.stringify({ items: state.items, trash: state.trash }, null, 2), 'application/json'); closeAllMenus(); }
         function exportTxt() { downloadFile('links.txt', state.items.map(i=>`${i.content} | ${i.description} | ${i.category}`).join('\n'), 'text/plain'); closeAllMenus(); }
-        function downloadSite() { 
-            closeAllMenus();
-            downloadFile(`LinkManager_Backup_${new Date().toISOString().slice(0,10)}.html`, '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/html');
-        }
-        function downloadSource() {
-            closeAllMenus();
-            downloadFile('source.txt', '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/plain');
-        }
-
-        // === Helpers ===
+        function downloadSite() { closeAllMenus(); downloadFile(`LinkManager_Backup_${new Date().toISOString().slice(0,10)}.html`, '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/html'); }
+        function downloadSource() { closeAllMenus(); downloadFile('source.txt', '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/plain'); }
         function downloadFile(n, c, t) { const b=new Blob([c],{type:t}), u=URL.createObjectURL(b), a=document.createElement('a'); a.href=u; a.download=n; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
         async function copyText(t) { try { await navigator.clipboard.writeText(t); showToast('הועתק ללוח'); } catch (e) { prompt('העתק:', t); } }
         function escapeHtml(text) { return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : ''; }
         function closeAllMenus() { document.querySelectorAll('.dropdown-content, .drop-trigger').forEach(el => el.classList.remove('show', 'active')); }
-        
         function updateCategoryDropdowns() {
             const cats = new Set(state.items.map(i => i.category));
             const select = document.getElementById('categoryFilter');
@@ -791,13 +755,8 @@
             const currentVal = select.value;
             let html = '<option value="">📂 כל הקטגוריות</option>';
             let listHtml = '';
-            [...cats].sort().forEach(c => {
-                const s = escapeHtml(c);
-                html += `<option value="${s}">${s}</option>`;
-                listHtml += `<option value="${s}">`;
-            });
-            select.innerHTML = html;
-            datalist.innerHTML = listHtml;
+            [...cats].sort().forEach(c => { const s = escapeHtml(c); html += `<option value="${s}">${s}</option>`; listHtml += `<option value="${s}">`; });
+            select.innerHTML = html; datalist.innerHTML = listHtml;
             if(currentVal && cats.has(currentVal)) select.value = currentVal;
         }
 
@@ -806,66 +765,43 @@
 
         // Trash UI
         function openTrashModal() {
-            const list = document.getElementById('trashList');
-            list.innerHTML = '';
+            const list = document.getElementById('trashList'); list.innerHTML = '';
             if(state.trash.length === 0) list.innerHTML = '<div style="text-align:center; padding:20px;">ריק</div>';
             else state.trash.forEach(item => {
-                const el = document.createElement('div');
-                el.className = 'trash-item';
-                el.innerHTML = `
-                    <div style="flex-grow:1; margin-left:10px;">
-                        <strong>${escapeHtml(item.description)}</strong><br>
-                        <small style="opacity:0.7">${escapeHtml(item.content)}</small>
-                    </div>
-                    <div>
-                        <button onclick="restoreItem(${item.id})" style="cursor:pointer; background:none; border:none; font-size:1.2em;">♻️</button>
-                        <button onclick="deleteForever(${item.id})" style="cursor:pointer; background:none; border:none; font-size:1.2em;">❌</button>
-                    </div>
-                `;
+                const el = document.createElement('div'); el.className = 'trash-item';
+                el.innerHTML = `<div style="flex-grow:1; margin-left:10px;"><strong>${escapeHtml(item.description)}</strong><br><small style="opacity:0.7">${escapeHtml(item.content)}</small></div><div><button onclick="restoreItem(${item.id})" style="cursor:pointer; background:none; border:none; font-size:1.2em;">♻️</button><button onclick="deleteForever(${item.id})" style="cursor:pointer; background:none; border:none; font-size:1.2em;">❌</button></div>`;
                 list.appendChild(el);
             });
             document.getElementById('trashModal').classList.add('open');
         }
         function closeTrashModal() { document.getElementById('trashModal').classList.remove('open'); }
-        
         window.restoreItem = function(id) {
-            const idx = state.trash.findIndex(i => i.id === id);
-            if(idx === -1) return;
-            const item = state.trash[idx];
-            delete item.deletedAt;
-            state.items.unshift(item);
-            state.trash.splice(idx, 1);
-            pushToCloud();
-            openTrashModal();
-            showToast('שוחזר');
+            const idx = state.trash.findIndex(i => i.id === id); if(idx === -1) return;
+            const item = state.trash[idx]; delete item.deletedAt;
+            state.items.unshift(item); state.trash.splice(idx, 1);
+            pushToCloud(); openTrashModal(); showToast('שוחזר');
         }
         window.deleteForever = function(id) {
             if(!confirm('למחוק לצמיתות?')) return;
-            const idx = state.trash.findIndex(i => i.id === id);
-            if(idx !== -1) { state.trash.splice(idx, 1); pushToCloud(); openTrashModal(); }
+            const idx = state.trash.findIndex(i => i.id === id); if(idx !== -1) { state.trash.splice(idx, 1); pushToCloud(); openTrashModal(); }
         }
 
-        // Scroll To Top Logic
         function setupScrollToTop() {
             const btn = document.getElementById('scrollTopBtn');
-            window.onscroll = () => {
-                if (document.body.scrollTop > 200 || document.documentElement.scrollTop > 200) {
-                    btn.classList.add('show');
-                } else {
-                    btn.classList.remove('show');
-                }
-            };
-            btn.onclick = () => {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            };
+            window.onscroll = () => { if (document.body.scrollTop > 200 || document.documentElement.scrollTop > 200) btn.classList.add('show'); else btn.classList.remove('show'); };
+            btn.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // Advanced Toast
+        // === ADVANCED TOAST LOGIC ===
         function showToast(msg, undoCallback = null) {
             const t = document.getElementById('toast');
             const undoBtn = document.getElementById('undoBtn');
+            const progress = document.getElementById('toastProgress');
             
+            // Clear previous state
             if (toastTimeout) clearTimeout(toastTimeout);
+            progress.classList.remove('animating');
+            void progress.offsetWidth; // Trigger reflow
             
             document.getElementById('toastMsg').textContent = msg;
             
@@ -875,12 +811,17 @@
                     undoCallback();
                     t.classList.remove('visible');
                 };
+                progress.classList.add('animating'); // Start 10s animation
             } else {
                 undoBtn.style.display = 'none';
             }
             
             t.classList.add('visible');
-            toastTimeout = setTimeout(() => t.classList.remove('visible'), 4000);
+            
+            // 10 Seconds duration
+            toastTimeout = setTimeout(() => {
+                t.classList.remove('visible');
+            }, 10000);
         }
     </script>
 </body>
