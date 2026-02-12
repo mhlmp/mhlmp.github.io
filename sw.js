@@ -1,12 +1,12 @@
-const CACHE_NAME = 'LinkMeir-Pro-v3';
+const CACHE_NAME = 'LinkManager-Cloud-v4';
 const urlsToCache = [
   './',
   './index.html',
-  './icon.jpg',
-  './manifest.json'
+  './manifest.json',
+  './icon.jpg'
 ];
 
-// התקנה: שמירת קבצי הליבה בלבד (ללא מידע משתמש)
+// התקנה: שמירת קבצי המערכת בלבד (ללא דאטה)
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
@@ -33,17 +33,14 @@ self.addEventListener('activate', event => {
 
 // שליפת נתונים
 self.addEventListener('fetch', event => {
-  const url = event.request.url;
-
   // 1. התעלמות מוחלטת מבקשות Firebase/Google (כדי למנוע שמירת מידע אישי ב-Cache)
-  if (url.includes('firestore.googleapis.com') || 
-      url.includes('googleapis.com') ||
-      url.includes('firebase')) {
+  if (event.request.url.includes('firestore.googleapis.com') || 
+      event.request.url.includes('googleapis.com') ||
+      event.request.url.includes('firebase')) {
       return; // תן לרשת לטפל בזה ישירות
   }
 
-  // 2. עבור קובץ ה-HTML - תמיד נסה רשת קודם (Network First)
-  // זה מבטיח שתמיד תקבל את הגרסה הכי מעודכנת של האפליקציה
+  // 2. עבור קובץ ה-HTML - תמיד נסה רשת קודם (כדי לקבל עדכוני קוד)
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => caches.match('./index.html'))
@@ -51,7 +48,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 3. קבצים סטטיים (תמונות, סקריפטים) - Cache First
+  // 3. קבצים סטטיים אחרים - נסה מה-Cache קודם
   event.respondWith(
     caches.match(event.request).then(response => response || fetch(event.request))
   );
