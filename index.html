@@ -88,7 +88,7 @@
         .status-dot.syncing { background: #ffbb00; animation: pulse 1s infinite; }
         
         .btn-login { background: var(--google-btn); color: white; border: none; padding: 10px 24px; border-radius: 30px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 0.95rem; transition: 0.2s; box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3); }
-        .btn-logout { background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; margin-left: 5px; transition: 0.2s; }
+        .btn-action-sm { background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; margin-left: 5px; transition: 0.2s; }
 
         /* Welcome Screen */
         #welcomeScreen { display: none; flex-direction: column; align-items: center; text-align: center; padding: 40px 20px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border); margin-top: 20px; }
@@ -171,9 +171,15 @@
         .modal-body { padding: 20px; overflow-y: auto; flex-grow: 1; }
         .trash-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: rgba(127,127,127,0.05); margin-bottom: 8px; border-radius: 8px; border: 1px solid var(--glass-border); }
 
-        /* Toast */
-        #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px); background: rgba(30, 41, 59, 0.95); color: white; padding: 12px 24px; border-radius: 12px; box-shadow: 0 15px 40px rgba(0,0,0,0.4); display: flex; align-items: center; gap: 20px; z-index: 9999; transition: transform 0.4s, opacity 0.3s; opacity: 0; border: 1px solid rgba(255,255,255,0.1); }
+        /* Toast with UNDO */
+        #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px); background: rgba(30, 41, 59, 0.95); color: white; padding: 12px 24px; border-radius: 12px; box-shadow: 0 15px 40px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: space-between; gap: 20px; z-index: 9999; transition: transform 0.4s, opacity 0.3s; opacity: 0; border: 1px solid rgba(255,255,255,0.1); min-width: 300px; }
         #toast.visible { transform: translateX(-50%) translateY(0); opacity: 1; }
+        #undoBtn { background: transparent; border: 1px solid var(--accent-gold); color: var(--accent-gold); padding: 4px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.9rem; transition: 0.2s; display: none; }
+        #undoBtn:hover { background: var(--accent-gold); color: #000; }
+        
+        /* Scroll To Top */
+        #scrollTopBtn { position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; border-radius: 50%; background: var(--primary-color); color: white; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 2000; opacity: 0; visibility: hidden; transition: 0.3s; display: flex; align-items: center; justify-content: center; }
+        #scrollTopBtn.show { opacity: 1; visibility: visible; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
@@ -199,7 +205,10 @@
                     <div id="syncStatus" class="cloud-status"><span class="status-dot online"></span> פרטי (ענן בלבד)</div>
                 </div>
             </div>
-            <button id="logoutBtn" class="btn-logout">יציאה</button>
+            <div>
+                <button id="switchAccountBtn" class="btn-action-sm">🔄 החלף חשבון</button>
+                <button id="logoutBtn" class="btn-action-sm">יציאה</button>
+            </div>
         </div>
     </div>
 
@@ -221,6 +230,8 @@
                 <select id="sortOrder">
                     <option value="date-new" selected>📅 תאריך (הכי חדש = הכי גבוה)</option>
                     <option value="name">🔤 שם (א-ת)</option>
+                    <option value="index-asc">🔢 מספר (1 עד אחרון)</option>
+                    <option value="index-desc">🔢 מספר (אחרון עד 1)</option>
                 </select>
             </div>
 
@@ -285,10 +296,11 @@
     </div>
 
     <div id="toast">
-        <div class="toast-content">
-            <span id="toastMsg">הודעה</span>
-        </div>
+        <span id="toastMsg">הודעה</span>
+        <button id="undoBtn">↪ בטל</button>
     </div>
+
+    <button id="scrollTopBtn" title="גלול למעלה">⬆️</button>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -308,6 +320,7 @@
 
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
         let app, auth, db;
+        let toastTimeout;
         
         // State
         let state = {
@@ -330,6 +343,7 @@
             initTheme();
             setupEventListeners();
             setupFirebaseListeners();
+            setupScrollToTop();
         });
 
         function initServiceWorker() {
@@ -359,9 +373,10 @@
             document.getElementById('toggleDarkModeBtn')?.addEventListener('click', toggleTheme);
             document.getElementById('toggleDuplicatesBtn')?.addEventListener('click', toggleDuplicates);
             
-            // Auth
+            // Auth & Account Switching
             document.getElementById('googleLoginBtn')?.addEventListener('click', cloudLogin);
             document.getElementById('logoutBtn')?.addEventListener('click', cloudLogout);
+            document.getElementById('switchAccountBtn')?.addEventListener('click', switchAccount);
 
             // Trash
             document.getElementById('trashBtn')?.addEventListener('click', openTrashModal);
@@ -427,9 +442,21 @@
         async function cloudLogin() {
             try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (e) { alert(e.message); }
         }
+        
+        async function switchAccount() {
+            try {
+                // Sign out current user first
+                await signOut(auth);
+                // Create provider with prompt param to force account picker
+                const provider = new GoogleAuthProvider();
+                provider.setCustomParameters({ prompt: 'select_account' });
+                await signInWithPopup(auth, provider);
+            } catch (e) { alert(e.message); }
+        }
+
         async function cloudLogout() {
             await signOut(auth);
-            window.location.reload(); // Ensure total memory clear
+            window.location.reload(); 
         }
         async function pushToCloud() {
             if (!state.user) return;
@@ -450,17 +477,27 @@
 
             // Sort & Index Calculation
             let sortedFullList = [...state.items];
-            const baseSort = (a, b) => {
+            
+            // Calculate base order (Chronological) for "Iron Numbers"
+            // We want item #1 to always be the oldest item, #2 second oldest, etc.
+            const chronologicalList = [...state.items].sort((a, b) => a.date.localeCompare(b.date));
+            const indexMap = new Map();
+            chronologicalList.forEach((item, index) => {
+                indexMap.set(item.id, index + 1);
+            });
+            
+            // Apply Display Sort
+            sortedFullList.sort((a, b) => {
                 if (sort === 'name') return a.content.localeCompare(b.content);
-                return b.date.localeCompare(a.date); // Default date-new
-            };
-            sortedFullList.sort(baseSort);
+                if (sort === 'index-asc') return indexMap.get(a.id) - indexMap.get(b.id);
+                if (sort === 'index-desc') return indexMap.get(b.id) - indexMap.get(a.id);
+                // Default: date-new (newest first)
+                return b.date.localeCompare(a.date); 
+            });
 
-            // Assign "Iron Numbers" based on sort
-            const total = sortedFullList.length;
-            sortedFullList.forEach((item, index) => {
-                if (sort === 'date-new') item.visualIndex = total - index;
-                else item.visualIndex = index + 1;
+            // Assign Visual Index
+            sortedFullList.forEach(item => {
+                item.visualIndex = indexMap.get(item.id);
             });
 
             // Duplicates Logic
@@ -471,7 +508,7 @@
             });
             sortedFullList.forEach(i => { if(dups.has(i.content.toLowerCase().trim())) i.isDup = true; });
 
-            // Search Logic (including #hash)
+            // Search Logic
             const isHashSearch = /^#\s*\d+$/.test(query);
             const searchNum = isHashSearch ? parseInt(query.replace(/\D/g, '')) : null;
 
@@ -503,7 +540,6 @@
 
             if (pinnedItems.length > 0) renderGroup(container, '📌 מוצמד', pinnedItems, true);
 
-            // Group regulars by category
             const groups = {};
             regularItems.forEach(i => {
                 if(!groups[i.category]) groups[i.category] = [];
@@ -552,6 +588,7 @@
                         <span class="duplicate-badge" style="display:${item.isDup ? 'inline' : 'none'}">כפול</span>
                     </div>
                     <div class="card-actions">
+                        <button class="icon-btn btn-share" title="שתף">📤</button>
                         <button class="icon-btn btn-copy" title="העתק">📋</button>
                         <button class="icon-btn btn-edit" title="ערוך">✏️</button>
                         <button class="icon-btn pin-btn ${item.isPinned ? 'active' : ''}" title="נעץ">📌</button>
@@ -560,6 +597,7 @@
                 </div>
             `;
             
+            div.querySelector('.btn-share').onclick = () => shareItem(item);
             div.querySelector('.btn-copy').onclick = () => copyText(item.content);
             div.querySelector('.btn-edit').onclick = () => editItem(item);
             div.querySelector('.pin-btn').onclick = () => togglePin(item.id);
@@ -586,41 +624,96 @@
             state.items.unshift(newItem); 
             pushToCloud();
             e.target.reset();
-            showToast('נוסף בהצלחה');
+            
+            // Undo Logic: Remove the added item
+            showToast('פריט נוסף', () => {
+                state.items.shift();
+                pushToCloud();
+            });
         }
 
-        // === Actions ===
+        // === Actions with UNDO ===
         function moveToTrash(id) {
             const idx = state.items.findIndex(i => i.id === id);
             if(idx === -1) return;
             const item = state.items[idx];
+            
+            // Save state for undo
+            const originalItems = [...state.items];
+            const originalTrash = [...state.trash];
+
             item.deletedAt = new Date().toISOString();
             state.trash.unshift(item);
             state.items.splice(idx, 1);
             pushToCloud();
-            showToast('הועבר לסל המחזור');
+            
+            showToast('הועבר לסל המחזור', () => {
+                state.items = originalItems;
+                state.trash = originalTrash;
+                pushToCloud();
+            });
         }
 
         function togglePin(id) {
             const item = state.items.find(i => i.id === id);
-            if(item) { item.isPinned = !item.isPinned; pushToCloud(); }
+            if(item) { 
+                item.isPinned = !item.isPinned; 
+                pushToCloud();
+                showToast(item.isPinned ? 'ננעץ' : 'שוחרר', () => {
+                    item.isPinned = !item.isPinned;
+                    pushToCloud();
+                });
+            }
         }
 
         function editItem(item) {
+            const oldContent = item.content;
+            const oldDesc = item.description;
+            const oldCat = item.category;
+            const oldNote = item.note;
+            const oldType = item.type;
+
             const c = prompt('תוכן:', item.content);
             if (c === null) return;
+            
             item.content = c;
             item.description = prompt('תיאור:', item.description) || '';
             item.category = prompt('קטגוריה:', item.category) || 'כללי';
             item.note = prompt('הערה:', item.note) || '';
             item.type = URL_REGEX.test(c) ? 'link' : 'text';
+            
             pushToCloud();
-            showToast('עודכן');
+            
+            showToast('עודכן בהצלחה', () => {
+                item.content = oldContent;
+                item.description = oldDesc;
+                item.category = oldCat;
+                item.note = oldNote;
+                item.type = oldType;
+                pushToCloud();
+            });
+        }
+
+        async function shareItem(item) {
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: item.description || 'Link Manager Item',
+                        text: item.note || item.description,
+                        url: item.type === 'link' ? item.content : null
+                    });
+                } catch (err) {
+                    // Fallback if sharing text failed or cancelled
+                    copyText(item.content);
+                }
+            } else {
+                copyText(item.content);
+            }
         }
 
         function toggleDuplicates() { state.showDuplicates = !state.showDuplicates; renderList(); }
 
-        // === Import/Export Logic (Restored) ===
+        // === Import/Export Logic ===
         function importJson(e) {
             const f = e.target.files[0];
             if(!f) return;
@@ -628,9 +721,15 @@
             r.onload = ev => { 
                 try { 
                     const d = JSON.parse(ev.target.result);
-                    if(confirm('האם להחליף את כל הנתונים הקיימים בנתונים מהקובץ?')) {
+                    if(confirm('האם להחליף את כל הנתונים הקיימים?')) {
+                        const oldState = { items: [...state.items], trash: [...state.trash] };
                         if(Array.isArray(d)) state.items = d; else { state.items = d.items||[]; state.trash = d.trash||[]; }
-                        pushToCloud(); closeAllMenus(); alert('נטען בהצלחה!'); 
+                        pushToCloud(); closeAllMenus(); 
+                        showToast('נטען בהצלחה!', () => {
+                            state.items = oldState.items;
+                            state.trash = oldState.trash;
+                            pushToCloud();
+                        });
                     }
                 } catch(e){ alert('שגיאה בקובץ'); } 
             };
@@ -644,6 +743,8 @@
             r.onload = (ev) => {
                 const lines = ev.target.result.split('\n');
                 let added = 0;
+                const oldItems = [...state.items];
+                
                 const map = new Map(state.items.map(i => [i.content.toLowerCase().trim(), i]));
                 lines.forEach(l => {
                     const p = l.split('|').map(s => s.trim());
@@ -653,7 +754,14 @@
                         added++;
                     }
                 });
-                if(added > 0) { pushToCloud(); alert(`נוספו ${added} פריטים חדשים`); } else { alert('לא נמצאו פריטים חדשים'); }
+                
+                if(added > 0) { 
+                    pushToCloud(); 
+                    showToast(`נוספו ${added} פריטים`, () => {
+                        state.items = oldItems;
+                        pushToCloud();
+                    });
+                } else { alert('לא נמצאו פריטים חדשים'); }
                 closeAllMenus();
             };
             r.readAsText(f);
@@ -661,11 +769,8 @@
 
         function exportJson() { downloadFile('backup.json', JSON.stringify({ items: state.items, trash: state.trash }, null, 2), 'application/json'); closeAllMenus(); }
         function exportTxt() { downloadFile('links.txt', state.items.map(i=>`${i.content} | ${i.description} | ${i.category}`).join('\n'), 'text/plain'); closeAllMenus(); }
-        
         function downloadSite() { 
             closeAllMenus();
-            // Note: downloading the HTML will save the current view (including data in DOM)
-            // but the app logic prevents loading from local storage, so it's a static snapshot.
             downloadFile(`LinkManager_Backup_${new Date().toISOString().slice(0,10)}.html`, '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/html');
         }
         function downloadSource() {
@@ -675,7 +780,7 @@
 
         // === Helpers ===
         function downloadFile(n, c, t) { const b=new Blob([c],{type:t}), u=URL.createObjectURL(b), a=document.createElement('a'); a.href=u; a.download=n; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
-        async function copyText(t) { try { await navigator.clipboard.writeText(t); showToast('הועתק'); } catch (e) { prompt('העתק:', t); } }
+        async function copyText(t) { try { await navigator.clipboard.writeText(t); showToast('הועתק ללוח'); } catch (e) { prompt('העתק:', t); } }
         function escapeHtml(text) { return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : ''; }
         function closeAllMenus() { document.querySelectorAll('.dropdown-content, .drop-trigger').forEach(el => el.classList.remove('show', 'active')); }
         
@@ -740,11 +845,42 @@
             if(idx !== -1) { state.trash.splice(idx, 1); pushToCloud(); openTrashModal(); }
         }
 
-        function showToast(msg) {
+        // Scroll To Top Logic
+        function setupScrollToTop() {
+            const btn = document.getElementById('scrollTopBtn');
+            window.onscroll = () => {
+                if (document.body.scrollTop > 200 || document.documentElement.scrollTop > 200) {
+                    btn.classList.add('show');
+                } else {
+                    btn.classList.remove('show');
+                }
+            };
+            btn.onclick = () => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            };
+        }
+
+        // Advanced Toast
+        function showToast(msg, undoCallback = null) {
             const t = document.getElementById('toast');
+            const undoBtn = document.getElementById('undoBtn');
+            
+            if (toastTimeout) clearTimeout(toastTimeout);
+            
             document.getElementById('toastMsg').textContent = msg;
+            
+            if (undoCallback) {
+                undoBtn.style.display = 'block';
+                undoBtn.onclick = () => {
+                    undoCallback();
+                    t.classList.remove('visible');
+                };
+            } else {
+                undoBtn.style.display = 'none';
+            }
+            
             t.classList.add('visible');
-            setTimeout(() => t.classList.remove('visible'), 3000);
+            toastTimeout = setTimeout(() => t.classList.remove('visible'), 4000);
         }
     </script>
 </body>
