@@ -86,7 +86,10 @@
         .btn-login { background: var(--google-btn); color: white; border: none; padding: 10px 24px; border-radius: 30px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 0.95rem; transition: 0.2s; box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3); }
         .btn-logout, .btn-switch { background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; margin-left: 5px; transition: 0.2s; }
 
-        /* Welcome/Lock Screen */
+        /* אזורים מוגנים - מוסתרים כשלא מחוברים */
+        .auth-required { display: none !important; }
+        .auth-required.visible { display: block !important; }
+
         #welcomeScreen {
             display: none;
             flex-direction: column;
@@ -101,10 +104,6 @@
         }
         #welcomeScreen.visible { display: flex; }
         .lock-icon { font-size: 4rem; margin-bottom: 20px; opacity: 0.8; }
-
-        /* Protected Content Areas */
-        #appContent { display: none; }
-        #appContent.visible { display: block; }
 
         #controlsArea { padding: 16px; margin-bottom: 25px; display: flex; flex-direction: column; gap: 14px; position: relative; z-index: 100; }
         .search-container input { width: 100%; padding: 12px 16px; font-size: 16px; border: 1px solid var(--glass-border); border-radius: var(--radius); background: rgba(127,127,127,0.1); color: var(--text-primary); transition: 0.2s; }
@@ -147,7 +146,7 @@
     </header>
 
     <div id="userSection" class="glass-panel">
-        <div id="loggedOutView" style="display:flex; width:100%; justify-content:center;">
+        <div id="loggedOutView" style="display:none; width:100%; justify-content:center;">
             <button id="googleLoginBtn" class="btn-login">התחבר עם Google</button>
         </div>
         <div id="loggedInView" style="display:none; width:100%; justify-content:space-between; align-items:center;">
@@ -167,9 +166,9 @@
 
     <div id="welcomeScreen" class="visible">
         <div class="lock-icon">🔒</div>
-        <h2>הנתונים מוגנים בענן</h2>
-        <p>המידע שלך נשמר אך ורק בחשבון ה-Google שלך.</p>
-        <p>אנא התחבר כדי לצפות ולנהל את הקישורים.</p>
+        <h2>הנתונים מאובטחים בענן</h2>
+        <p>כדי לצפות בקישורים שלך, עליך להתחבר.</p>
+        <p>המידע נטען ישירות מהשרת הפרטי שלך.</p>
     </div>
 
     <div id="appContent" class="auth-required">
@@ -186,7 +185,7 @@
                 <div class="dropdown">
                     <button class="action-btn btn-json drop-trigger" data-target="jsonMenu">📂 JSON ▼</button>
                     <div id="jsonMenu" class="dropdown-content">
-                        <label for="importJsonInput">📥 ייבוא JSON</label>
+                        <label for="importJsonInput">📥 ייבוא לענן</label>
                         <input type="file" id="importJsonInput" accept=".json" style="display:none">
                         <button id="exportJsonBtn">📤 ייצוא JSON</button>
                     </div>
@@ -220,60 +219,61 @@
         import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // === קונפיגורציה ===
+        // הגדרות Firebase
         const firebaseConfig = {
-            apiKey: "AIzaSyDwofGCJUWkdLGWyXK7_UBAbbC39FXnAmI",
-            authDomain: "linkmeir-dada4.firebaseapp.com",
-            projectId: "linkmeir-dada4",
-            storageBucket: "linkmeir-dada4.firebasestorage.app",
-            messagingSenderId: "933486826829",
-            appId: "1:933486826829:web:6e61498d88a55623c65304",
-            measurementId: "G-46D3WMVFK5"
+            apiKey: "AIzaSyBnRk-Os6EvJcFIdpl-lICc9w-E4pQ74nE",
+            authDomain: "linkmanager-fdac5.firebaseapp.com",
+            projectId: "linkmanager-fdac5",
+            storageBucket: "linkmanager-fdac5.firebasestorage.app",
+            messagingSenderId: "532683691813",
+            appId: "1:532683691813:web:5cf639e32a715c626eeccc"
         };
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // משתנים בזיכרון ה-RAM בלבד (נמחקים ברענון)
+        // משתנים בזיכרון בלבד (RAM)
         const state = { items: [], trash: [], user: null, unsubscribe: null };
 
         document.addEventListener('DOMContentLoaded', () => {
             initTheme();
             setupEventListeners();
-            setupFirebaseListeners(); // המקור היחיד למידע
+            setupFirebaseListeners(); 
             
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('./sw.js').catch(console.error);
             }
         });
 
-        // === ניהול משתמשים וסנכרון ענן (ללא LocalStorage) ===
+        // ניהול משתמשים וסנכרון ענן בזמן אמת
         function setupFirebaseListeners() {
             onAuthStateChanged(auth, (user) => {
                 if (user) {
-                    // == מחובר ==
+                    // === משתמש התחבר ===
                     state.user = user;
-                    toggleInterface(true); // הצג ממשק
+                    toggleInterface(true);
                     
                     document.getElementById('userName').textContent = user.displayName;
                     document.getElementById('userAvatar').src = user.photoURL;
                     updateSyncStatus('syncing');
 
-                    // האזנה בזמן אמת לענן
+                    // ביטול האזנה קודמת אם הייתה
                     if (state.unsubscribe) state.unsubscribe();
+
+                    // חיבור ל-Firestore
                     const docRef = doc(db, "users", user.uid);
-                    
                     state.unsubscribe = onSnapshot(docRef, (docSnap) => {
                         document.getElementById('mainLoader').style.display = 'none';
                         if (docSnap.exists()) {
+                            // טעינת נתונים מהענן לזיכרון ה-RAM
                             const d = docSnap.data();
                             state.items = d.items || [];
                             state.trash = d.trash || [];
                             renderList();
                             updateSyncStatus('online');
                         } else {
-                            // משתמש חדש? צור מסמך ריק בענן כדי להתחיל
+                            // משתמש חדש? יצירת מסמך ריק בענן
                             saveToFirestore(true); 
                         }
                     }, (error) => {
@@ -282,20 +282,20 @@
                     });
 
                 } else {
-                    // == מנותק ==
+                    // === משתמש התנתק ===
                     state.user = null;
-                    state.items = []; // ניקוי זיכרון מיידי
-                    state.trash = []; // ניקוי זיכרון מיידי
+                    state.items = []; // מחיקת נתונים מהזיכרון
+                    state.trash = []; // מחיקת נתונים מהזיכרון
                     if (state.unsubscribe) state.unsubscribe();
                     
-                    toggleInterface(false); // נעל ממשק
+                    toggleInterface(false); // נעילת הממשק
                 }
             });
         }
 
-        // שמירה לענן בלבד
+        // שמירה לענן בלבד (ללא LocalStorage)
         async function saveToFirestore(isInit = false) {
-            if (!state.user) return; // לא שומרים אם לא מחוברים
+            if (!state.user) return;
             
             if(!isInit) updateSyncStatus('syncing');
             try {
@@ -313,6 +313,7 @@
             }
         }
 
+        // ניהול תצוגה (מחובר/מנותק)
         function toggleInterface(isLoggedIn) {
             const loggedInView = document.getElementById('loggedInView');
             const loggedOutView = document.getElementById('loggedOutView');
@@ -336,28 +337,15 @@
 
         function renderList() {
             const container = document.getElementById('listContainer');
-            if(!container) return;
             container.innerHTML = '';
             
-            // הגנה: אם אין משתמש, לא מרנדרים כלום
             if (!state.user) return;
 
             const query = document.getElementById('searchInput').value.toLowerCase();
             const catFilter = document.getElementById('categoryFilter').value;
             const sortMode = document.getElementById('sortOrder').value;
 
-            // עדכון רשימת קטגוריות
-            const categories = [...new Set(state.items.map(i => i.category))];
-            const catSelect = document.getElementById('categoryFilter');
-            const currentCat = catSelect.value;
-            let optionsHTML = '<option value="">📂 כל הקטגוריות</option>';
-            categories.filter(c => c).sort().forEach(c => {
-                optionsHTML += `<option value="${c}">${c}</option>`;
-            });
-            catSelect.innerHTML = optionsHTML;
-            if (categories.includes(currentCat)) catSelect.value = currentCat;
-
-            // סינון
+            // סינון ומיון בזיכרון
             let filtered = state.items.filter(i => 
                 (i.content.toLowerCase().includes(query) || 
                 i.description.toLowerCase().includes(query) ||
@@ -365,11 +353,18 @@
                 (catFilter === "" || i.category === catFilter)
             );
 
-            // מיון
             filtered.sort((a, b) => {
                 if (sortMode === 'name') return (a.description || a.content).localeCompare(b.description || b.content);
-                return new Date(b.date) - new Date(a.date); // ברירת מחדל: חדש לישן
+                return new Date(b.date) - new Date(a.date);
             });
+
+            // עדכון רשימת קטגוריות
+            const categories = [...new Set(state.items.map(i => i.category))];
+            const catSelect = document.getElementById('categoryFilter');
+            const currentCat = catSelect.value;
+            catSelect.innerHTML = '<option value="">📂 כל הקטגוריות</option>' + 
+                categories.filter(c => c).sort().map(c => `<option value="${c}">${c}</option>`).join('');
+            if (categories.includes(currentCat)) catSelect.value = currentCat;
 
             document.getElementById('itemCount').textContent = `${filtered.length} פריטים בענן`;
 
@@ -381,7 +376,6 @@
             filtered.forEach(item => {
                 const card = document.createElement('div');
                 card.className = `card glass-panel ${item.isPinned ? 'pinned' : ''}`;
-                card.style.marginBottom = '15px';
                 
                 const isUrl = item.content.trim().match(/^(http|https):\/\/[^ "]+$/);
                 const contentDisplay = isUrl ? 
@@ -389,15 +383,12 @@
                     `<div class="card-link" style="color:var(--text-primary); cursor:pointer" onclick="window.copyItem('${item.content.replace(/'/g, "\\'")}')">${item.content}</div>`;
 
                 card.innerHTML = `
-                    <div class="card-body" style="padding:15px">
+                    <div class="card-body">
                         ${contentDisplay}
-                        ${isUrl && item.description ? `<div style="font-size:0.85rem; opacity:0.7; margin-top:5px; word-break:break-all" dir="ltr">${item.content}</div>` : ''}
+                        ${isUrl && item.description ? `<div style="font-size:0.85rem; opacity:0.7; margin-top:5px;" dir="ltr">${item.content}</div>` : ''}
                         ${!isUrl && item.description ? `<div style="font-size:0.85rem; opacity:0.7; margin-top:5px">${item.description}</div>` : ''}
-                        
                         <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:flex-end">
-                            <span style="font-size:0.75rem; background:rgba(127,127,127,0.15); padding:3px 8px; border-radius:6px; color:var(--text-secondary)">
-                                ${item.category}
-                            </span>
+                            <span style="font-size:0.75rem; background:rgba(127,127,127,0.15); padding:3px 8px; border-radius:6px; color:var(--text-secondary)">${item.category}</span>
                             <span style="font-size:0.7rem; opacity:0.5">${new Date(item.date).toLocaleDateString()}</span>
                         </div>
                     </div>
@@ -415,7 +406,7 @@
             
             document.getElementById('logoutBtn').onclick = async () => {
                 await signOut(auth);
-                window.location.reload(); // רענון כדי לוודא ניקוי מוחלט של הזיכרון
+                window.location.reload(); // רענון לניקוי זיכרון מוחלט
             };
             
             document.getElementById('switchAccountBtn').onclick = async () => {
@@ -427,8 +418,8 @@
 
             document.getElementById('addItemForm').onsubmit = async (e) => {
                 e.preventDefault();
-                if (!state.user) return; // הגנה נוספת
-
+                if (!state.user) return;
+                
                 const btn = e.target.querySelector('button');
                 btn.disabled = true;
                 btn.textContent = 'שומר בענן...';
@@ -443,43 +434,45 @@
                     isPinned: false
                 };
                 
-                // עדכון זיכרון מקומי (RAM)
-                state.items.unshift(newItem);
-                
-                // שמירה לענן
-                await saveToFirestore();
+                state.items.unshift(newItem); // עדכון זיכרון
+                await saveToFirestore(); // שמירה לענן
                 
                 renderList();
                 e.target.reset();
                 document.querySelector('details').removeAttribute('open');
                 btn.disabled = false;
                 btn.textContent = 'הוסף למאגר';
-                showToast("הפריט נשמר בענן!");
+                showToast("נשמר בהצלחה!");
             };
 
             document.getElementById('searchInput').oninput = renderList;
             document.getElementById('categoryFilter').onchange = renderList;
             document.getElementById('sortOrder').onchange = renderList;
-            document.getElementById('toggleDarkModeBtn').onclick = toggleTheme;
+            document.getElementById('toggleDarkModeBtn').onclick = () => {
+                document.body.classList.toggle('dark-mode');
+                localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
+            };
 
             document.querySelectorAll('.drop-trigger').forEach(btn => {
                 btn.onclick = (e) => {
                     e.stopPropagation();
                     const menu = document.getElementById(btn.dataset.target);
-                    document.querySelectorAll('.dropdown-content').forEach(m => { if (m !== menu) m.classList.remove('show'); });
+                    document.querySelectorAll('.dropdown-content').forEach(m => { if(m!==menu) m.classList.remove('show'); });
                     if(menu) menu.classList.toggle('show');
                 };
             });
             window.onclick = () => document.querySelectorAll('.dropdown-content').forEach(m => m.classList.remove('show'));
-            
-            // ייצוא וייבוא JSON
+
+            // ייצוא/ייבוא
             document.getElementById('exportJsonBtn').onclick = () => {
                 if (state.items.length === 0) return alert("אין נתונים לייצוא");
                 const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.items));
                 const a = document.createElement('a');
                 a.href = dataStr;
-                a.download = "link_manager_backup.json";
+                a.download = "link_manager_cloud_backup.json";
+                document.body.appendChild(a);
                 a.click();
+                a.remove();
             };
 
             document.getElementById('importJsonInput').onchange = (e) => {
@@ -490,13 +483,13 @@
                     try {
                         const imported = JSON.parse(event.target.result);
                         if (Array.isArray(imported)) {
-                            // מיזוג: הוסף רק חדשים
+                            // מיזוג נתונים חדשים
                             const currentIds = new Set(state.items.map(i => i.id));
                             const newItems = imported.filter(i => !currentIds.has(i.id));
                             state.items = [...newItems, ...state.items];
-                            await saveToFirestore(); // שמירה לענן
+                            await saveToFirestore();
                             renderList();
-                            showToast("ייבוא הושלם");
+                            showToast(`נוספו ${newItems.length} פריטים לענן`);
                         }
                     } catch (err) { alert("קובץ לא תקין"); }
                 };
@@ -505,7 +498,7 @@
         }
 
         window.deleteItem = async (id) => {
-            if(!confirm("למחוק? (זה ימחק מהענן)")) return;
+            if(!confirm("למחוק? (הפעולה תסונכרן לענן)")) return;
             const idx = state.items.findIndex(i => i.id === id);
             if (idx > -1) {
                 state.trash.push(state.items.splice(idx, 1)[0]);
@@ -517,21 +510,14 @@
 
         window.copyItem = (text) => {
             navigator.clipboard.writeText(text);
-            showToast("הועתק ללוח!");
-        }
+            showToast("הועתק!");
+        };
 
         function updateSyncStatus(status) {
             const el = document.getElementById('syncStatus');
-            if (!el) return;
-            const dot = el.querySelector('.status-dot');
-            dot.className = `status-dot ${status}`;
-            
-            let text = 'מנותק';
-            if(status === 'online') text = 'מחובר לענן';
-            if(status === 'syncing') text = 'מסנכרן...';
-            if(status === 'error') text = 'שגיאת רשת';
-            
-            el.innerHTML = `<span class="status-dot ${status}"></span> ${text}`;
+            if(!el) return;
+            const textMap = { 'online': 'מחובר לענן', 'syncing': 'מסנכרן...', 'error': 'שגיאה' };
+            el.innerHTML = `<span class="status-dot ${status}"></span> ${textMap[status] || 'מנותק'}`;
         }
 
         function showToast(msg) {
@@ -542,15 +528,9 @@
         }
 
         function initTheme() { 
-            if(localStorage.getItem('theme')==='light') { 
-                document.body.classList.remove('dark-mode'); 
-                document.getElementById('toggleDarkModeBtn').textContent='🌙'; 
-            } 
-        }
-        function toggleTheme() { 
-            document.body.classList.toggle('dark-mode'); 
-            localStorage.setItem('theme', document.body.classList.contains('dark-mode')?'dark':'light'); 
-            document.getElementById('toggleDarkModeBtn').textContent=document.body.classList.contains('dark-mode')?'☀️':'🌙'; 
+            if(localStorage.getItem('theme') === 'light') {
+                document.body.classList.remove('dark-mode');
+            }
         }
     </script>
 </body>
