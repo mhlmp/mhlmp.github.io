@@ -149,7 +149,7 @@
         .modal-body { padding: 20px; overflow-y: auto; }
         .trash-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: rgba(127,127,127,0.05); margin-bottom: 8px; border-radius: 8px; border: 1px solid var(--glass-border); }
 
-        /* TOAST WITH PROGRESS - FIXED */
+        /* TOAST WITH PROGRESS */
         #toast {
             position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px);
             background: rgba(30, 41, 59, 0.95); color: white;
@@ -196,6 +196,8 @@
         /* Scroll Top */
         #scrollTopBtn { position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; border-radius: 50%; background: var(--primary-color); color: white; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 2000; opacity: 0; visibility: hidden; transition: 0.3s; display: flex; align-items: center; justify-content: center; }
         #scrollTopBtn.show { opacity: 1; visibility: visible; }
+        
+        .btn-reload { padding: 4px 8px; margin-right: 5px; cursor: pointer; border: 1px solid var(--glass-border); border-radius: 4px; background: transparent; font-size: 12px; color: var(--text-secondary); }
     </style>
 </head>
 <body class="dark-mode">
@@ -217,7 +219,10 @@
                 <img id="userAvatar" src="" class="user-avatar" alt="Avatar">
                 <div>
                     <div id="userName" class="user-name">שם משתמש</div>
-                    <div class="cloud-status"><span class="status-dot online"></span> מחובר (ענן)</div>
+                    <div class="cloud-status">
+                        <span class="status-dot online"></span> מחובר 
+                        <button id="forceReloadBtn" class="btn-reload" title="רענן נתונים מהענן בכוח">🔄</button>
+                    </div>
                 </div>
             </div>
             <div>
@@ -392,6 +397,7 @@
             
             document.getElementById('trashBtn')?.addEventListener('click', openTrashModal);
             document.querySelector('.btn-close-modal')?.addEventListener('click', closeTrashModal);
+            document.getElementById('forceReloadBtn')?.addEventListener('click', forceReload);
 
             ['importJsonInput', 'smartImportInput'].forEach(id => {
                 const el = document.getElementById(id);
@@ -424,7 +430,8 @@
                             updateCategoryDropdowns();
                             renderList();
                         } else {
-                            pushToCloud();
+                            // SAFE MODE: DO NOT WRITE EMPTY DATA AUTOMATICALLY
+                            // Just render empty state and wait for user action
                         }
                     });
                 } else {
@@ -454,6 +461,14 @@
                 provider.setCustomParameters({ prompt: 'select_account' });
                 await signInWithPopup(auth, provider);
             } catch (e) { alert(e.message); }
+        }
+
+        function forceReload() {
+            if(!state.user) return;
+            // Clears cache by re-triggering snapshot
+            if (state.unsubscribe) state.unsubscribe();
+            setupFirebaseListeners();
+            showToast("רענון נתונים מהענן בוצע");
         }
 
         async function pushToCloud() {
