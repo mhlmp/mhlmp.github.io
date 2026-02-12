@@ -478,6 +478,9 @@
             const indexMap = new Map();
             chronologicalList.forEach((item, index) => indexMap.set(item.id, index + 1));
 
+            // Determine if we need to flatten the list (remove categories)
+            const isIndexSort = sort === 'index-asc' || sort === 'index-desc';
+
             let sortedFullList = [...state.items];
             sortedFullList.sort((a, b) => {
                 if (sort === 'name') return a.content.localeCompare(b.content);
@@ -508,23 +511,35 @@
 
             document.getElementById('itemCount').textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
 
-            const pinnedItems = filtered.filter(i => i.isPinned);
-            const regularItems = filtered.filter(i => !i.isPinned);
-
             if (filtered.length === 0) {
                 container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-secondary);">לא נמצאו תוצאות</div>';
                 return;
             }
 
-            if (pinnedItems.length > 0) renderGroup(container, '📌 מוצמד', pinnedItems, true);
+            // === RENDER LOGIC SWITCH ===
+            if (isIndexSort) {
+                // FLAT LIST VIEW (No Categories)
+                const section = document.createElement('div');
+                section.className = 'category-block';
+                section.innerHTML = `<div class="items-grid"></div>`;
+                const grid = section.querySelector('.items-grid');
+                filtered.forEach(item => grid.appendChild(createCard(item)));
+                container.appendChild(section);
+            } else {
+                // CATEGORY VIEW
+                const pinnedItems = filtered.filter(i => i.isPinned);
+                const regularItems = filtered.filter(i => !i.isPinned);
 
-            const groups = {};
-            regularItems.forEach(i => {
-                if(!groups[i.category]) groups[i.category] = [];
-                groups[i.category].push(i);
-            });
+                if (pinnedItems.length > 0) renderGroup(container, '📌 מוצמד', pinnedItems, true);
 
-            Object.keys(groups).sort().forEach(cat => renderGroup(container, cat, groups[cat], false));
+                const groups = {};
+                regularItems.forEach(i => {
+                    if(!groups[i.category]) groups[i.category] = [];
+                    groups[i.category].push(i);
+                });
+
+                Object.keys(groups).sort().forEach(cat => renderGroup(container, cat, groups[cat], false));
+            }
         }
 
         function renderGroup(container, title, items, isPinned) {
@@ -565,7 +580,7 @@
                 </div>
             `;
             
-            div.querySelector('.btn-share').onclick = () => shareItem(item);
+            div.querySelector('.btn-share').onclick = (e) => { e.stopPropagation(); shareItem(item); };
             div.querySelector('.btn-copy').onclick = () => copyText(item.content);
             div.querySelector('.btn-edit').onclick = () => editItem(item);
             div.querySelector('.pin-btn').onclick = () => togglePin(item.id);
