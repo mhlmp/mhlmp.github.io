@@ -3,8 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f172a">
     <title>Link Manager Pro</title>
     <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/jpeg" href="icon.jpg">
+    
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
@@ -50,6 +53,7 @@
             transition: color 0.3s;
         }
 
+        /* Glassmorphism Classes */
         .glass-panel {
             background: var(--glass-bg);
             backdrop-filter: var(--glass-blur);
@@ -60,9 +64,9 @@
         }
 
         header { text-align: center; margin-bottom: 25px; }
-        h1 { margin: 5px 0; font-size: 1.8rem; color: var(--text-primary); font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        h1 { margin: 5px 0; font-size: 1.8rem; font-weight: 800; }
         
-        #itemCount {
+        #connectionStatus {
             display: inline-block; 
             background: rgba(127, 127, 127, 0.1); 
             padding: 4px 15px;
@@ -70,137 +74,135 @@
             border: 1px solid var(--glass-border); font-weight: 600;
         }
 
+        /* User UI */
         #userSection { padding: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
         .user-info { display: flex; align-items: center; gap: 12px; }
         .user-avatar { width: 42px; height: 42px; border-radius: 50%; border: 2px solid var(--glass-border); object-fit: cover; }
         .user-name { font-weight: 700; font-size: 1rem; }
-        .cloud-status { font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; font-weight: 500; }
         
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; display: inline-block; transition: 0.3s; }
-        .status-dot.online { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
-        .status-dot.syncing { background: #ffbb00; animation: pulse 1s infinite; }
-        .status-dot.error { background: var(--accent-red); }
-        
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .btn-login { background: var(--google-btn); color: white; border: none; padding: 10px 24px; border-radius: 30px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3); }
+        .btn-action-sm { background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 8px 14px; border-radius: 8px; cursor: pointer; margin-left: 5px; }
 
-        .btn-login { background: var(--google-btn); color: white; border: none; padding: 10px 24px; border-radius: 30px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 0.95rem; transition: 0.2s; box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3); }
-        .btn-logout, .btn-switch { background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; margin-left: 5px; transition: 0.2s; }
-
-        /* אזורים מוגנים - מוסתרים כשלא מחוברים */
-        .auth-required { display: none !important; }
-        .auth-required.visible { display: block !important; }
-
-        #welcomeScreen {
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 40px 20px;
-            background: var(--glass-bg);
-            border-radius: var(--radius);
-            border: 1px solid var(--glass-border);
-            margin-top: 20px;
-        }
+        /* Welcome & Protect */
+        #welcomeScreen { display: none; flex-direction: column; align-items: center; text-align: center; padding: 40px 20px; margin-top: 20px; }
         #welcomeScreen.visible { display: flex; }
         .lock-icon { font-size: 4rem; margin-bottom: 20px; opacity: 0.8; }
-
-        #controlsArea { padding: 16px; margin-bottom: 25px; display: flex; flex-direction: column; gap: 14px; position: relative; z-index: 100; }
-        .search-container input { width: 100%; padding: 12px 16px; font-size: 16px; border: 1px solid var(--glass-border); border-radius: var(--radius); background: rgba(127,127,127,0.1); color: var(--text-primary); transition: 0.2s; }
-        .filters-container { display: flex; gap: 10px; flex-wrap: wrap; }
-        .filters-container select { flex: 1; min-width: 140px; height: 44px; padding: 0 12px; font-size: 15px; color: var(--text-primary); border: 1px solid var(--glass-border); border-radius: var(--radius); cursor: pointer; background-color: rgba(127,127,127,0.1); }
         
-        .actions-container { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-        .action-btn { width: 100%; height: 44px; padding: 0 12px; font-size: 14px; font-weight: 600; color: white; border: none; border-radius: var(--radius); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: transform 0.1s; }
+        .auth-required { transition: opacity 0.3s ease; }
+        .auth-required.locked { display: none !important; }
+
+        /* Controls */
+        #controlsArea { padding: 16px; margin-bottom: 25px; display: flex; flex-direction: column; gap: 14px; position: relative; z-index: 100; }
+        .search-container input { width: 100%; padding: 12px 16px; font-size: 16px; border: 1px solid var(--glass-border); border-radius: var(--radius); background: rgba(127,127,127,0.1); color: var(--text-primary); }
+        .filters-container { display: flex; gap: 10px; flex-wrap: wrap; }
+        .filters-container select { flex: 1; height: 44px; padding: 0 12px; background: rgba(127,127,127,0.1); color: var(--text-primary); border: 1px solid var(--glass-border); border-radius: var(--radius); }
+        .filters-container select option { background: #1e293b; color: white; }
+
+        .actions-bar { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+        .action-btn { flex: 1; height: 44px; color: white; border: none; border-radius: var(--radius); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; }
         .btn-json { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
-        .btn-txt { background: linear-gradient(135deg, #06b6d4, #0891b2); }
-        .btn-site { background: linear-gradient(135deg, #6366f1, #4f46e5); } 
-        .btn-toggle { background: rgba(127,127,127,0.1); color: var(--text-primary); border: 1px solid var(--glass-border); width: 44px; font-size: 1.2rem; }
+        .btn-trash { background: linear-gradient(135deg, #64748b, #475569); }
+        .btn-icon-only { width: 44px; flex: 0 0 44px; background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); color: var(--text-primary); }
 
-        .dropdown { position: relative; display: inline-block; flex-grow: 1; }
-        .dropdown-content { display: none; position: absolute; background: var(--glass-bg); backdrop-filter: blur(20px); min-width: 240px; box-shadow: 0 15px 40px rgba(0,0,0,0.3); border-radius: var(--radius); border: 1px solid var(--glass-border); z-index: 2000; right: 0; top: calc(100% + 8px); padding: 8px 0; }
-        .dropdown-content.show { display: block; }
-        .dropdown-content button, .dropdown-content label { color: var(--text-primary); padding: 12px 20px; display: block; background: none; border: none; width: 100%; text-align: right; cursor: pointer; font-size: 14px; font-weight: 500; }
-
+        /* Add Item Form */
+        details { margin-bottom: 25px; }
+        summary { padding: 16px; cursor: pointer; font-weight: 700; color: var(--primary-color); background: rgba(127,127,127,0.05); list-style: none; display: flex; justify-content: center; border-radius: var(--radius); }
         #addItemForm { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
-        #addItemForm input, #addItemForm textarea { padding: 12px; border: 1px solid var(--glass-border); border-radius: var(--radius); background: rgba(127,127,127,0.05); color: var(--text-primary); width: 100%; font-size: 15px; }
-        #addItemForm button { background: var(--accent-green); color: white; padding: 14px; border: none; border-radius: var(--radius); font-weight: bold; cursor: pointer; font-size: 16px; }
+        #addItemForm input, #addItemForm textarea { padding: 12px; border: 1px solid var(--glass-border); border-radius: var(--radius); background: rgba(127,127,127,0.05); color: var(--text-primary); width: 100%; }
+        #addItemForm button { background: var(--accent-green); color: white; padding: 14px; border: none; border-radius: var(--radius); font-weight: bold; cursor: pointer; }
 
+        /* Cards Grid */
         .items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-        .card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius); position: relative; display: flex; flex-direction: column; transition: all 0.2s; box-shadow: var(--glass-shadow); }
-        .card.pinned { border: 2px solid var(--accent-gold); background: rgba(255, 255, 0, 0.05); }
-        .card-body { padding: 20px; padding-top: 40px; flex-grow: 1; }
-        .card-link { display: block; color: var(--primary-color); font-weight: 700; text-decoration: none; margin-bottom: 10px; word-break: break-all; font-size: 16px; }
+        .category-header { margin: 30px 0 15px 0; border-bottom: 2px solid rgba(127,127,127,0.1); padding-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
 
-        #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px); background: rgba(30, 41, 59, 0.95); color: white; border-radius: 12px; display: flex; flex-direction: column; z-index: 9999; transition: 0.4s; opacity: 0; min-width: 300px; overflow: hidden; }
-        #toast.visible { transform: translateX(-50%) translateY(0); opacity: 1; }
-        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-left: 10px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius); display: flex; flex-direction: column; position: relative; transition: transform 0.2s; }
+        .card:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+        .card.pinned { border: 2px solid var(--accent-gold); background: rgba(255, 215, 0, 0.05); }
+        
+        .card-body { padding: 20px; padding-top: 35px; flex-grow: 1; }
+        .card-link { display: block; color: var(--primary-color); font-weight: 700; text-decoration: none; margin-bottom: 8px; word-break: break-all; font-size: 1.1em; }
+        .card-desc { font-size: 0.95em; opacity: 0.9; margin-bottom: 10px; line-height: 1.4; }
+        .card-note { background: var(--note-bg); color: #4a3b10; padding: 8px; border-radius: 6px; font-size: 0.85em; margin-top: 10px; border-right: 3px solid var(--accent-gold); }
+        
+        .card-footer { padding: 10px 15px; background: rgba(127,127,127,0.05); border-top: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center; border-radius: 0 0 var(--radius) var(--radius); }
+        .card-actions button { background: none; border: none; cursor: pointer; font-size: 1.1em; padding: 5px; border-radius: 50%; transition: background 0.2s; opacity: 0.7; }
+        .card-actions button:hover { background: rgba(127,127,127,0.2); opacity: 1; }
+        .pin-active { color: var(--accent-gold); opacity: 1 !important; }
+
+        /* Trash Modal */
+        #trashModal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 2000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+        #trashModal.open { display: flex; }
+        .modal-content { background: var(--glass-bg); width: 90%; max-width: 600px; max-height: 80vh; border-radius: var(--radius); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--glass-border); }
+        .modal-body { padding: 20px; overflow-y: auto; }
+        .trash-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--glass-border); }
+
+        /* Toast */
+        #toast { position: fixed; bottom: 30px; left: 50%; transform: translate(-50%, 100px); background: #1e293b; color: white; padding: 12px 24px; border-radius: 50px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); opacity: 0; transition: 0.3s; z-index: 3000; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 15px; }
+        #toast.visible { transform: translate(-50%, 0); opacity: 1; }
     </style>
 </head>
 <body class="dark-mode">
 
     <header>
-        <h1>Link Manager Pro <span id="mainLoader" class="loader" style="display:none"></span></h1>
-        <div id="itemCount">ממתין להתחברות...</div>
+        <h1>Link Manager Pro</h1>
+        <div id="connectionStatus">ממתין להתחברות...</div>
     </header>
 
     <div id="userSection" class="glass-panel">
-        <div id="loggedOutView" style="display:none; width:100%; justify-content:center;">
-            <button id="googleLoginBtn" class="btn-login">התחבר עם Google</button>
+        <div id="loggedOutView" style="display:flex; width:100%; justify-content:center;">
+            <button id="googleLoginBtn" class="btn-login">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" alt="G">
+                התחבר עם Google
+            </button>
         </div>
         <div id="loggedInView" style="display:none; width:100%; justify-content:space-between; align-items:center;">
             <div class="user-info">
                 <img id="userAvatar" src="" class="user-avatar" alt="Avatar">
                 <div>
-                    <div id="userName" class="user-name">טוען...</div>
-                    <div id="syncStatus" class="cloud-status"><span class="status-dot"></span> מנותק</div>
+                    <div id="userName" class="user-name">משתמש</div>
+                    <div style="font-size:0.8em; opacity:0.7">מחובר לענן פרטי</div>
                 </div>
             </div>
-            <div>
-                <button id="switchAccountBtn" class="btn-switch">🔄</button>
-                <button id="logoutBtn" class="btn-logout">יציאה</button>
-            </div>
+            <button id="logoutBtn" class="btn-action-sm">יציאה</button>
         </div>
     </div>
 
     <div id="welcomeScreen" class="visible">
         <div class="lock-icon">🔒</div>
-        <h2>הנתונים מאובטחים בענן</h2>
-        <p>כדי לצפות בקישורים שלך, עליך להתחבר.</p>
-        <p>המידע נטען ישירות מהשרת הפרטי שלך.</p>
+        <h2>המידע שלך פרטי</h2>
+        <p>המערכת שומרת את הקישורים שלך <b>אך ורק</b> בחשבון Google הפרטי שלך.</p>
+        <p>בעת יציאה (Logout), כל הנתונים נמחקים מיידית מהמכשיר הזה.</p>
     </div>
 
-    <div id="appContent" class="auth-required">
+    <div id="protectedContent" class="auth-required locked">
         <div id="controlsArea" class="glass-panel">
-            <input type="search" id="searchInput" placeholder="🔍 חפש קישור או קטגוריה...">
+            <div class="search-container">
+                <input type="search" id="searchInput" placeholder="🔍 חיפוש מהיר...">
+            </div>
+
             <div class="filters-container">
                 <select id="categoryFilter"><option value="">📂 כל הקטגוריות</option></select>
                 <select id="sortOrder">
-                    <option value="date-new">📅 תאריך (חדש)</option>
-                    <option value="name">🔤 שם (א-ת)</option>
+                    <option value="newest">📅 חדש לישן</option>
+                    <option value="name">🔤 לפי א-ב</option>
                 </select>
             </div>
-            <div class="actions-container">
-                <div class="dropdown">
-                    <button class="action-btn btn-json drop-trigger" data-target="jsonMenu">📂 JSON ▼</button>
-                    <div id="jsonMenu" class="dropdown-content">
-                        <label for="importJsonInput">📥 ייבוא לענן</label>
-                        <input type="file" id="importJsonInput" accept=".json" style="display:none">
-                        <button id="exportJsonBtn">📤 ייצוא JSON</button>
-                    </div>
-                </div>
-                <button id="trashBtn" class="action-btn btn-txt">🗑️ סל מחזור</button>
-                <button id="toggleDarkModeBtn" class="action-btn btn-toggle">☀️</button>
+
+            <div class="actions-bar">
+                <button id="exportBtn" class="action-btn btn-json">📤 ייצוא JSON</button>
+                <button id="trashBtn" class="action-btn btn-trash">🗑️ סל מחזור</button>
+                <button id="darkModeBtn" class="action-btn btn-icon-only">☀️</button>
             </div>
         </div>
 
-        <details class="glass-panel" style="margin-bottom:20px">
-            <summary style="padding:15px; cursor:pointer; font-weight:700; color:var(--primary-color); text-align:center">➕ הוספת פריט חדש</summary>
+        <details class="glass-panel">
+            <summary>➕ הוספת קישור חדש</summary>
             <form id="addItemForm">
-                <textarea id="itemContent" rows="2" required placeholder="קישור או טקסט..."></textarea>
-                <input type="text" id="itemDescription" placeholder="תיאור">
-                <input type="text" id="itemCategory" placeholder="קטגוריה">
+                <textarea id="itemContent" rows="2" required placeholder="הדבק כאן קישור (URL) או טקסט..."></textarea>
+                <input type="text" id="itemDescription" placeholder="תיאור קצר">
+                <input type="text" id="itemCategory" list="catList" placeholder="קטגוריה (לדוגמה: עבודה, לימודים)">
+                <datalist id="catList"></datalist>
+                <input type="text" id="itemNote" placeholder="הערה (אופציונלי)">
                 <button type="submit">שמור בענן</button>
             </form>
         </details>
@@ -208,327 +210,324 @@
         <div id="listContainer"></div>
     </div>
 
-    <div id="toast">
-        <div style="padding:15px; display:flex; justify-content:space-between; align-items:center;">
-            <span id="toastMsg">הודעה</span>
+    <div id="trashModal">
+        <div class="modal-content">
+            <div style="padding:15px; border-bottom:1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-between;">
+                <h3>סל מחזור</h3>
+                <button onclick="document.getElementById('trashModal').classList.remove('open')" style="background:none; border:none; color:white; font-size:1.5em; cursor:pointer;">&times;</button>
+            </div>
+            <div id="trashList" class="modal-body"></div>
         </div>
     </div>
+
+    <div id="toast">הודעה</div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // הגדרות Firebase
+        // === FIREBASE CONFIGURATION ===
         const firebaseConfig = {
-            apiKey: "AIzaSyBnRk-Os6EvJcFIdpl-lICc9w-E4pQ74nE",
-            authDomain: "linkmanager-fdac5.firebaseapp.com",
-            projectId: "linkmanager-fdac5",
-            storageBucket: "linkmanager-fdac5.firebasestorage.app",
-            messagingSenderId: "532683691813",
-            appId: "1:532683691813:web:5cf639e32a715c626eeccc"
+            apiKey: "AIzaSyDwofGCJUWkdLGWyXK7_UBAbbC39FXnAmI",
+            authDomain: "linkmeir-dada4.firebaseapp.com",
+            projectId: "linkmeir-dada4",
+            storageBucket: "linkmeir-dada4.firebasestorage.app",
+            messagingSenderId: "933486826829",
+            appId: "1:933486826829:web:6e61498d88a55623c65304",
+            measurementId: "G-46D3WMVFK5"
         };
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // משתנים בזיכרון בלבד (RAM)
-        const state = { items: [], trash: [], user: null, unsubscribe: null };
+        // === STATE MANAGEMENT ===
+        let currentUser = null;
+        let items = [];
+        let trash = [];
+        let unsubscribe = null;
 
+        // === INITIALIZATION ===
         document.addEventListener('DOMContentLoaded', () => {
-            initTheme();
+            initServiceWorker();
             setupEventListeners();
-            setupFirebaseListeners(); 
-            
+            checkTheme();
+        });
+
+        function initServiceWorker() {
             if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('./sw.js').catch(console.error);
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('SW Registered'))
+                    .catch(err => console.error('SW Error:', err));
+            }
+        }
+
+        // === AUTH & PRIVACY LOGIC ===
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // USER LOGGED IN
+                currentUser = user;
+                updateUI(true);
+                startCloudSync(user);
+            } else {
+                // USER LOGGED OUT
+                currentUser = null;
+                // CRITICAL: WIPE DATA
+                items = [];
+                trash = [];
+                unsubscribe && unsubscribe();
+                localStorage.removeItem(`LinkMeir_Cache`); // Wipe local cache
+                updateUI(false);
             }
         });
 
-        // ניהול משתמשים וסנכרון ענן בזמן אמת
-        function setupFirebaseListeners() {
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    // === משתמש התחבר ===
-                    state.user = user;
-                    toggleInterface(true);
+        function startCloudSync(user) {
+            const userRef = doc(db, "users", user.uid);
+            document.getElementById('connectionStatus').textContent = "מסנכרן...";
+            
+            // Listen for real-time updates from Google Cloud
+            unsubscribe = onSnapshot(userRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    items = data.items || [];
+                    trash = data.trash || [];
                     
-                    document.getElementById('userName').textContent = user.displayName;
-                    document.getElementById('userAvatar').src = user.photoURL;
-                    updateSyncStatus('syncing');
-
-                    // ביטול האזנה קודמת אם הייתה
-                    if (state.unsubscribe) state.unsubscribe();
-
-                    // חיבור ל-Firestore
-                    const docRef = doc(db, "users", user.uid);
-                    state.unsubscribe = onSnapshot(docRef, (docSnap) => {
-                        document.getElementById('mainLoader').style.display = 'none';
-                        if (docSnap.exists()) {
-                            // טעינת נתונים מהענן לזיכרון ה-RAM
-                            const d = docSnap.data();
-                            state.items = d.items || [];
-                            state.trash = d.trash || [];
-                            renderList();
-                            updateSyncStatus('online');
-                        } else {
-                            // משתמש חדש? יצירת מסמך ריק בענן
-                            saveToFirestore(true); 
-                        }
-                    }, (error) => {
-                        console.error(error);
-                        updateSyncStatus('error');
-                    });
-
+                    // Optional: Cache locally only for offline resilience while logged in
+                    localStorage.setItem(`LinkMeir_Cache`, JSON.stringify(data));
                 } else {
-                    // === משתמש התנתק ===
-                    state.user = null;
-                    state.items = []; // מחיקת נתונים מהזיכרון
-                    state.trash = []; // מחיקת נתונים מהזיכרון
-                    if (state.unsubscribe) state.unsubscribe();
-                    
-                    toggleInterface(false); // נעילת הממשק
+                    // New user doc
+                    setDoc(userRef, { items: [], trash: [] });
                 }
+                document.getElementById('connectionStatus').textContent = `${items.length} פריטים`;
+                renderApp();
+            }, (error) => {
+                console.error("Sync Error", error);
+                document.getElementById('connectionStatus').textContent = "שגיאת סנכרון";
             });
         }
 
-        // שמירה לענן בלבד (ללא LocalStorage)
-        async function saveToFirestore(isInit = false) {
-            if (!state.user) return;
-            
-            if(!isInit) updateSyncStatus('syncing');
+        async function login() {
+            const provider = new GoogleAuthProvider();
+            try { await signInWithPopup(auth, provider); } catch (e) { alert("התחברות נכשלה: " + e.message); }
+        }
+
+        async function logout() {
+            if (confirm("האם אתה בטוח? כל הנתונים יימחקו מהמכשיר הנוכחי (אך יישמרו בענן).")) {
+                await signOut(auth);
+                window.location.reload(); // Hard refresh to clear memory
+            }
+        }
+
+        // === DATA OPERATIONS ===
+        async function saveToCloud() {
+            if (!currentUser) return;
             try {
-                await setDoc(doc(db, "users", state.user.uid), {
-                    items: state.items,
-                    trash: state.trash,
+                await setDoc(doc(db, "users", currentUser.uid), {
+                    items: items,
+                    trash: trash,
                     lastUpdated: new Date().toISOString()
-                }, { merge: true });
-                
-                if(!isInit) updateSyncStatus('online');
+                });
             } catch (e) {
-                console.error("Save failed:", e);
-                updateSyncStatus('error');
-                showToast("שגיאה בשמירה לענן!");
+                showToast("שגיאה בשמירה בענן!");
             }
         }
 
-        // ניהול תצוגה (מחובר/מנותק)
-        function toggleInterface(isLoggedIn) {
-            const loggedInView = document.getElementById('loggedInView');
-            const loggedOutView = document.getElementById('loggedOutView');
-            const welcomeScreen = document.getElementById('welcomeScreen');
-            const appContent = document.getElementById('appContent');
-            const itemCount = document.getElementById('itemCount');
+        function addItem(e) {
+            e.preventDefault();
+            const content = document.getElementById('itemContent').value.trim();
+            if (!content) return;
 
-            if (isLoggedIn) {
-                loggedInView.style.display = 'flex';
-                loggedOutView.style.display = 'none';
-                welcomeScreen.classList.remove('visible');
-                appContent.classList.add('visible');
-            } else {
-                loggedInView.style.display = 'none';
-                loggedOutView.style.display = 'flex';
-                welcomeScreen.classList.add('visible');
-                appContent.classList.remove('visible');
-                itemCount.textContent = "ממתין להתחברות...";
-            }
-        }
-
-        function renderList() {
-            const container = document.getElementById('listContainer');
-            container.innerHTML = '';
+            const isUrl = /^(http|https):\/\/[^ "]+$/.test(content);
             
-            if (!state.user) return;
+            const newItem = {
+                id: Date.now(),
+                content: content,
+                description: document.getElementById('itemDescription').value.trim(),
+                category: document.getElementById('itemCategory').value.trim() || 'כללי',
+                note: document.getElementById('itemNote').value.trim(),
+                date: new Date().toISOString(),
+                type: isUrl ? 'link' : 'text',
+                isPinned: false
+            };
 
-            const query = document.getElementById('searchInput').value.toLowerCase();
+            items.unshift(newItem);
+            saveToCloud();
+            e.target.reset();
+            renderApp();
+            showToast("נשמר בהצלחה ✅");
+        }
+
+        window.deleteItem = function(id) {
+            const index = items.findIndex(i => i.id === id);
+            if (index > -1) {
+                const item = items[index];
+                item.deletedAt = new Date().toISOString();
+                trash.unshift(item);
+                items.splice(index, 1);
+                saveToCloud();
+                renderApp();
+                showToast("הועבר לסל המחזור 🗑️");
+            }
+        };
+
+        window.togglePin = function(id) {
+            const item = items.find(i => i.id === id);
+            if (item) {
+                item.isPinned = !item.isPinned;
+                saveToCloud();
+                renderApp();
+            }
+        };
+
+        // === UI RENDERING ===
+        function renderApp() {
+            const container = document.getElementById('listContainer');
+            const search = document.getElementById('searchInput').value.toLowerCase();
             const catFilter = document.getElementById('categoryFilter').value;
-            const sortMode = document.getElementById('sortOrder').value;
+            const sortOrder = document.getElementById('sortOrder').value;
 
-            // סינון ומיון בזיכרון
-            let filtered = state.items.filter(i => 
-                (i.content.toLowerCase().includes(query) || 
-                i.description.toLowerCase().includes(query) ||
-                i.category.toLowerCase().includes(query)) &&
-                (catFilter === "" || i.category === catFilter)
-            );
-
-            filtered.sort((a, b) => {
-                if (sortMode === 'name') return (a.description || a.content).localeCompare(b.description || b.content);
-                return new Date(b.date) - new Date(a.date);
+            // Filter
+            let filtered = items.filter(i => {
+                const matchSearch = i.content.toLowerCase().includes(search) || 
+                                    i.description.toLowerCase().includes(search) ||
+                                    i.category.toLowerCase().includes(search);
+                const matchCat = catFilter ? i.category === catFilter : true;
+                return matchSearch && matchCat;
             });
 
-            // עדכון רשימת קטגוריות
-            const categories = [...new Set(state.items.map(i => i.category))];
+            // Sort
+            filtered.sort((a, b) => {
+                if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1; // Pinned first
+                if (sortOrder === 'newest') return b.date.localeCompare(a.date);
+                return a.content.localeCompare(b.content);
+            });
+
+            // Update Categories Dropdown
+            const categories = [...new Set(items.map(i => i.category))].sort();
             const catSelect = document.getElementById('categoryFilter');
+            const dataList = document.getElementById('catList');
+            
+            // Save selection
             const currentCat = catSelect.value;
             catSelect.innerHTML = '<option value="">📂 כל הקטגוריות</option>' + 
-                categories.filter(c => c).sort().map(c => `<option value="${c}">${c}</option>`).join('');
-            if (categories.includes(currentCat)) catSelect.value = currentCat;
+                categories.map(c => `<option value="${c}">${c}</option>`).join('');
+            catSelect.value = currentCat;
+            dataList.innerHTML = categories.map(c => `<option value="${c}">`).join('');
 
-            document.getElementById('itemCount').textContent = `${filtered.length} פריטים בענן`;
-
-            if(filtered.length === 0) {
-                container.innerHTML = `<div style="text-align:center; padding:40px; opacity:0.5">לא נמצאו פריטים</div>`;
+            // Render Grid
+            container.innerHTML = '';
+            
+            if (filtered.length === 0) {
+                container.innerHTML = `<div style="text-align:center; opacity:0.5; grid-column:1/-1; margin-top:30px;">לא נמצאו פריטים</div>`;
                 return;
             }
 
+            // Grouping logic could go here, but grid is cleaner for now
+            const grid = document.createElement('div');
+            grid.className = 'items-grid';
+            
             filtered.forEach(item => {
-                const card = document.createElement('div');
-                card.className = `card glass-panel ${item.isPinned ? 'pinned' : ''}`;
+                const el = document.createElement('div');
+                el.className = `card ${item.isPinned ? 'pinned' : ''}`;
                 
-                const isUrl = item.content.trim().match(/^(http|https):\/\/[^ "]+$/);
-                const contentDisplay = isUrl ? 
-                    `<a href="${item.content}" target="_blank" class="card-link" style="color:var(--primary-color)">${item.description || item.content}</a>` :
-                    `<div class="card-link" style="color:var(--text-primary); cursor:pointer" onclick="window.copyItem('${item.content.replace(/'/g, "\\'")}')">${item.content}</div>`;
+                let contentHtml = item.type === 'link' 
+                    ? `<a href="${item.content}" target="_blank" class="card-link">${escapeHtml(item.content)}</a>`
+                    : `<div class="card-link" onclick="navigator.clipboard.writeText('${escapeHtml(item.content)}'); showToast('הועתק')">${escapeHtml(item.content)}</div>`;
 
-                card.innerHTML = `
+                el.innerHTML = `
                     <div class="card-body">
-                        ${contentDisplay}
-                        ${isUrl && item.description ? `<div style="font-size:0.85rem; opacity:0.7; margin-top:5px;" dir="ltr">${item.content}</div>` : ''}
-                        ${!isUrl && item.description ? `<div style="font-size:0.85rem; opacity:0.7; margin-top:5px">${item.description}</div>` : ''}
-                        <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:flex-end">
-                            <span style="font-size:0.75rem; background:rgba(127,127,127,0.15); padding:3px 8px; border-radius:6px; color:var(--text-secondary)">${item.category}</span>
-                            <span style="font-size:0.7rem; opacity:0.5">${new Date(item.date).toLocaleDateString()}</span>
+                        <div style="font-size:0.8em; opacity:0.6; margin-bottom:5px;">${escapeHtml(item.category)}</div>
+                        ${contentHtml}
+                        <div class="card-desc">${escapeHtml(item.description)}</div>
+                        ${item.note ? `<div class="card-note">📝 ${escapeHtml(item.note)}</div>` : ''}
+                    </div>
+                    <div class="card-footer">
+                        <small style="opacity:0.6">${new Date(item.date).toLocaleDateString('he-IL')}</small>
+                        <div class="card-actions">
+                            <button onclick="togglePin(${item.id})" title="נעץ/בטל נעיצה" class="${item.isPinned ? 'pin-active' : ''}">📌</button>
+                            <button onclick="navigator.clipboard.writeText('${escapeHtml(item.content)}'); showToast('הועתק')" title="העתק">📋</button>
+                            <button onclick="deleteItem(${item.id})" title="מחק">🗑️</button>
                         </div>
                     </div>
-                    <div style="padding:8px 15px; border-top:1px solid var(--glass-border); display:flex; justify-content:flex-end; gap:12px; background:rgba(0,0,0,0.02)">
-                        <button onclick="window.copyItem('${item.content.replace(/'/g, "\\'")}')" style="background:none; border:none; cursor:pointer; opacity:0.7" title="העתק">📋</button>
-                        <button onclick="window.deleteItem(${item.id})" style="background:none; border:none; cursor:pointer; opacity:0.7; color:#ef4444" title="מחק">🗑️</button>
-                    </div>
                 `;
-                container.appendChild(card);
+                grid.appendChild(el);
             });
+            container.appendChild(grid);
         }
 
-        function setupEventListeners() {
-            document.getElementById('googleLoginBtn').onclick = () => signInWithPopup(auth, new GoogleAuthProvider());
+        // === UTILS ===
+        function updateUI(loggedIn) {
+            document.getElementById('loggedOutView').style.display = loggedIn ? 'none' : 'flex';
+            document.getElementById('loggedInView').style.display = loggedIn ? 'flex' : 'none';
+            document.getElementById('welcomeScreen').classList.toggle('visible', !loggedIn);
+            document.getElementById('protectedContent').classList.toggle('locked', !loggedIn);
             
-            document.getElementById('logoutBtn').onclick = async () => {
-                await signOut(auth);
-                window.location.reload(); // רענון לניקוי זיכרון מוחלט
-            };
-            
-            document.getElementById('switchAccountBtn').onclick = async () => {
-                await signOut(auth);
-                const provider = new GoogleAuthProvider();
-                provider.setCustomParameters({ prompt: 'select_account' });
-                signInWithPopup(auth, provider);
-            };
-
-            document.getElementById('addItemForm').onsubmit = async (e) => {
-                e.preventDefault();
-                if (!state.user) return;
-                
-                const btn = e.target.querySelector('button');
-                btn.disabled = true;
-                btn.textContent = 'שומר בענן...';
-
-                const content = document.getElementById('itemContent').value;
-                const newItem = {
-                    id: Date.now(),
-                    content,
-                    description: document.getElementById('itemDescription').value || '',
-                    category: document.getElementById('itemCategory').value || 'כללי',
-                    date: new Date().toISOString(),
-                    isPinned: false
-                };
-                
-                state.items.unshift(newItem); // עדכון זיכרון
-                await saveToFirestore(); // שמירה לענן
-                
-                renderList();
-                e.target.reset();
-                document.querySelector('details').removeAttribute('open');
-                btn.disabled = false;
-                btn.textContent = 'הוסף למאגר';
-                showToast("נשמר בהצלחה!");
-            };
-
-            document.getElementById('searchInput').oninput = renderList;
-            document.getElementById('categoryFilter').onchange = renderList;
-            document.getElementById('sortOrder').onchange = renderList;
-            document.getElementById('toggleDarkModeBtn').onclick = () => {
-                document.body.classList.toggle('dark-mode');
-                localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
-            };
-
-            document.querySelectorAll('.drop-trigger').forEach(btn => {
-                btn.onclick = (e) => {
-                    e.stopPropagation();
-                    const menu = document.getElementById(btn.dataset.target);
-                    document.querySelectorAll('.dropdown-content').forEach(m => { if(m!==menu) m.classList.remove('show'); });
-                    if(menu) menu.classList.toggle('show');
-                };
-            });
-            window.onclick = () => document.querySelectorAll('.dropdown-content').forEach(m => m.classList.remove('show'));
-
-            // ייצוא/ייבוא
-            document.getElementById('exportJsonBtn').onclick = () => {
-                if (state.items.length === 0) return alert("אין נתונים לייצוא");
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.items));
-                const a = document.createElement('a');
-                a.href = dataStr;
-                a.download = "link_manager_cloud_backup.json";
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-            };
-
-            document.getElementById('importJsonInput').onchange = (e) => {
-                const file = e.target.files[0];
-                if (!file || !state.user) return;
-                const reader = new FileReader();
-                reader.onload = async (event) => {
-                    try {
-                        const imported = JSON.parse(event.target.result);
-                        if (Array.isArray(imported)) {
-                            // מיזוג נתונים חדשים
-                            const currentIds = new Set(state.items.map(i => i.id));
-                            const newItems = imported.filter(i => !currentIds.has(i.id));
-                            state.items = [...newItems, ...state.items];
-                            await saveToFirestore();
-                            renderList();
-                            showToast(`נוספו ${newItems.length} פריטים לענן`);
-                        }
-                    } catch (err) { alert("קובץ לא תקין"); }
-                };
-                reader.readAsText(file);
-            };
-        }
-
-        window.deleteItem = async (id) => {
-            if(!confirm("למחוק? (הפעולה תסונכרן לענן)")) return;
-            const idx = state.items.findIndex(i => i.id === id);
-            if (idx > -1) {
-                state.trash.push(state.items.splice(idx, 1)[0]);
-                renderList();
-                await saveToFirestore(); // עדכון ענן
-                showToast("נמחק");
+            if (loggedIn && currentUser) {
+                document.getElementById('userName').textContent = currentUser.displayName;
+                document.getElementById('userAvatar').src = currentUser.photoURL;
             }
-        };
+        }
 
-        window.copyItem = (text) => {
-            navigator.clipboard.writeText(text);
-            showToast("הועתק!");
-        };
-
-        function updateSyncStatus(status) {
-            const el = document.getElementById('syncStatus');
-            if(!el) return;
-            const textMap = { 'online': 'מחובר לענן', 'syncing': 'מסנכרן...', 'error': 'שגיאה' };
-            el.innerHTML = `<span class="status-dot ${status}"></span> ${textMap[status] || 'מנותק'}`;
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
         }
 
         function showToast(msg) {
             const t = document.getElementById('toast');
-            document.getElementById('toastMsg').textContent = msg;
+            t.textContent = msg;
             t.classList.add('visible');
             setTimeout(() => t.classList.remove('visible'), 3000);
         }
 
-        function initTheme() { 
-            if(localStorage.getItem('theme') === 'light') {
+        function setupEventListeners() {
+            document.getElementById('googleLoginBtn').addEventListener('click', login);
+            document.getElementById('logoutBtn').addEventListener('click', logout);
+            document.getElementById('addItemForm').addEventListener('submit', addItem);
+            document.getElementById('searchInput').addEventListener('input', renderApp);
+            document.getElementById('categoryFilter').addEventListener('change', renderApp);
+            document.getElementById('sortOrder').addEventListener('change', renderApp);
+            
+            // Trash & Export
+            document.getElementById('trashBtn').addEventListener('click', () => {
+                const list = document.getElementById('trashList');
+                list.innerHTML = trash.length ? '' : '<div style="text-align:center">ריק</div>';
+                trash.forEach((item, idx) => {
+                    const div = document.createElement('div');
+                    div.className = 'trash-item';
+                    div.innerHTML = `<div>${escapeHtml(item.description || item.content)}</div>
+                                     <button onclick="restoreItem(${idx})">♻️</button>`;
+                    list.appendChild(div);
+                });
+                document.getElementById('trashModal').classList.add('open');
+            });
+
+            window.restoreItem = function(index) {
+                const item = trash.splice(index, 1)[0];
+                delete item.deletedAt;
+                items.unshift(item);
+                saveToCloud();
+                renderApp();
+                document.getElementById('trashModal').classList.remove('open');
+            };
+
+            document.getElementById('exportBtn').addEventListener('click', () => {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(items));
+                const node = document.createElement('a');
+                node.href = dataStr;
+                node.download = "linkmeir_backup.json";
+                node.click();
+            });
+
+            document.getElementById('darkModeBtn').addEventListener('click', () => {
+                document.body.classList.toggle('dark-mode');
+                localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
+            });
+        }
+
+        function checkTheme() {
+            if (localStorage.getItem('theme') === 'light') {
                 document.body.classList.remove('dark-mode');
             }
         }
