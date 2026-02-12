@@ -3,17 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f172a">
     <title>Link Manager Pro</title>
     
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#0f172a">
     <meta name="mobile-web-app-capable" content="yes">
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="LinkManager">
     <link rel="apple-touch-icon" href="icon.jpg">
-    
     <link rel="icon" type="image/jpeg" href="icon.jpg">
     
     <style>
@@ -26,7 +25,6 @@
             --text-primary: #1a1a1a;
             --text-secondary: #555555;
             --primary-color: #0066cc;
-            --primary-glow: rgba(0, 102, 204, 0.2);
             --radius: 12px;
             --accent-green: #00a651;
             --accent-red: #d93025;
@@ -43,7 +41,6 @@
             --text-primary: #f1f5f9;
             --text-secondary: #cbd5e1;
             --primary-color: #60a5fa;
-            --primary-glow: rgba(96, 165, 250, 0.2);
             --note-bg: rgba(60, 50, 30, 0.8);
         }
 
@@ -72,18 +69,23 @@
             border: 1px solid var(--glass-border); font-weight: 600;
         }
         
-        /* Install Button */
+        /* כפתור התקנה - מוסתר כברירת מחדל */
         #installAppBtn {
-            display: none; /* Hidden by default */
-            margin: 10px auto;
-            background: var(--primary-color); color: white; border: none;
-            padding: 8px 16px; border-radius: 20px; font-weight: bold;
-            cursor: pointer; font-size: 0.9rem;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            display: none; 
+            margin: 10px auto; 
+            background: var(--primary-color); 
+            color: white; 
+            border: none;
+            padding: 8px 20px; 
+            border-radius: 20px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            font-size: 0.95rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); 
             animation: fadeIn 0.5s ease;
+            border: 1px solid rgba(255,255,255,0.2);
         }
 
-        /* User UI */
         #userSection { padding: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
         .user-info { display: flex; align-items: center; gap: 12px; }
         .user-avatar { width: 42px; height: 42px; border-radius: 50%; border: 2px solid var(--glass-border); object-fit: cover; }
@@ -95,25 +97,21 @@
         .btn-login { background: var(--google-btn); color: white; border: none; padding: 10px 24px; border-radius: 30px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; }
         .btn-action-sm { background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 8px 14px; border-radius: 8px; cursor: pointer; margin-left: 5px; }
 
-        /* Welcome & Locked */
         #welcomeScreen { display: none; flex-direction: column; align-items: center; text-align: center; padding: 40px 20px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border); margin-top: 20px; }
         #welcomeScreen.visible { display: flex; }
         .lock-icon { font-size: 4rem; margin-bottom: 20px; opacity: 0.8; }
         .auth-required { transition: opacity 0.3s ease; }
         .auth-required.locked { display: none !important; }
 
-        /* Controls */
         #controlsArea { padding: 16px; margin-bottom: 25px; display: flex; flex-direction: column; gap: 14px; z-index: 100; position: relative; }
         .search-container input { width: 100%; padding: 12px 16px; font-size: 16px; border: 1px solid var(--glass-border); border-radius: var(--radius); background: rgba(127,127,127,0.1); color: var(--text-primary); }
         .filters-container { display: flex; gap: 10px; flex-wrap: wrap; }
         .filters-container select { flex: 1; min-width: 140px; height: 44px; padding: 0 12px; background: rgba(127,127,127,0.1); color: var(--text-primary); border: 1px solid var(--glass-border); border-radius: var(--radius); }
         .filters-container select option { background: #1e293b; color: white; }
 
-        /* Action Buttons & Dropdowns */
         .actions-container { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
         .dropdown { position: relative; display: inline-block; flex-grow: 1; }
         .action-btn { width: 100%; height: 44px; color: white; border: none; border-radius: var(--radius); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; }
-        
         .btn-json { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
         .btn-txt { background: linear-gradient(135deg, #06b6d4, #0891b2); }
         .btn-site { background: linear-gradient(135deg, #6366f1, #4f46e5); } 
@@ -127,42 +125,35 @@
         input[type="file"] { display: none; }
         .dropdown-divider { border-top: 1px solid var(--glass-border); margin: 6px 0; }
 
-        /* Add Item */
         details { margin-bottom: 25px; }
         summary { padding: 16px; cursor: pointer; font-weight: 700; color: var(--primary-color); background: rgba(127,127,127,0.05); list-style: none; display: flex; justify-content: center; border-radius: var(--radius); }
         #addItemForm { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
         #addItemForm input, #addItemForm textarea { padding: 12px; border: 1px solid var(--glass-border); border-radius: var(--radius); background: rgba(127,127,127,0.05); color: var(--text-primary); width: 100%; }
         #addItemForm button { background: var(--accent-green); color: white; padding: 14px; border: none; border-radius: var(--radius); font-weight: bold; cursor: pointer; }
 
-        /* Grid & Cards */
         .category-block { margin-bottom: 35px; }
         .category-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 5px; margin-bottom: 15px; border-bottom: 2px solid rgba(127,127,127,0.1); }
         .category-header h2 { margin: 0; font-size: 1.4rem; font-weight: 700; }
         .category-badge { background: rgba(127,127,127,0.1); padding: 4px 12px; border-radius: 12px; font-weight: 600; font-size: 0.85rem; border: 1px solid var(--glass-border); }
         
         .items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-        
         .card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius); position: relative; display: flex; flex-direction: column; transition: transform 0.2s; }
         .card:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
         .card.pinned { border: 2px solid var(--accent-gold); background: rgba(255, 255, 0, 0.05); }
-        
         .card-index { position: absolute; top: 12px; left: 12px; background: rgba(127,127,127,0.1); font-size: 11px; padding: 3px 8px; border-radius: 6px; font-family: monospace; color: var(--text-secondary); }
         .card-body { padding: 20px; padding-top: 40px; flex-grow: 1; }
         .card-link { display: block; color: var(--primary-color); font-weight: 700; text-decoration: none; margin-bottom: 10px; word-break: break-all; font-size: 16px; line-height: 1.4; }
         .card-text-content { background: rgba(127,127,127,0.05); padding: 12px; border-radius: 8px; font-family: monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; border: 1px solid var(--glass-border); }
         .card-desc { font-size: 15px; opacity: 0.9; margin-bottom: 10px; line-height: 1.5; }
         .card-note { margin-top: 12px; padding: 10px; background-color: var(--note-bg); color: #4a3b10; font-size: 13px; border-radius: 8px; border-right: 4px solid var(--accent-gold); display: flex; gap: 8px; }
-        
         .card-footer { padding: 12px 20px; border-top: 1px solid var(--glass-border); background: rgba(127,127,127,0.05); display: flex; justify-content: space-between; align-items: center; border-radius: 0 0 var(--radius) var(--radius); }
         .tag-category { font-size: 11px; background: rgba(127,127,127,0.1); padding: 4px 10px; border-radius: 12px; border: 1px solid var(--glass-border); font-weight: 600; }
         .duplicate-badge { color: var(--accent-red); font-weight: bold; font-size: 12px; display: none; margin-left: 5px; background: rgba(239,68,68,0.1); padding: 2px 6px; border-radius: 4px; }
-
         .card-actions { display: flex; gap: 4px; }
         .icon-btn { background: transparent; border: none; cursor: pointer; font-size: 18px; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); transition: all 0.2s; }
         .icon-btn:hover { color: var(--primary-color); background: rgba(127,127,127,0.1); }
         .pin-btn.active { color: var(--accent-gold); transform: rotate(45deg); opacity: 1; }
 
-        /* Trash Modal */
         #trashModal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
         #trashModal.open { display: flex; }
         .modal-content { background: var(--glass-bg); width: 90%; max-width: 600px; max-height: 80vh; border-radius: var(--radius); border: 1px solid var(--glass-border); display: flex; flex-direction: column; overflow: hidden; }
@@ -170,19 +161,8 @@
         .modal-body { padding: 20px; overflow-y: auto; }
         .trash-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: rgba(127,127,127,0.05); margin-bottom: 8px; border-radius: 8px; border: 1px solid var(--glass-border); }
 
-        /* Toast */
-        #toast {
-            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px);
-            background: rgba(30, 41, 59, 0.95); color: white;
-            border-radius: 12px; box-shadow: 0 15px 40px rgba(0,0,0,0.4);
-            z-index: 9999;
-            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s;
-            opacity: 0;
-            border: 1px solid rgba(255,255,255,0.1);
-            overflow: hidden; display: flex; flex-direction: column; min-width: 320px;
-        }
+        #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px); background: rgba(30, 41, 59, 0.95); color: white; border-radius: 12px; box-shadow: 0 15px 40px rgba(0,0,0,0.4); z-index: 9999; transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s; opacity: 0; border: 1px solid rgba(255,255,255,0.1); overflow: hidden; display: flex; flex-direction: column; min-width: 320px; }
         #toast.visible { transform: translateX(-50%) translateY(0); opacity: 1; }
-
         .toast-content { padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 15px; }
         #undoBtn { background: rgba(255,255,255,0.1); border: 1px solid var(--accent-gold); color: var(--accent-gold); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem; transition: 0.2s; white-space: nowrap; }
         #undoBtn:hover { background: var(--accent-gold); color: #000; }
@@ -190,10 +170,8 @@
         .toast-progress.animating { animation: countdown 10s linear forwards; }
         @keyframes countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
-        /* Scroll Top */
         #scrollTopBtn { position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; border-radius: 50%; background: var(--primary-color); color: white; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 2000; opacity: 0; visibility: hidden; transition: 0.3s; display: flex; align-items: center; justify-content: center; }
         #scrollTopBtn.show { opacity: 1; visibility: visible; }
-        
         .btn-reload { padding: 4px 8px; margin-right: 5px; cursor: pointer; border: 1px solid var(--glass-border); border-radius: 4px; background: transparent; font-size: 12px; color: var(--text-secondary); }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
@@ -329,6 +307,7 @@
         import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+        // === Config ===
         const firebaseConfig = {
             apiKey: "AIzaSyDwofGCJUWkdLGWyXK7_UBAbbC39FXnAmI",
             authDomain: "linkmeir-dada4.firebaseapp.com",
@@ -342,7 +321,7 @@
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
         let app, auth, db;
         let toastTimeout;
-        let deferredPrompt; // For install prompt
+        let deferredPrompt; // עבור כפתור ההתקנה
         
         let state = {
             items: [], trash: [], user: null, unsubscribe: null, showDuplicates: true
@@ -361,29 +340,30 @@
             setupFirebaseListeners();
             setupScrollToTop();
             
-            // PWA Install Prompt Logic
+            // לוגיקה להתקנת אפליקציה (PWA)
             window.addEventListener('beforeinstallprompt', (e) => {
                 e.preventDefault();
                 deferredPrompt = e;
                 const installBtn = document.getElementById('installAppBtn');
-                installBtn.style.display = 'block';
-                
-                installBtn.addEventListener('click', () => {
-                    installBtn.style.display = 'none';
-                    deferredPrompt.prompt();
-                    deferredPrompt.userChoice.then((choiceResult) => {
-                        deferredPrompt = null;
+                if(installBtn) {
+                    installBtn.style.display = 'block';
+                    installBtn.addEventListener('click', () => {
+                        installBtn.style.display = 'none';
+                        deferredPrompt.prompt();
+                        deferredPrompt.userChoice.then((choiceResult) => {
+                            if (choiceResult.outcome === 'accepted') {
+                                console.log('User accepted the install prompt');
+                            }
+                            deferredPrompt = null;
+                        });
                     });
-                });
+                }
             });
         });
 
         function initServiceWorker() {
             if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(console.error);
         }
-
-        // ... [שאר הקוד נשאר ללא שינוי, העתק את כל הפונקציות הקודמות: setupEventListeners, setupFirebaseListeners, renderList, וכו'] ...
-        // לצורך הקיצור, אני משלב את הקוד הקודם המלא כאן, רק מוודא שהחלקים של Firebase והלוגיקה קיימים:
 
         function setupEventListeners() {
             document.querySelectorAll('.drop-trigger').forEach(btn => {
@@ -426,7 +406,7 @@
             document.getElementById('downloadSourceBtn')?.addEventListener('click', downloadSource);
         }
 
-        // === Copy all logic functions from previous response below ===
+        // === Firebase Safe Sync ===
         function setupFirebaseListeners() {
             onAuthStateChanged(auth, (user) => {
                 if (user) {
@@ -434,6 +414,7 @@
                     toggleAppInterface(true);
                     document.getElementById('userName').textContent = user.displayName;
                     document.getElementById('userAvatar').src = user.photoURL;
+
                     const userDoc = doc(db, "users", user.uid);
                     state.unsubscribe = onSnapshot(userDoc, (docSnap) => {
                         if (docSnap.exists()) {
@@ -442,16 +423,25 @@
                             state.trash = d.trash || [];
                             updateCategoryDropdowns();
                             renderList();
+                            updateSyncStatus('online');
+                        } else {
+                            // Safe mode: Do not overwrite empty data automatically
+                            updateSyncStatus('online');
                         }
+                    }, (err) => {
+                        console.error(err);
+                        updateSyncStatus('error');
                     });
                 } else {
-                    state.user = null; state.items = []; state.trash = [];
+                    state.user = null;
+                    state.items = [];
+                    state.trash = [];
                     if (state.unsubscribe) state.unsubscribe();
                     toggleAppInterface(false);
                 }
             });
         }
-        
+
         function toggleAppInterface(isLoggedIn) {
             document.getElementById('loggedInView').style.display = isLoggedIn ? 'flex' : 'none';
             document.getElementById('loggedOutView').style.display = isLoggedIn ? 'none' : 'flex';
@@ -459,24 +449,56 @@
             document.getElementById('protectedContent').classList.toggle('locked', !isLoggedIn);
             if (!isLoggedIn) document.getElementById('itemCount').textContent = "ממתין להתחברות...";
         }
-        
+
+        function updateSyncStatus(status) {
+            const el = document.querySelector('.cloud-status');
+            if(el) {
+                const dot = el.querySelector('.status-dot');
+                if(dot) dot.className = `status-dot ${status}`;
+            }
+        }
+
         async function cloudLogin() { try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (e) { alert(e.message); } }
         async function cloudLogout() { await signOut(auth); window.location.reload(); }
-        async function switchAccount() { try { await signOut(auth); const p = new GoogleAuthProvider(); p.setCustomParameters({prompt: 'select_account'}); await signInWithPopup(auth, p); } catch(e){ alert(e.message); } }
-        function forceReload() { if(state.unsubscribe) state.unsubscribe(); setupFirebaseListeners(); showToast("רענון בוצע"); }
-        async function pushToCloud() { if (!state.user) return; try { await setDoc(doc(db, "users", state.user.uid), { items: state.items, trash: state.trash, lastUpdated: new Date().toISOString() }); } catch (e) { showToast('שגיאה בסנכרון'); } }
+        async function switchAccount() {
+            try {
+                await signOut(auth);
+                const provider = new GoogleAuthProvider();
+                provider.setCustomParameters({ prompt: 'select_account' });
+                await signInWithPopup(auth, provider);
+            } catch (e) { alert(e.message); }
+        }
 
+        function forceReload() {
+            if(!state.user) return;
+            if (state.unsubscribe) state.unsubscribe();
+            setupFirebaseListeners();
+            showToast("רענון נתונים מהענן בוצע");
+        }
+
+        async function pushToCloud() {
+            if (!state.user) return;
+            try {
+                await setDoc(doc(db, "users", state.user.uid), { items: state.items, trash: state.trash, lastUpdated: new Date().toISOString() });
+            } catch (e) { showToast('שגיאה בסנכרון לענן'); }
+        }
+
+        // === Logic ===
         function renderList() {
             if (!state.user) return;
-            const container = document.getElementById('listContainer'); container.innerHTML = '';
+            const container = document.getElementById('listContainer');
+            container.innerHTML = '';
+
             const query = document.getElementById('searchInput').value.toLowerCase();
             const catFilter = document.getElementById('categoryFilter').value;
             const sort = document.getElementById('sortOrder').value;
-            
+
             const chronologicalList = [...state.items].sort((a, b) => a.date.localeCompare(b.date));
-            const indexMap = new Map(); chronologicalList.forEach((item, index) => indexMap.set(item.id, index + 1));
+            const indexMap = new Map();
+            chronologicalList.forEach((item, index) => indexMap.set(item.id, index + 1));
+
             const isIndexSort = sort === 'index-asc' || sort === 'index-desc';
-            
+
             let sortedFullList = [...state.items];
             sortedFullList.sort((a, b) => {
                 if (sort === 'name') return a.content.localeCompare(b.content);
@@ -484,15 +506,19 @@
                 if (sort === 'index-desc') return indexMap.get(b.id) - indexMap.get(a.id);
                 return b.date.localeCompare(a.date); 
             });
+
             sortedFullList.forEach(item => item.visualIndex = indexMap.get(item.id));
-            
+
             const seen = new Set(), dups = new Set();
-            sortedFullList.forEach(i => { const k = i.content.toLowerCase().trim(); if (seen.has(k)) { i.isDup = true; dups.add(k); } else { i.isDup = false; seen.add(k); } });
+            sortedFullList.forEach(i => {
+                const k = i.content.toLowerCase().trim();
+                if (seen.has(k)) { i.isDup = true; dups.add(k); } else { i.isDup = false; seen.add(k); }
+            });
             sortedFullList.forEach(i => { if(dups.has(i.content.toLowerCase().trim())) i.isDup = true; });
-            
+
             const isHashSearch = /^#\s*\d+$/.test(query);
             const searchNum = isHashSearch ? parseInt(query.replace(/\D/g, '')) : null;
-            
+
             let filtered = sortedFullList.filter(i => {
                 if (isHashSearch) return i.visualIndex === searchNum;
                 if (!state.showDuplicates && i.isDup && state.items.indexOf(i) !== state.items.findIndex(x => x.content.toLowerCase() === i.content.toLowerCase())) return false;
@@ -500,35 +526,76 @@
                 const matchesCat = !catFilter || i.category === catFilter;
                 return matchesSearch && matchesCat;
             });
-            
+
             document.getElementById('itemCount').textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
-            if (filtered.length === 0) { container.innerHTML = '<div style="text-align:center; padding:20px; opacity:0.6">לא נמצאו תוצאות</div>'; return; }
-            
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-secondary);">לא נמצאו תוצאות</div>';
+                return;
+            }
+
             if (isIndexSort) {
-                const s = document.createElement('div'); s.className = 'category-block'; s.innerHTML = `<div class="items-grid"></div>`;
-                const g = s.querySelector('.items-grid'); filtered.forEach(item => g.appendChild(createCard(item))); container.appendChild(s);
+                const section = document.createElement('div');
+                section.className = 'category-block';
+                section.innerHTML = `<div class="items-grid"></div>`;
+                const grid = section.querySelector('.items-grid');
+                filtered.forEach(item => grid.appendChild(createCard(item)));
+                container.appendChild(section);
             } else {
-                const pinned = filtered.filter(i => i.isPinned), reg = filtered.filter(i => !i.isPinned);
-                if (pinned.length > 0) renderGroup(container, '📌 מוצמד', pinned, true);
-                const groups = {}; reg.forEach(i => { if(!groups[i.category]) groups[i.category] = []; groups[i.category].push(i); });
+                const pinnedItems = filtered.filter(i => i.isPinned);
+                const regularItems = filtered.filter(i => !i.isPinned);
+
+                if (pinnedItems.length > 0) renderGroup(container, '📌 מוצמד', pinnedItems, true);
+
+                const groups = {};
+                regularItems.forEach(i => {
+                    if(!groups[i.category]) groups[i.category] = [];
+                    groups[i.category].push(i);
+                });
+
                 Object.keys(groups).sort().forEach(cat => renderGroup(container, cat, groups[cat], false));
             }
         }
 
-        function renderGroup(c, t, i, p) {
-            const s = document.createElement('div'); s.className = 'category-block';
-            const h = p ? 'style="border-bottom: 2px solid var(--accent-gold); color: var(--accent-gold);"' : '';
-            s.innerHTML = `<div class="category-header" ${h}><h2>${escapeHtml(t)}</h2><span class="category-badge">${i.length}</span></div><div class="items-grid"></div>`;
-            const g = s.querySelector('.items-grid'); i.forEach(x => g.appendChild(createCard(x))); c.appendChild(s);
+        function renderGroup(container, title, items, isPinned) {
+            const section = document.createElement('div');
+            section.className = 'category-block';
+            const headerStyle = isPinned ? 'style="border-bottom: 2px solid var(--accent-gold); color: var(--accent-gold);"' : '';
+            section.innerHTML = `<div class="category-header" ${headerStyle}><h2>${escapeHtml(title)}</h2><span class="category-badge">${items.length}</span></div><div class="items-grid"></div>`;
+            const grid = section.querySelector('.items-grid');
+            items.forEach(i => grid.appendChild(createCard(i)));
+            container.appendChild(section);
         }
 
         function createCard(item) {
-            const div = document.createElement('div'); div.className = `card ${item.isPinned ? 'pinned' : ''}`;
-            const sc = escapeHtml(item.content);
-            const ch = item.type === 'link' ? `<a href="${sc}" class="card-link" target="_blank">${sc}</a>` : `<div class="card-text-content">${sc}</div>`;
-            const nh = item.note ? `<div class="card-note">📝 ${escapeHtml(item.note)}</div>` : '';
-            div.innerHTML = `<div class="card-index">#${item.visualIndex}</div><div class="card-body">${ch}<div class="card-desc">${escapeHtml(item.description)}</div>${nh}</div><div class="card-footer"><div><span class="tag-category">${escapeHtml(item.category)}</span><span class="duplicate-badge" style="display:${item.isDup?'inline':'none'}">כפול</span></div><div class="card-actions"><button class="icon-btn btn-share">📤</button><button class="icon-btn btn-copy">📋</button><button class="icon-btn btn-edit">✏️</button><button class="icon-btn pin-btn ${item.isPinned?'active':''}">📌</button><button class="icon-btn trash-btn">🗑️</button></div></div>`;
-            div.querySelector('.btn-share').onclick = e => { e.stopPropagation(); shareItem(item); };
+            const div = document.createElement('div');
+            div.className = `card ${item.isPinned ? 'pinned' : ''}`;
+            const safeContent = escapeHtml(item.content);
+            const contentHtml = item.type === 'link' 
+                ? `<a href="${safeContent}" class="card-link" target="_blank">${safeContent}</a>`
+                : `<div class="card-text-content">${safeContent}</div>`;
+            const noteHtml = item.note ? `<div class="card-note">📝 ${escapeHtml(item.note)}</div>` : '';
+
+            div.innerHTML = `
+                <div class="card-index">#${item.visualIndex}</div>
+                <div class="card-body">
+                    ${contentHtml}
+                    <div class="card-desc">${escapeHtml(item.description)}</div>
+                    ${noteHtml}
+                </div>
+                <div class="card-footer">
+                    <div><span class="tag-category">${escapeHtml(item.category)}</span><span class="duplicate-badge" style="display:${item.isDup ? 'inline' : 'none'}">כפול</span></div>
+                    <div class="card-actions">
+                        <button class="icon-btn btn-share" title="שתף">📤</button>
+                        <button class="icon-btn btn-copy" title="העתק">📋</button>
+                        <button class="icon-btn btn-edit" title="ערוך">✏️</button>
+                        <button class="icon-btn pin-btn ${item.isPinned ? 'active' : ''}" title="נעץ">📌</button>
+                        <button class="icon-btn trash-btn" title="מחק">🗑️</button>
+                    </div>
+                </div>
+            `;
+            
+            div.querySelector('.btn-share').onclick = (e) => { e.stopPropagation(); shareItem(item); };
             div.querySelector('.btn-copy').onclick = () => copyText(item.content);
             div.querySelector('.btn-edit').onclick = () => editItem(item);
             div.querySelector('.pin-btn').onclick = () => togglePin(item.id);
@@ -537,49 +604,229 @@
         }
 
         function handleAdd(e) {
-            e.preventDefault(); const c = document.getElementById('itemContent').value.trim(); if (!c) return;
-            const ni = { id: Date.now(), content: c, description: document.getElementById('itemDescription').value.trim(), category: document.getElementById('itemCategory').value.trim() || 'כללי', note: document.getElementById('itemNote').value.trim(), date: new Date().toISOString(), type: URL_REGEX.test(c) ? 'link' : 'text', isPinned: false };
-            state.items.unshift(ni); pushToCloud(); e.target.reset();
-            showToast('פריט נוסף', () => { const idx = state.items.findIndex(i => i.id === ni.id); if (idx > -1) { state.items.splice(idx, 1); pushToCloud(); } });
-        }
-        function moveToTrash(id) {
-            const idx = state.items.findIndex(i => i.id === id); if(idx === -1) return;
-            const it = JSON.parse(JSON.stringify(state.items[idx]));
-            state.items[idx].deletedAt = new Date().toISOString(); state.trash.unshift(state.items[idx]); state.items.splice(idx, 1); pushToCloud();
-            showToast('הועבר לסל המחזור', () => { state.items.splice(idx, 0, it); const ti = state.trash.findIndex(t => t.id === id); if(ti>-1) state.trash.splice(ti, 1); pushToCloud(); });
-        }
-        function togglePin(id) { const i = state.items.find(x => x.id === id); if(i) { i.isPinned = !i.isPinned; pushToCloud(); showToast(i.isPinned?'ננעץ':'שוחרר', () => { i.isPinned = !i.isPinned; pushToCloud(); }); } }
-        function editItem(item) {
-            const oi = JSON.parse(JSON.stringify(item));
-            const c = prompt('תוכן:', item.content); if(c===null) return;
-            item.content = c; item.description = prompt('תיאור:', item.description)||''; item.category = prompt('קטגוריה:', item.category)||'כללי'; item.note = prompt('הערה:', item.note)||''; item.type = URL_REGEX.test(c)?'link':'text';
+            e.preventDefault();
+            const content = document.getElementById('itemContent').value.trim();
+            if (!content) return;
+            
+            const newItem = {
+                id: Date.now(),
+                content,
+                description: document.getElementById('itemDescription').value.trim(),
+                category: document.getElementById('itemCategory').value.trim() || 'כללי',
+                note: document.getElementById('itemNote').value.trim(),
+                date: new Date().toISOString(), 
+                type: URL_REGEX.test(content) ? 'link' : 'text',
+                isPinned: false
+            };
+            
+            state.items.unshift(newItem); 
             pushToCloud();
-            showToast('עודכן', () => { const cur = state.items.find(i=>i.id===oi.id); if(cur) { Object.assign(cur, oi); pushToCloud(); } });
+            e.target.reset();
+            
+            showToast('פריט נוסף', () => {
+                const idx = state.items.findIndex(i => i.id === newItem.id);
+                if (idx > -1) {
+                    state.items.splice(idx, 1);
+                    pushToCloud();
+                }
+            });
         }
-        async function shareItem(i) { if(navigator.share) { try { await navigator.share({title:'Link Manager', text: `${i.description}\n${i.content}`, url: i.type==='link'?i.content:null}); } catch(e){copyText(i.content);} } else copyText(i.content); }
+
+        function moveToTrash(id) {
+            const idx = state.items.findIndex(i => i.id === id);
+            if(idx === -1) return;
+            
+            const itemToTrash = JSON.parse(JSON.stringify(state.items[idx]));
+            state.items[idx].deletedAt = new Date().toISOString();
+            state.trash.unshift(state.items[idx]);
+            state.items.splice(idx, 1);
+            pushToCloud();
+            
+            showToast('הועבר לסל המחזור', () => {
+                state.items.splice(idx, 0, itemToTrash); 
+                const trashIdx = state.trash.findIndex(t => t.id === id);
+                if (trashIdx > -1) state.trash.splice(trashIdx, 1);
+                pushToCloud();
+            });
+        }
+
+        function togglePin(id) {
+            const item = state.items.find(i => i.id === id);
+            if(item) { 
+                item.isPinned = !item.isPinned; 
+                pushToCloud();
+                showToast(item.isPinned ? 'ננעץ' : 'שוחרר', () => {
+                    const currentItem = state.items.find(i => i.id === id);
+                    if (currentItem) {
+                        currentItem.isPinned = !currentItem.isPinned;
+                        pushToCloud();
+                    }
+                });
+            }
+        }
+
+        function editItem(item) {
+            const originalItem = JSON.parse(JSON.stringify(item));
+            const c = prompt('תוכן:', item.content);
+            if (c === null) return;
+            
+            item.content = c;
+            item.description = prompt('תיאור:', item.description) || '';
+            item.category = prompt('קטגוריה:', item.category) || 'כללי';
+            item.note = prompt('הערה:', item.note) || '';
+            item.type = URL_REGEX.test(c) ? 'link' : 'text';
+            
+            pushToCloud();
+            
+            showToast('עודכן בהצלחה', () => {
+                const currentItem = state.items.find(i => i.id === originalItem.id);
+                if (currentItem) {
+                    Object.assign(currentItem, originalItem);
+                    pushToCloud();
+                }
+            });
+        }
+
+        async function shareItem(item) {
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: 'Link Manager',
+                        text: `${item.description}\n${item.content}`,
+                        url: item.type === 'link' ? item.content : null
+                    });
+                } catch (err) { copyText(item.content); }
+            } else {
+                copyText(item.content);
+            }
+        }
+
         function toggleDuplicates() { state.showDuplicates = !state.showDuplicates; renderList(); }
-        function importJson(e) { const f = e.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = ev => { try { const d = JSON.parse(ev.target.result); if(confirm('להחליף הכל?')) { const b = JSON.parse(JSON.stringify(state)); if(Array.isArray(d)) state.items = d; else { state.items = d.items||[]; state.trash = d.trash||[]; } pushToCloud(); closeAllMenus(); showToast('נטען', () => { state.items = b.items; state.trash = b.trash; pushToCloud(); }); } } catch(e){ alert('שגיאה'); } }; r.readAsText(f); }
-        function smartImport(e) { const f = e.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = ev => { const l = ev.target.result.split('\n'); let a = 0; const b = JSON.parse(JSON.stringify(state.items)); const m = new Map(state.items.map(i => [i.content.toLowerCase().trim(), i])); l.forEach(line => { const p = line.split('|').map(s => s.trim()); if(!p[0]) return; if(!m.has(p[0].toLowerCase())) { state.items.unshift({ id: Date.now()+a, content: p[0], description: p[1]||'', category: p[2]||'כללי', date: new Date().toISOString(), type: URL_REGEX.test(p[0])?'link':'text', isPinned: false }); a++; } }); if(a>0) { pushToCloud(); showToast(`נוספו ${a}`, () => { state.items = b; pushToCloud(); }); } else alert('אין חדש'); closeAllMenus(); }; r.readAsText(f); }
+
+        function importJson(e) {
+            const f = e.target.files[0]; if(!f) return;
+            const r = new FileReader();
+            r.onload = ev => { 
+                try { 
+                    const d = JSON.parse(ev.target.result);
+                    if(confirm('האם להחליף את כל הנתונים?')) {
+                        const backup = JSON.parse(JSON.stringify(state)); 
+                        if(Array.isArray(d)) state.items = d; else { state.items = d.items||[]; state.trash = d.trash||[]; }
+                        pushToCloud(); closeAllMenus(); 
+                        showToast('נטען בהצלחה!', () => {
+                            state.items = backup.items;
+                            state.trash = backup.trash;
+                            pushToCloud();
+                        });
+                    }
+                } catch(e){ alert('שגיאה בקובץ'); } 
+            };
+            r.readAsText(f);
+        }
+
+        function smartImport(e) {
+            const f = e.target.files[0]; if (!f) return;
+            const r = new FileReader();
+            r.onload = (ev) => {
+                const lines = ev.target.result.split('\n');
+                let added = 0;
+                const backupItems = JSON.parse(JSON.stringify(state.items));
+                
+                const map = new Map(state.items.map(i => [i.content.toLowerCase().trim(), i]));
+                lines.forEach(l => {
+                    const p = l.split('|').map(s => s.trim());
+                    if (!p[0]) return;
+                    if (!map.has(p[0].toLowerCase())) {
+                        state.items.unshift({ id: Date.now()+added, content: p[0], description: p[1]||'', category: p[2]||'כללי', date: new Date().toISOString(), type: URL_REGEX.test(p[0])?'link':'text', isPinned: false });
+                        added++;
+                    }
+                });
+                
+                if(added > 0) { 
+                    pushToCloud(); 
+                    showToast(`נוספו ${added} פריטים`, () => {
+                        state.items = backupItems;
+                        pushToCloud();
+                    });
+                } else { alert('לא נמצאו פריטים חדשים'); }
+                closeAllMenus();
+            };
+            r.readAsText(f);
+        }
+
         function exportJson() { downloadFile('backup.json', JSON.stringify({ items: state.items, trash: state.trash }, null, 2), 'application/json'); closeAllMenus(); }
         function exportTxt() { downloadFile('links.txt', state.items.map(i=>`${i.content} | ${i.description} | ${i.category}`).join('\n'), 'text/plain'); closeAllMenus(); }
-        function downloadSite() { closeAllMenus(); downloadFile(`LinkManager_${new Date().toISOString().slice(0,10)}.html`, '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/html'); }
+        function downloadSite() { closeAllMenus(); downloadFile(`LinkManager_Backup_${new Date().toISOString().slice(0,10)}.html`, '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/html'); }
         function downloadSource() { closeAllMenus(); downloadFile('source.txt', '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/plain'); }
         function downloadFile(n, c, t) { const b=new Blob([c],{type:t}), u=URL.createObjectURL(b), a=document.createElement('a'); a.href=u; a.download=n; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
-        async function copyText(t) { try { await navigator.clipboard.writeText(t); showToast('הועתק'); } catch (e) { prompt('העתק:', t); } }
-        function escapeHtml(t) { return t ? t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : ''; }
+        async function copyText(t) { try { await navigator.clipboard.writeText(t); showToast('הועתק ללוח'); } catch (e) { prompt('העתק:', t); } }
+        function escapeHtml(text) { return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : ''; }
         function closeAllMenus() { document.querySelectorAll('.dropdown-content, .drop-trigger').forEach(el => el.classList.remove('show', 'active')); }
-        function updateCategoryDropdowns() { const c = new Set(state.items.map(i => i.category)); const s = document.getElementById('categoryFilter'); const d = document.getElementById('categoriesDatalist'); const v = s.value; let h = '<option value="">📂 כל הקטגוריות</option>'; let lh = ''; [...c].sort().forEach(x => { const e = escapeHtml(x); h += `<option value="${e}">${e}</option>`; lh += `<option value="${e}">`; }); s.innerHTML = h; d.innerHTML = lh; if(v && c.has(v)) s.value = v; }
+        function updateCategoryDropdowns() {
+            const cats = new Set(state.items.map(i => i.category));
+            const select = document.getElementById('categoryFilter');
+            const datalist = document.getElementById('categoriesDatalist');
+            const currentVal = select.value;
+            let html = '<option value="">📂 כל הקטגוריות</option>';
+            let listHtml = '';
+            [...cats].sort().forEach(c => { const s = escapeHtml(c); html += `<option value="${s}">${s}</option>`; listHtml += `<option value="${s}">`; });
+            select.innerHTML = html; datalist.innerHTML = listHtml;
+            if(currentVal && cats.has(currentVal)) select.value = currentVal;
+        }
+
         function initTheme() { if(localStorage.getItem('theme')==='light') { document.body.classList.remove('dark-mode'); document.getElementById('toggleDarkModeBtn').textContent='🌙'; } }
         function toggleTheme() { document.body.classList.toggle('dark-mode'); localStorage.setItem('theme', document.body.classList.contains('dark-mode')?'dark':'light'); document.getElementById('toggleDarkModeBtn').textContent=document.body.classList.contains('dark-mode')?'☀️':'🌙'; }
-        
-        function openTrashModal() { const l = document.getElementById('trashList'); l.innerHTML = ''; if(state.trash.length===0) l.innerHTML='<div style="text-align:center;padding:20px">ריק</div>'; else state.trash.forEach(i => { const d = document.createElement('div'); d.className='trash-item'; d.innerHTML=`<div style="flex-grow:1;margin-left:10px"><strong>${escapeHtml(i.description)}</strong><br><small>${escapeHtml(i.content)}</small></div><div><button onclick="restoreItem(${i.id})">♻️</button><button onclick="deleteForever(${i.id})">❌</button></div>`; l.appendChild(d); }); document.getElementById('trashModal').classList.add('open'); }
+
+        function openTrashModal() {
+            const list = document.getElementById('trashList'); list.innerHTML = '';
+            if(state.trash.length === 0) list.innerHTML = '<div style="text-align:center; padding:20px;">ריק</div>';
+            else state.trash.forEach(item => {
+                const el = document.createElement('div'); el.className = 'trash-item';
+                el.innerHTML = `<div style="flex-grow:1; margin-left:10px;"><strong>${escapeHtml(item.description)}</strong><br><small style="opacity:0.7">${escapeHtml(item.content)}</small></div><div><button onclick="restoreItem(${item.id})" style="cursor:pointer; background:none; border:none; font-size:1.2em;">♻️</button><button onclick="deleteForever(${item.id})" style="cursor:pointer; background:none; border:none; font-size:1.2em;">❌</button></div>`;
+                list.appendChild(el);
+            });
+            document.getElementById('trashModal').classList.add('open');
+        }
         function closeTrashModal() { document.getElementById('trashModal').classList.remove('open'); }
-        window.restoreItem = id => restoreFromTrash(id);
-        window.deleteForever = id => deleteForever(id);
-        function restoreFromTrash(id, n=true) { const idx = state.trash.findIndex(i => i.id===id); if(idx===-1) return; const it = state.trash[idx]; delete it.deletedAt; state.items.unshift(it); state.trash.splice(idx, 1); pushToCloud(); openTrashModal(); renderList(); if(n) showToast('שוחזר'); }
-        function deleteForever(id) { if(!confirm('למחוק?')) return; const idx = state.trash.findIndex(i=>i.id===id); if(idx!==-1) { state.trash.splice(idx, 1); pushToCloud(); openTrashModal(); } }
-        function setupScrollToTop() { const b = document.getElementById('scrollTopBtn'); window.onscroll = () => { if(document.body.scrollTop > 200 || document.documentElement.scrollTop > 200) b.classList.add('show'); else b.classList.remove('show'); }; b.onclick = () => window.scrollTo({top:0, behavior:'smooth'}); }
-        function showToast(m, u=null) { const t = document.getElementById('toast'), p = document.getElementById('toastProgress'), ub = document.getElementById('undoBtn'); if(toastTimeout) clearTimeout(toastTimeout); p.classList.remove('animating'); void p.offsetWidth; document.getElementById('toastMsg').textContent = m; if(u) { ub.style.display='block'; ub.onclick = () => { u(); t.classList.remove('visible'); }; p.classList.add('animating'); toastTimeout = setTimeout(() => t.classList.remove('visible'), 10000); } else { ub.style.display='none'; toastTimeout = setTimeout(() => t.classList.remove('visible'), 3000); } t.classList.add('visible'); }
+        window.restoreItem = function(id) {
+            const idx = state.trash.findIndex(i => i.id === id); if(idx === -1) return;
+            const item = state.trash[idx]; delete item.deletedAt;
+            state.items.unshift(item); state.trash.splice(idx, 1);
+            pushToCloud(); openTrashModal(); showToast('שוחזר');
+        }
+        window.deleteForever = function(id) {
+            if(!confirm('למחוק לצמיתות?')) return;
+            const idx = state.trash.findIndex(i => i.id === id); if(idx !== -1) { state.trash.splice(idx, 1); pushToCloud(); openTrashModal(); }
+        }
+
+        function setupScrollToTop() {
+            const btn = document.getElementById('scrollTopBtn');
+            window.onscroll = () => { if (document.body.scrollTop > 200 || document.documentElement.scrollTop > 200) btn.classList.add('show'); else btn.classList.remove('show'); };
+            btn.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function showToast(msg, undoCallback = null) {
+            const t = document.getElementById('toast');
+            const undoBtn = document.getElementById('undoBtn');
+            const progress = document.getElementById('toastProgress');
+            
+            if (toastTimeout) clearTimeout(toastTimeout);
+            progress.classList.remove('animating');
+            void progress.offsetWidth; 
+            
+            document.getElementById('toastMsg').textContent = msg;
+            
+            if (undoCallback) {
+                undoBtn.style.display = 'block';
+                undoBtn.onclick = () => { undoCallback(); t.classList.remove('visible'); };
+                progress.classList.add('animating'); 
+            } else {
+                undoBtn.style.display = 'none';
+            }
+            
+            t.classList.add('visible');
+            toastTimeout = setTimeout(() => { t.classList.remove('visible'); }, 10000);
+        }
     </script>
 </body>
 </html>
