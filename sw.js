@@ -1,4 +1,4 @@
-const CACHE_NAME = 'LinkManager-Cloud-v5';
+const CACHE_NAME = 'LinkManager-Final-v1';
 const urlsToCache = [
   './',
   './index.html',
@@ -30,12 +30,14 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  // התעלם מבקשות Firebase
   if (event.request.url.includes('firestore.googleapis.com') || 
       event.request.url.includes('googleapis.com') ||
       event.request.url.includes('firebase')) {
       return;
   }
 
+  // תמיד נסה להביא index.html מהרשת
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => caches.match('./index.html'))
