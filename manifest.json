@@ -7,7 +7,7 @@
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
   "orientation": "portrait-primary",
-  "description": "Secure cloud-based link manager",
+  "description": "Manage your links securely in the cloud",
   "icons": [
     {
       "src": "icon.jpg",
