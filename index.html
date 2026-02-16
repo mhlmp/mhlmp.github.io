@@ -720,8 +720,7 @@
                 try {
                     await navigator.share({
                         title: 'Link Manager',
-                        text: `${item.description}\n${item.content}`,
-                        url: item.type === 'link' ? item.content : null
+                        text: item.type === 'link' ? item.description : `${item.description}\n${item.content}`,                        url: item.type === 'link' ? item.content : null
                     });
                 } catch (err) { }
             } else {
@@ -869,5 +868,6 @@
     </script>
 </body>
 </html>
+
 
 
