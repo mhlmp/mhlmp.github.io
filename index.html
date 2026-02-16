@@ -723,7 +723,7 @@
                         text: `${item.description}\n${item.content}`,
                         url: item.type === 'link' ? item.content : null
                     });
-                } catch (err) { copyText(item.content); }
+                } catch (err) { }
             } else {
                 copyText(item.content);
             }
@@ -869,4 +869,5 @@
     </script>
 </body>
 </html>
+
 
