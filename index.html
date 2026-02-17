@@ -298,7 +298,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -323,6 +323,7 @@
         try {
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
+            setPersistence(auth, browserLocalPersistence);
             db = getFirestore(app);
             enableIndexedDbPersistence(db).catch((err) => {
                     if (err.code == 'failed-precondition') {
@@ -434,40 +435,47 @@
         }
 
         function setupFirebaseListeners() {
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    state.user = user;
-                    toggleAppInterface(true);
-                    document.getElementById('userName').textContent = user.displayName;
-                    document.getElementById('userAvatar').src = user.photoURL;
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            state.user = user;
+            toggleAppInterface(true);
+            
+            // עדכון מיידי של פרטי המשתמש כדי למנוע המתנה
+            document.getElementById('userName').textContent = user.displayName;
+            document.getElementById('userAvatar').src = user.photoURL;
 
-                    const userDoc = doc(db, "users", user.uid);
-                    state.unsubscribe = onSnapshot(userDoc, (docSnap) => {
-                        if (docSnap.exists()) {
-                            const d = docSnap.data();
-                            state.items = d.items || [];
-                            state.trash = d.trash || [];
-                            updateCategoryDropdowns();
-                            renderList();
-                            updateSyncStatus('online');
-                        } else {
-                            updateSyncStatus('online');
-                        }
-                    }, (err) => {
-                        console.error(err);
-                        updateSyncStatus('error');
-                    });
-                } else {
-                    if (!state.isOffline) {
-                        state.user = null;
-                        state.items = [];
-                        state.trash = [];
-                        if (state.unsubscribe) state.unsubscribe();
-                        toggleAppInterface(false);
+            const userDoc = doc(db, "users", user.uid);
+
+            // הוספת { includeMetadataChanges: true } - זה מה שמאפשר טעינה מיידית מה-Cache
+            state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
+                if (docSnap.exists()) {
+                    const d = docSnap.data();
+                    state.items = d.items || [];
+                    state.trash = d.trash || [];
+
+                    // בדיקה אם המידע הגיע מהזיכרון המקומי או מהשרת
+                    const isFromCache = docSnap.metadata.fromCache;
+                    
+                    renderList();
+                    updateCategoryDropdowns();
+                    
+                    // עדכון הסטטוס: מעלים את ה"ממתין" ברגע שיש נתונים
+                    const statusLabel = document.getElementById('connectionStatus'); // וודא שזה ה-ID אצלך
+                    if (statusLabel) {
+                        statusLabel.textContent = isFromCache ? "טוען מהזיכרון..." : "מחובר";
+                        statusLabel.style.color = isFromCache ? "#ffcc00" : "#00ff00";
                     }
                 }
+                updateSyncStatus('online');
+            }, (err) => {
+                console.error(err);
+                updateSyncStatus('error');
             });
+        } else {
+            toggleAppInterface(false);
         }
+    });
+}
 
         function toggleAppInterface(isLoggedIn) {
             document.getElementById('loggedInView').style.display = isLoggedIn ? 'flex' : 'none';
@@ -926,6 +934,7 @@
     </script>
 </body>
 </html>
+
 
 
 
