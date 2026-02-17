@@ -1,4 +1,6 @@
-const CACHE_NAME = 'LinkManager-Final-v1';
+// 1. שנה את מספר הגרסה בכל פעם שאתה מעלה עדכון ל-GitHub
+const CACHE_NAME = 'LinkManager-v1.1-' + new Date().getTime(); 
+
 const urlsToCache = [
   './',
   './index.html',
@@ -6,14 +8,16 @@ const urlsToCache = [
   './icon.jpg'
 ];
 
+// התקנה - דוחף את הגרסה החדשה מיד
 self.addEventListener('install', event => {
-  self.skipWaiting();
+  self.skipWaiting(); 
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(urlsToCache))
   );
 });
 
+// הפעלה - מנקה קאש ישן מיד
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -29,23 +33,30 @@ self.addEventListener('activate', event => {
   return self.clients.claim();
 });
 
+// אסטרטגיית טעינה: Network First (קודם רשת, אם נכשל - זיכרון)
 self.addEventListener('fetch', event => {
-  // התעלם מבקשות Firebase
+  // התעלם מבקשות Firebase וגוגל - הן מנהלות אופליין לבד
   if (event.request.url.includes('firestore.googleapis.com') || 
       event.request.url.includes('googleapis.com') ||
       event.request.url.includes('firebase')) {
       return;
   }
 
-  // תמיד נסה להביא index.html מהרשת
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request).catch(() => caches.match('./index.html'))
-    );
-    return;
-  }
-
   event.respondWith(
-    caches.match(event.request).then(response => response || fetch(event.request))
+    fetch(event.request)
+      .then(response => {
+        // אם הצלחנו להביא מהרשת, נשמור עותק עדכני בזיכרון
+        if (response && response.status === 200) {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, responseClone);
+          });
+        }
+        return response;
+      })
+      .catch(() => {
+        // אם אין אינטרנט, נטען מהזיכרון המקומי
+        return caches.match(event.request);
+      })
   );
 });
