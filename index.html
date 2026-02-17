@@ -628,6 +628,14 @@
             div.querySelector('.btn-edit').onclick = () => editItem(item);
             div.querySelector('.pin-btn').onclick = () => togglePin(item.id);
             div.querySelector('.trash-btn').onclick = () => moveToTrash(item.id);
+            // הוסף את זה בשורה חדשה בין 630 ל-631
+            const linkElement = div.querySelector('.card-link');
+            if (linkElement) {
+                linkElement.onclick = (e) => {
+                    e.preventDefault();
+                    window.open(item.content, '_blank');
+                };
+            }
             return div;
         }
 
@@ -868,6 +876,7 @@
     </script>
 </body>
 </html>
+
 
 
 
