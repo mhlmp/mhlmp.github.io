@@ -390,8 +390,23 @@
         });
 
         function initServiceWorker() {
-            if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(console.error);
-        }
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js').then(reg => {
+            // בדיקה אם יש עדכון שמחכה ברקע בזמן שהאתר פתוח
+            reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        // ברגע שהגרסה החדשה הותקנה, נציע לך לעבור אליה
+                        if (confirm("נמצא עדכון גרסה חדש ל-LINK MANAGER! האם לרענן כדי לעדכן עכשיו?")) {
+                            window.location.reload();
+                        }
+                    }
+                });
+            });
+        }).catch(console.error);
+    }
+}
 
         function setupEventListeners() {
             document.querySelectorAll('.drop-trigger').forEach(btn => {
@@ -934,6 +949,7 @@
     </script>
 </body>
 </html>
+
 
 
 
