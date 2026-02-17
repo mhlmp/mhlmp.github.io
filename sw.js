@@ -1,5 +1,5 @@
 // 1. שנה את מספר הגרסה בכל פעם שאתה מעלה עדכון ל-GitHub
-const CACHE_NAME = 'LinkManager-v1.1-' + new Date().getTime(); 
+const CACHE_NAME = 'LinkManager-v' + new Date().getTime(); 
 
 const urlsToCache = [
   './',
@@ -60,3 +60,4 @@ self.addEventListener('fetch', event => {
       })
   );
 });
+
