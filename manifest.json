@@ -1,6 +1,6 @@
 {
   "name": "Link Manager Pro",
-  "short_name": "LinkManager",
+  "short_name": "MHLMP",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -45,3 +45,4 @@
     }
   ]
 }
+
