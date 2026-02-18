@@ -423,8 +423,23 @@
 
             document.getElementById('searchInput')?.addEventListener('input', () => window.requestAnimationFrame(renderList));
             document.getElementById('categoryFilter')?.addEventListener('change', renderList);
-            document.getElementById('sortOrder')?.addEventListener('change', renderList);
-            document.getElementById('addItemForm')?.addEventListener('submit', handleAdd);
+// מנגנון חכם לשמירת המיון האחרון
+            const sortSelect = document.getElementById('sortOrder');
+            if (sortSelect) {
+                // 1. בטעינה: נבדוק מה היה שמור בזיכרון ונפעיל אותו מיד
+                const savedSort = localStorage.getItem('lastSortOrder');
+                if (savedSort) {
+                    sortSelect.value = savedSort;
+                    // שימוש ב-setTimeout קטן מבטיח שהרשימה קיימת לפני המיון
+                    setTimeout(renderList, 0); 
+                }
+
+                // 2. בשינוי: נשמור את הבחירה החדשה לזיכרון
+                sortSelect.addEventListener('change', (e) => {
+                    localStorage.setItem('lastSortOrder', e.target.value);
+                    renderList();
+                });
+            }            document.getElementById('addItemForm')?.addEventListener('submit', handleAdd);
             document.getElementById('toggleDarkModeBtn')?.addEventListener('click', toggleTheme);
             document.getElementById('toggleDuplicatesBtn')?.addEventListener('click', toggleDuplicates);
             
@@ -838,8 +853,44 @@
         
         function downloadSource() { closeAllMenus(); downloadFile('source.txt', '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/plain'); }
         function downloadFile(n, c, t) { const b=new Blob([c],{type:t}), u=URL.createObjectURL(b), a=document.createElement('a'); a.href=u; a.download=n; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
-        async function copyText(t) { try { await navigator.clipboard.writeText(t); showToast('הועתק ללוח'); } catch (e) { prompt('העתק:', t); } }
-        function escapeHtml(text) { return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : ''; }
+async function copyText(t) {
+            try {
+                // נסיון 1: השיטה המודרנית (עובדת כשיש HTTPS/אונליין)
+                await navigator.clipboard.writeText(t);
+                showToast('הועתק ללוח');
+            } catch (err) {
+                // נסיון 2: השיטה היחידה שעובדת בקבצים מקומיים באנדרואיד/אייפון
+                try {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = t;
+                    
+                    // הגדרות קריטיות למניעת קפיצות מסך במובייל
+                    textArea.style.position = "fixed";
+                    textArea.style.left = "0";
+                    textArea.style.top = "0";
+                    textArea.style.opacity = "0"; // שקוף כדי לא להסתיר
+                    textArea.setAttribute("readonly", ""); // מונע פתיחת מקלדת בטלפון!
+                    
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    
+                    // הפקודה הקריטית לאנדרואיד - בחירת הטקסט בכוח
+                    textArea.setSelectionRange(0, 999999); 
+                    
+                    const successful = document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    
+                    if (successful) {
+                        showToast('הועתק (מצב מקומי)');
+                    } else {
+                        throw new Error('Fallback failed');
+                    }
+                } catch (e) {
+                    // אם הכל נכשל (נדיר מאוד), נבקש מהמשתמש
+                    prompt("העתקה אוטומטית נחסמה. העתק מכאן:", t);
+                }
+            }
+        }        function escapeHtml(text) { return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : ''; }
         function closeAllMenus() { document.querySelectorAll('.dropdown-content, .drop-trigger').forEach(el => el.classList.remove('show', 'active')); }
         function updateCategoryDropdowns() {
             const cats = new Set(state.items.map(i => i.category));
@@ -949,6 +1000,7 @@
     </script>
 </body>
 </html>
+
 
 
 
