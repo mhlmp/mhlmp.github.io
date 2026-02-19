@@ -164,9 +164,35 @@
         #scrollTopBtn.show { opacity: 1; visibility: visible; }
         .btn-reload { padding: 4px 8px; margin-right: 5px; cursor: pointer; border: 1px solid var(--glass-border); border-radius: 4px; background: transparent; font-size: 12px; color: var(--text-secondary); }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        /* --- עיצוב מצב בחירה מרובה וסרגל פעולות --- */
+        .card-checkbox { display: none; position: absolute; top: 12px; right: 12px; transform: scale(1.4); accent-color: var(--primary-color); pointer-events: none; z-index: 10; }
+        body.selection-mode-active .card-checkbox { display: block; }
+        body.selection-mode-active .card.selected { border: 2px solid var(--primary-color); background: rgba(96, 165, 250, 0.15); }
+        body.selection-mode-active .card-actions { display: none; }
+        body.selection-mode-active .card { cursor: pointer; }
+        body.selection-mode-active .card-link { pointer-events: none; }
+        
+        #bulkActionBar { position: fixed; top: 0; left: 0; right: 0; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--glass-border); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; z-index: 5000; transform: translateY(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        #bulkActionBar.visible { transform: translateY(0); }
+        .bulk-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;}
+        .bulk-btn { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 0.9rem; transition: 0.2s; }
+        .bulk-btn:hover { background: rgba(255,255,255,0.2); }
+        .bulk-btn.delete { background: rgba(239, 68, 68, 0.2); border-color: var(--accent-red); color: #fca5a5; }
+        .bulk-btn.delete:hover { background: var(--accent-red); color: white; }
     </style>
 </head>
 <body class="dark-mode">
+    <div id="bulkActionBar">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="selectAllCheckbox" style="transform: scale(1.4); cursor: pointer;">
+            <span id="selectedCount" style="font-weight: bold; color: white;">0 נבחרו</span>
+        </div>
+        <div class="bulk-actions">
+            <button class="bulk-btn" id="bulkMoveBtn">📂 העבר לקטגוריה</button>
+            <button class="bulk-btn delete" id="bulkDeleteBtn">🗑️ מחק נבחרים</button>
+            <button class="bulk-btn" id="cancelBulkBtn">✖ ביטול</button>
+        </div>
+    </div>
     <div id="devtools-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#090a0a; color:white; z-index:999999; text-align:center; padding-top:20%; font-family:monospace; flex-direction:column; align-items:center;">
         <h1 style="font-size:2.5rem; margin-bottom:20px;">DevTools detected! Access denied.</h1>
         <p>This area is restricted.</p>
@@ -335,7 +361,8 @@
         let deferredPrompt; 
         
         let state = {
-            items: [], trash: [], user: null, unsubscribe: null, showDuplicates: true, isOffline: false
+            items: [], trash: [], user: null, unsubscribe: null, showDuplicates: true, isOffline: false,
+            selectedIds: new Set(), isSelectionMode: false // הוספנו משתנים לבחירה מרובה
         };
 
         try {
@@ -353,23 +380,30 @@
         } catch (e) { console.error("Firebase Init Error:", e); }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Check for Offline/Backup Data embedded in the file
             const offlineDataEl = document.getElementById('offline-data');
-            if (offlineDataEl && offlineDataEl.textContent.trim()) {
+            // מנגנון חכם: מנסה לקרוא קודם כל מהזיכרון של הדפדפן (כדי לזכור שינויים אחרונים)
+            const localCache = localStorage.getItem('linkManagerLocalData');
+            
+            if (localCache || (offlineDataEl && offlineDataEl.textContent.trim())) {
                 try {
-                    const parsed = JSON.parse(offlineDataEl.textContent);
+                    let parsed;
+                    if (localCache) {
+                        parsed = JSON.parse(localCache); // טוען מהזיכרון העדכני
+                    } else {
+                        parsed = JSON.parse(offlineDataEl.textContent); // טוען מהקובץ בפעם הראשונה
+                        localStorage.setItem('linkManagerLocalData', JSON.stringify(parsed)); // שומר מיד לזיכרון
+                    }
+                    
                     state.items = parsed.items || [];
                     state.trash = parsed.trash || [];
                     state.isOffline = true;
-                    // Mock user to enable UI
-                    state.user = { displayName: 'גיבוי מקומי', photoURL: 'icon.jpg', uid: 'offline' };
                     
-                    // Activate UI immediately
+                    state.user = { displayName: 'גיבוי מקומי', photoURL: 'icon.jpg', uid: 'offline' };
                     toggleAppInterface(true);
                     document.getElementById('userName').textContent = 'מצב לא-מקוון (קובץ)';
                     document.getElementById('userAvatar').src = 'icon.jpg';
                     const cloudStatus = document.querySelector('.cloud-status');
-                    cloudStatus.innerHTML = '<span class="status-dot offline"></span> עריכה מקומית';
+                    cloudStatus.innerHTML = '<span class="status-dot offline"></span> עריכה מקומית (נשמר אוטומטית)';
                     
                     updateCategoryDropdowns();
                     renderList();
@@ -566,14 +600,12 @@
 
         async function pushToCloud() {
             if (state.isOffline) {
-                // In offline mode, we just update the internal state and re-render.
-                // We update the data script tag so if they download AGAIN, it's saved.
-                document.getElementById('offline-data').textContent = JSON.stringify({
-                    items: state.items,
-                    trash: state.trash
-                });
+                // שומר את השינויים לזיכרון המקומי כדי שישרדו רענון/סגירה
+                const dataToSave = JSON.stringify({ items: state.items, trash: state.trash });
+                localStorage.setItem('linkManagerLocalData', dataToSave);
+                document.getElementById('offline-data').textContent = dataToSave; // מעדכן גם את ה-DOM להורדה עתידית
                 renderList();
-                showToast("נשמר מקומית (הורד אתר לשמירה קבועה)");
+                showToast("נשמר מקומית בהצלחה!");
                 return;
             }
             
@@ -677,6 +709,7 @@
             const noteHtml = item.note ? `<div class="card-note">📝 ${escapeHtml(item.note)}</div>` : '';
 
             div.innerHTML = `
+                <input type="checkbox" class="card-checkbox" ${state.selectedIds.has(item.id) ? 'checked' : ''}>
                 <div class="card-index">#${item.visualIndex}</div>
                 <div class="card-body">
                     ${contentHtml}
@@ -695,16 +728,31 @@
                 </div>
             `;
             
+            // מנגנון בחירה מרובה (לחיצה רגילה בזמן מצב בחירה)
+            div.onclick = (e) => {
+                if (state.isSelectionMode) {
+                    e.preventDefault(); // מונע פתיחת קישור
+                    toggleSelection(item.id);
+                }
+            };
+
+            // לחיצה ארוכה בטלפון / מקש ימני במחשב מפעילים את מצב הבחירה
+            div.addEventListener('contextmenu', (e) => {
+                if (e.target.closest('.card-actions')) return; // אל תפעיל אם לחצו על כפתור עריכה/מחיקה
+                e.preventDefault(); 
+                if (!state.isSelectionMode) enterSelectionMode(item.id);
+            });
+
             div.querySelector('.btn-share').onclick = (e) => { e.stopPropagation(); shareItem(item); };
-            div.querySelector('.btn-copy').onclick = () => copyText(item.content);
-            div.querySelector('.btn-edit').onclick = () => editItem(item);
-            div.querySelector('.pin-btn').onclick = () => togglePin(item.id);
-            div.querySelector('.trash-btn').onclick = () => moveToTrash(item.id);
-            // הוסף את זה בשורה חדשה בין 630 ל-631
+            div.querySelector('.btn-copy').onclick = (e) => { e.stopPropagation(); copyText(item.content); };
+            div.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); editItem(item); };
+            div.querySelector('.pin-btn').onclick = (e) => { e.stopPropagation(); togglePin(item.id); };
+            div.querySelector('.trash-btn').onclick = (e) => { e.stopPropagation(); moveToTrash(item.id); };
+            
             const linkElement = div.querySelector('.card-link');
             if (linkElement) {
                 linkElement.onclick = (e) => {
-                    e.preventDefault();
+                    if(state.isSelectionMode) { e.preventDefault(); return; } // חוסם פתיחה במצב עריכה
                     window.open(item.content, '_blank');
                 };
             }
@@ -1020,6 +1068,82 @@ async function copyText(t) {
             t.classList.add('visible');
             toastTimeout = setTimeout(() => { t.classList.remove('visible'); }, 10000);
         }
+        // --- פונקציות בחירה מרובה (Multi-Select) ---
+        function enterSelectionMode(firstId) {
+            state.isSelectionMode = true;
+            state.selectedIds.add(firstId);
+            document.body.classList.add('selection-mode-active');
+            updateBulkActionBar();
+            renderList();
+            if ('vibrate' in navigator) navigator.vibrate(50); // רטט קטן למובייל
+        }
+
+        function toggleSelection(id) {
+            if (state.selectedIds.has(id)) state.selectedIds.delete(id);
+            else state.selectedIds.add(id);
+            
+            if (state.selectedIds.size === 0) exitSelectionMode();
+            else { updateBulkActionBar(); renderList(); }
+        }
+
+        function exitSelectionMode() {
+            state.isSelectionMode = false;
+            state.selectedIds.clear();
+            document.body.classList.remove('selection-mode-active');
+            document.getElementById('bulkActionBar').classList.remove('visible');
+            renderList();
+        }
+
+        function updateBulkActionBar() {
+            const bar = document.getElementById('bulkActionBar');
+            document.getElementById('selectedCount').textContent = `${state.selectedIds.size} פריטים נבחרו`;
+            
+            // בודק אם כל הפריטים הנוכחיים בסינון נבחרו
+            const currentFilteredItems = document.querySelectorAll('.card').length;
+            document.getElementById('selectAllCheckbox').checked = (state.selectedIds.size > 0 && state.selectedIds.size === state.items.length);
+            bar.classList.add('visible');
+        }
+
+        // כפתורי הסרגל העליון
+        document.getElementById('cancelBulkBtn')?.addEventListener('click', exitSelectionMode);
+        
+        document.getElementById('selectAllCheckbox')?.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                state.items.forEach(i => state.selectedIds.add(i.id));
+            } else {
+                state.selectedIds.clear();
+            }
+            if (state.selectedIds.size === 0) exitSelectionMode();
+            else { updateBulkActionBar(); renderList(); }
+        });
+
+        document.getElementById('bulkDeleteBtn')?.addEventListener('click', () => {
+            if(!confirm(`האם אתה בטוח שברצונך להעביר ${state.selectedIds.size} פריטים לסל המחזור?`)) return;
+            
+            const itemsToTrash = state.items.filter(i => state.selectedIds.has(i.id));
+            itemsToTrash.forEach(i => i.deletedAt = new Date().toISOString());
+            
+            state.trash.unshift(...itemsToTrash);
+            state.items = state.items.filter(i => !state.selectedIds.has(i.id));
+            
+            pushToCloud();
+            exitSelectionMode();
+            showToast(`הועברו ${itemsToTrash.length} פריטים לסל המחזור`);
+        });
+
+        document.getElementById('bulkMoveBtn')?.addEventListener('click', () => {
+            const newCat = prompt('לאיזו קטגוריה תרצה להעביר את כל הפריטים הנבחרים? (הקלד שם או השאר "כללי")');
+            if (newCat === null) return;
+            
+            const catName = newCat.trim() || 'כללי';
+            state.items.forEach(i => {
+                if (state.selectedIds.has(i.id)) i.category = catName;
+            });
+            
+            pushToCloud();
+            exitSelectionMode();
+            showToast(`הפריטים הועברו בהצלחה לקטגוריה "${catName}"`);
+        });
         // --- אבטחה נגד DevTools ---
     const ADMIN_EMAIL = "meirhadad74@gmail.com"; // ⚠️ שנה לאימייל שלך בדיוק!
 
@@ -1062,6 +1186,7 @@ async function copyText(t) {
     </script>
 </body>
 </html>
+
 
 
 
