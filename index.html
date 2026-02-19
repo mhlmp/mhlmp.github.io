@@ -310,6 +310,7 @@
           <div class="modal-header">
                 <h3>🗑️ סל מחזור</h3>
                 <div style="display: flex; gap: 10px; align-items: center;">
+                    <button id="restoreAllBtn" style="background: rgba(0, 166, 81, 0.1); color: #86efac; border: 1px solid var(--accent-green); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem;">♻️ שחזר הכל</button>
                     <button id="emptyTrashBtn" style="background: rgba(239, 68, 68, 0.1); color: #fca5a5; border: 1px solid var(--accent-red); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem;">🧹 רוקן הכל</button>
                     <button class="btn-close-modal">✖</button>
                 </div>
@@ -1199,6 +1200,31 @@ async function copyText(t) {
                 updateCategoryDropdowns();
             });
         });
+        
+// לוגיקה לשחזור מלא של סל המחזור עם אפשרות UNDO
+        window.restoreAllTrash = function() {
+            if (state.trash.length === 0) return;
+            if (!confirm(`האם אתה בטוח שברצונך לשחזר את כל ${state.trash.length} הפריטים?`)) return;
+            
+            const originalItems = [...state.items]; // גיבוי רשימה ראשית
+            const itemsToRestore = JSON.parse(JSON.stringify(state.trash)); // העתקה עמוקה של הסל
+            
+            itemsToRestore.forEach(item => delete item.deletedAt); // ניקוי חותמת המחיקה
+            
+            state.items = [...itemsToRestore, ...state.items]; // הוספה לראש הרשימה
+            state.trash = []; // ריקון הסל
+            
+            pushToCloud();
+            openTrashModal(); // רענון התצוגה במודאל
+            
+            showToast(`שוחזרו ${itemsToRestore.length} פריטים`, () => {
+                state.items = originalItems; // ביטול: מחזיר רשימה מקורית
+                state.trash = itemsToRestore; // מחזיר פריטים לסל
+                pushToCloud();
+                openTrashModal();
+            });
+        };
+        
         // לוגיקה לריקון מלא של סל המחזור עם אפשרות UNDO
         window.emptyTrash = function() {
             if (state.trash.length === 0) return;
@@ -1217,6 +1243,7 @@ async function copyText(t) {
             });
         };
 
+        document.getElementById('restoreAllBtn')?.addEventListener('click', restoreAllTrash);
         // חיבור הכפתור מה-HTML לפונקציה
         document.getElementById('emptyTrashBtn')?.addEventListener('click', emptyTrash);
        // --- אבטחה נגד DevTools ---
@@ -1262,6 +1289,7 @@ async function copyText(t) {
     </script>
 </body>
 </html>
+
 
 
 
