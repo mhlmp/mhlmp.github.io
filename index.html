@@ -785,8 +785,9 @@
 
         function handleEditSubmit(e) {
             e.preventDefault();
-            const id = parseInt(document.getElementById('editItemId').value);
-            const item = state.items.find(i => i.id === id);
+            const idValue = document.getElementById('editItemId').value;
+            // הופך בבטחה למספר גדול (מזהה הפריט) ומוודא שהחיפוש מדויק
+            const item = state.items.find(i => String(i.id) === idValue);
             if (!item) return;
             
             const originalItem = JSON.parse(JSON.stringify(item));
@@ -1061,6 +1062,7 @@ async function copyText(t) {
     </script>
 </body>
 </html>
+
 
 
 
