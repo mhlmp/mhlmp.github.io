@@ -1033,16 +1033,47 @@ async function copyText(t) {
             document.getElementById('trashModal').classList.add('open');
         }
         function closeTrashModal() { document.getElementById('trashModal').classList.remove('open'); }
-        window.restoreItem = function(id) {
-            const idx = state.trash.findIndex(i => i.id === id); if(idx === -1) return;
-            const item = state.trash[idx]; delete item.deletedAt;
-            state.items.unshift(item); state.trash.splice(idx, 1);
-            pushToCloud(); openTrashModal(); showToast('שוחזר');
-        }
+       window.restoreItem = function(id) {
+            const idx = state.trash.findIndex(i => i.id === id); 
+            if(idx === -1) return;
+            
+            const item = JSON.parse(JSON.stringify(state.trash[idx])); 
+            delete item.deletedAt;
+            
+            state.items.unshift(item);
+            state.trash.splice(idx, 1);
+            
+            pushToCloud(); 
+            openTrashModal(); 
+            
+            showToast('הפריט שוחזר', () => {
+                const itemToTrash = state.items.find(i => i.id === id);
+                if (itemToTrash) {
+                    itemToTrash.deletedAt = new Date().toISOString();
+                    state.trash.splice(idx, 0, itemToTrash);
+                    state.items = state.items.filter(i => i.id !== id);
+                    pushToCloud();
+                    openTrashModal();
+                }
+            });
+        };
+
         window.deleteForever = function(id) {
-            if(!confirm('למחוק לצמיתות?')) return;
-            const idx = state.trash.findIndex(i => i.id === id); if(idx !== -1) { state.trash.splice(idx, 1); pushToCloud(); openTrashModal(); }
-        }
+            const idx = state.trash.findIndex(i => i.id === id); 
+            if(idx === -1) return;
+            
+            const itemToDelete = JSON.parse(JSON.stringify(state.trash[idx]));
+            state.trash.splice(idx, 1);
+            
+            pushToCloud(); 
+            openTrashModal(); 
+            
+            showToast('הפריט נמחק לצמיתות', () => {
+                state.trash.splice(idx, 0, itemToDelete);
+                pushToCloud();
+                openTrashModal();
+            });
+        };
 
         function setupScrollToTop() {
             const btn = document.getElementById('scrollTopBtn');
@@ -1144,18 +1175,29 @@ async function copyText(t) {
             });
         });
 
-        document.getElementById('bulkMoveBtn')?.addEventListener('click', () => {
+       document.getElementById('bulkMoveBtn')?.addEventListener('click', () => {
             const newCat = prompt('לאיזו קטגוריה תרצה להעביר את כל הפריטים הנבחרים? (הקלד שם או השאר "כללי")');
             if (newCat === null) return;
             
             const catName = newCat.trim() || 'כללי';
+            // יצירת גיבוי עמוק לפני השינוי
+            const originalItems = JSON.parse(JSON.stringify(state.items)); 
+            
             state.items.forEach(i => {
                 if (state.selectedIds.has(i.id)) i.category = catName;
             });
             
             pushToCloud();
+            updateCategoryDropdowns(); // מעדכן את הרשימה למעלה אם נוצרה קטגוריה חדשה
+            const count = state.selectedIds.size;
             exitSelectionMode();
-            showToast(`הפריטים הועברו בהצלחה לקטגוריה "${catName}"`);
+            
+            // הודעה עם כפתור ביטול שמחזיר הכל לקדמותו
+            showToast(`${count} פריטים הועברו לקטגוריה "${catName}"`, () => {
+                state.items = originalItems; 
+                pushToCloud();
+                updateCategoryDropdowns();
+            });
         });
         // לוגיקה לריקון מלא של סל המחזור עם אפשרות UNDO
         window.emptyTrash = function() {
@@ -1220,6 +1262,7 @@ async function copyText(t) {
     </script>
 </body>
 </html>
+
 
 
 
