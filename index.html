@@ -237,15 +237,18 @@
                     </div>
                 </div>
 
-                <div class="dropdown">
-                    <button class="action-btn btn-txt drop-trigger" data-target="txtMenu"><span>📄</span> ניהול טקסט <span>▼</span></button>
-                    <div id="txtMenu" class="dropdown-content">
-                        <button id="exportTxtBtn">📤 ייצוא רשימה ל-TXT</button>
-                        <div class="dropdown-divider"></div>
-                        <label for="smartImportInput">🔄 <b>ייבוא חכם (מיזוג)</b></label>
-                        <input type="file" id="smartImportInput" accept=".txt">
-                    </div>
-                </div>
+               <div class="dropdown">
+    <button class="action-btn btn-txt drop-trigger" data-target="txtMenu"><span>📄</span> ניהול טקסט <span>▼</span></button>
+    <div id="txtMenu" class="dropdown-content">
+        <button id="exportTxtBtn">📤 ייצוא רשימה ל-TXT</button>
+        <div class="dropdown-divider"></div>
+        <label for="smartImportInput">🔄 <b>ייבוא חכם (מיזוג)</b></label>
+        <input type="file" id="smartImportInput" accept=".txt">
+        <div class="dropdown-divider"></div>
+        <label for="wipeDataInput" style="color: var(--accent-red);">⚠️ <b>מחק הכל (העלה קובץ ריק)</b></label>
+        <input type="file" id="wipeDataInput" accept=".txt">
+    </div>
+</div>
 
                 <div class="dropdown">
                     <button class="action-btn btn-site drop-trigger" data-target="siteMenu"><span>💾</span> ניהול אתר <span>▼</span></button>
@@ -285,7 +288,22 @@
             <div id="trashList" class="modal-body"></div>
         </div>
     </div>
-
+<div id="editModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
+        <div class="modal-content" style="padding: 20px; width: 90%; max-width: 400px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border);">
+            <h3 style="margin-top:0; color: var(--text-primary);">✏️ עריכת פריט</h3>
+            <form id="editItemForm" style="display: flex; flex-direction: column; gap: 12px;">
+                <input type="hidden" id="editItemId">
+                <textarea id="editItemContent" rows="2" required placeholder="תוכן..." style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%; box-sizing: border-box;"></textarea>
+                <input type="text" id="editItemDescription" placeholder="תיאור הפריט" style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%; box-sizing: border-box;">
+                <input type="text" id="editItemCategory" list="categoriesDatalist" placeholder="קטגוריה (בחר או הקלד)" style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%; box-sizing: border-box;">
+                <input type="text" id="editItemNote" placeholder="הערה אישית" style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%; box-sizing: border-box;">
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button type="submit" style="flex: 1; background: var(--accent-green); color: white; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">שמור שינויים</button>
+                    <button type="button" onclick="document.getElementById('editModal').style.display='none'" style="flex: 1; background: rgba(127,127,127,0.2); color: var(--text-primary); padding: 12px; border: 1px solid var(--glass-border); border-radius: 8px; cursor: pointer; font-weight: bold;">ביטול</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <div id="toast">
         <div class="toast-content">
             <span id="toastMsg">הודעה</span>
@@ -451,13 +469,18 @@
             document.querySelector('.btn-close-modal')?.addEventListener('click', closeTrashModal);
             document.getElementById('forceReloadBtn')?.addEventListener('click', forceReload);
 
-            ['importJsonInput', 'smartImportInput'].forEach(id => {
+           ['importJsonInput', 'smartImportInput', 'wipeDataInput'].forEach(id => {
                 const el = document.getElementById(id);
                 if(el) {
                     el.addEventListener('click', (e) => e.target.value = null);
-                    el.addEventListener('change', id === 'importJsonInput' ? importJson : smartImport);
+                    el.addEventListener('change', (e) => {
+                        if (id === 'importJsonInput') importJson(e);
+                        else if (id === 'smartImportInput') smartImport(e);
+                        else if (id === 'wipeDataInput') handleWipeData(e);
+                    });
                 }
             });
+            document.getElementById('editItemForm')?.addEventListener('submit', handleEditSubmit);
             document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
             document.getElementById('exportTxtBtn')?.addEventListener('click', exportTxt);
             document.getElementById('downloadHtmlBtn')?.addEventListener('click', downloadSite);
@@ -750,18 +773,33 @@
             }
         }
 
-        function editItem(item) {
-            const originalItem = JSON.parse(JSON.stringify(item));
-            const c = prompt('תוכן:', item.content);
-            if (c === null) return;
+       function editItem(item) {
+            // פותח את חלון העריכה וממלא אותו בנתונים הקיימים
+            document.getElementById('editItemId').value = item.id;
+            document.getElementById('editItemContent').value = item.content;
+            document.getElementById('editItemDescription').value = item.description || '';
+            document.getElementById('editItemCategory').value = item.category || '';
+            document.getElementById('editItemNote').value = item.note || '';
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        function handleEditSubmit(e) {
+            e.preventDefault();
+            const id = parseInt(document.getElementById('editItemId').value);
+            const item = state.items.find(i => i.id === id);
+            if (!item) return;
             
+            const originalItem = JSON.parse(JSON.stringify(item));
+            
+            const c = document.getElementById('editItemContent').value.trim();
             item.content = c;
-            item.description = prompt('תיאור:', item.description) || '';
-            item.category = prompt('קטגוריה:', item.category) || 'כללי';
-            item.note = prompt('הערה:', item.note) || '';
+            item.description = document.getElementById('editItemDescription').value.trim();
+            item.category = document.getElementById('editItemCategory').value.trim() || 'כללי';
+            item.note = document.getElementById('editItemNote').value.trim();
             item.type = URL_REGEX.test(c) ? 'link' : 'text';
             
             pushToCloud();
+            document.getElementById('editModal').style.display = 'none';
             
             showToast('עודכן בהצלחה', () => {
                 const currentItem = state.items.find(i => i.id === originalItem.id);
@@ -837,7 +875,30 @@
             };
             r.readAsText(f);
         }
-
+function handleWipeData(e) {
+            const f = e.target.files[0]; if (!f) return;
+            const r = new FileReader();
+            r.onload = (ev) => {
+                const text = ev.target.result.trim();
+                // בודק אם הקובץ אכן ריק לחלוטין
+                if (text === "") {
+                    if (confirm("הקובץ ריק! האם אתה בטוח שברצונך למחוק את כל הנתונים בחשבון זה? פעולה זו אינה הפיכה!")) {
+                        const backupItems = JSON.parse(JSON.stringify(state.items)); // שומר גיבוי ליתר ביטחון
+                        state.items = [];
+                        pushToCloud();
+                        showToast('⚠️ כל הנתונים נמחקו', () => {
+                            // כפתור חרטה (Undo) מובנה בתוך הטוסט!
+                            state.items = backupItems;
+                            pushToCloud();
+                        });
+                        closeAllMenus();
+                    }
+                } else {
+                    alert("פעולת המחיקה בוטלה: הקובץ שהעלית אינו ריק!");
+                }
+            };
+            r.readAsText(f);
+        }
         function exportJson() { downloadFile('backup.json', JSON.stringify({ items: state.items, trash: state.trash }, null, 2), 'application/json'); closeAllMenus(); }
         function exportTxt() { downloadFile('links.txt', state.items.map(i=>`${i.content} | ${i.description} | ${i.category}`).join('\n'), 'text/plain'); closeAllMenus(); }
         
@@ -1000,6 +1061,7 @@ async function copyText(t) {
     </script>
 </body>
 </html>
+
 
 
 
