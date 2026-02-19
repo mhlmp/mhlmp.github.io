@@ -599,11 +599,12 @@
         }
 
         async function pushToCloud() {
-            if (state.isOffline) {
+           if (state.isOffline) {
                 // שומר את השינויים לזיכרון המקומי כדי שישרדו רענון/סגירה
                 const dataToSave = JSON.stringify({ items: state.items, trash: state.trash });
                 localStorage.setItem('linkManagerLocalData', dataToSave);
                 document.getElementById('offline-data').textContent = dataToSave; // מעדכן גם את ה-DOM להורדה עתידית
+                updateCategoryDropdowns(); // <--- התיקון: מעדכן מיד את רשימת הקטגוריות בסרגל העליון!
                 renderList();
                 showToast("נשמר מקומית בהצלחה!");
                 return;
@@ -701,7 +702,7 @@
 
         function createCard(item) {
             const div = document.createElement('div');
-            div.className = `card ${item.isPinned ? 'pinned' : ''}`;
+           div.className = `card ${item.isPinned ? 'pinned' : ''} ${state.selectedIds.has(item.id) ? 'selected' : ''}`;
             const safeContent = escapeHtml(item.content);
             const contentHtml = item.type === 'link' 
                 ? `<a href="${safeContent}" class="card-link" target="_blank">${safeContent}</a>`
@@ -1144,48 +1145,50 @@ async function copyText(t) {
             exitSelectionMode();
             showToast(`הפריטים הועברו בהצלחה לקטגוריה "${catName}"`);
         });
-        // --- אבטחה נגד DevTools ---
-    const ADMIN_EMAIL = "meirhadad74@gmail.com"; // ⚠️ שנה לאימייל שלך בדיוק!
+       // --- אבטחה נגד DevTools ---
+        const ADMIN_EMAIL = "meirhadad74@gmail.com"; // ⚠️ שנה לאימייל שלך בדיוק!
 
-    function checkDevTools() {
-        // אם זה האדמין - שחרר הכל
-        if (state.user && state.user.email === ADMIN_EMAIL) {
-            document.getElementById('devtools-overlay').style.display = 'none';
-            return;
+        function checkDevTools() {
+            // אם זה האדמין או אם אנחנו מריצים קובץ גיבוי מקומי - שחרר הכל
+            if (state.isOffline || (state.user && state.user.email === ADMIN_EMAIL)) {
+                document.getElementById('devtools-overlay').style.display = 'none';
+                return;
+            }
+
+            // הגדרות זיהוי
+            const threshold = 160;
+            const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+            const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+            
+            // בדיקה אם הכלים פתוחים
+            if ((widthThreshold || heightThreshold) && !document.fullscreenElement) {
+                document.getElementById('devtools-overlay').style.display = 'flex';
+                // דיבאגר שתוקע את הדפדפן למי שלא אדמין
+                debugger; 
+            } else {
+                document.getElementById('devtools-overlay').style.display = 'none';
+            }
         }
 
-        // הגדרות זיהוי
-        const threshold = 160;
-        const widthThreshold = window.outerWidth - window.innerWidth > threshold;
-        const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+        // הפעלת הבדיקה כל שנייה
+        setInterval(checkDevTools, 1000);
+
+        // חסימת מקשים (F12, עכבר ימני וכו')
+        document.addEventListener('contextmenu', e => {
+            if (state.isOffline || (state.user && state.user.email === ADMIN_EMAIL)) return;
+            if (!state.isSelectionMode) e.preventDefault(); // מאפשר לחצן ימני רק במצב אופליין/אדמין
+        });
         
-        // בדיקה אם הכלים פתוחים
-        if ((widthThreshold || heightThreshold) && !document.fullscreenElement) {
-            document.getElementById('devtools-overlay').style.display = 'flex';
-            // דיבאגר שתוקע את הדפדפן למי שלא אדמין
-            debugger; 
-        } else {
-            document.getElementById('devtools-overlay').style.display = 'none';
-        }
-    }
-
-    // הפעלת הבדיקה כל שנייה
-    setInterval(checkDevTools, 1000);
-
-    // חסימת מקשים (F12, עכבר ימני וכו')
-    document.addEventListener('contextmenu', e => {
-        if (!state.user || state.user.email !== ADMIN_EMAIL) e.preventDefault();
-    });
-    
-    document.addEventListener('keydown', e => {
-        if (state.user && state.user.email === ADMIN_EMAIL) return;
-        if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) || (e.ctrlKey && e.key === 'u')) {
-            e.preventDefault();
-        }
-    });
+        document.addEventListener('keydown', e => {
+            if (state.isOffline || (state.user && state.user.email === ADMIN_EMAIL)) return;
+            if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) || (e.ctrlKey && e.key === 'u')) {
+                e.preventDefault();
+            }
+        });
     </script>
 </body>
 </html>
+
 
 
 
