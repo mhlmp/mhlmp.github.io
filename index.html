@@ -307,9 +307,12 @@
 
     <div id="trashModal">
         <div class="modal-content">
-            <div class="modal-header">
+          <div class="modal-header">
                 <h3>🗑️ סל מחזור</h3>
-                <button class="btn-close-modal">✖</button>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button id="emptyTrashBtn" style="background: rgba(239, 68, 68, 0.1); color: #fca5a5; border: 1px solid var(--accent-red); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem;">🧹 רוקן הכל</button>
+                    <button class="btn-close-modal">✖</button>
+                </div>
             </div>
             <div id="trashList" class="modal-body"></div>
         </div>
@@ -1121,7 +1124,10 @@ async function copyText(t) {
         document.getElementById('bulkDeleteBtn')?.addEventListener('click', () => {
             if(!confirm(`האם אתה בטוח שברצונך להעביר ${state.selectedIds.size} פריטים לסל המחזור?`)) return;
             
+            const originalItems = [...state.items]; // גיבוי לצורך UNDO
+            const selectedIdsArray = Array.from(state.selectedIds);
             const itemsToTrash = state.items.filter(i => state.selectedIds.has(i.id));
+            
             itemsToTrash.forEach(i => i.deletedAt = new Date().toISOString());
             
             state.trash.unshift(...itemsToTrash);
@@ -1129,7 +1135,13 @@ async function copyText(t) {
             
             pushToCloud();
             exitSelectionMode();
-            showToast(`הועברו ${itemsToTrash.length} פריטים לסל המחזור`);
+            
+            // הוספת ה-Callback שמאפשר את כפתור ה-UNDO בטוסט
+            showToast(`הועברו ${itemsToTrash.length} פריטים לסל המחזור`, () => {
+                state.items = originalItems; // מחזיר את הפריטים לרשימה
+                state.trash = state.trash.filter(t => !selectedIdsArray.includes(t.id)); // מוציא אותם מהסל
+                pushToCloud();
+            });
         });
 
         document.getElementById('bulkMoveBtn')?.addEventListener('click', () => {
@@ -1145,6 +1157,26 @@ async function copyText(t) {
             exitSelectionMode();
             showToast(`הפריטים הועברו בהצלחה לקטגוריה "${catName}"`);
         });
+        // לוגיקה לריקון מלא של סל המחזור עם אפשרות UNDO
+        window.emptyTrash = function() {
+            if (state.trash.length === 0) return;
+            if (!confirm(`האם אתה בטוח שברצונך למחוק לצמיתות את כל ${state.trash.length} הפריטים?`)) return;
+            
+            const originalTrash = [...state.trash]; // גיבוי לצורך ביטול
+            state.trash = [];
+            
+            pushToCloud();
+            openTrashModal(); // מרענן את התצוגה
+            
+            showToast('סל המחזור הותרק', () => {
+                state.trash = originalTrash; // החזרת הכל לסל במידת הצורך
+                pushToCloud();
+                openTrashModal();
+            });
+        };
+
+        // חיבור הכפתור מה-HTML לפונקציה
+        document.getElementById('emptyTrashBtn')?.addEventListener('click', emptyTrash);
        // --- אבטחה נגד DevTools ---
         const ADMIN_EMAIL = "meirhadad74@gmail.com"; // ⚠️ שנה לאימייל שלך בדיוק!
 
@@ -1188,6 +1220,7 @@ async function copyText(t) {
     </script>
 </body>
 </html>
+
 
 
 
