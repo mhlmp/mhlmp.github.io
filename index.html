@@ -626,7 +626,6 @@
             const container = document.getElementById('listContainer');
             container.innerHTML = '';
 
-            // הוספנו trim() כדי שאם בטעות לחצת על רווח לפני או אחרי המילה, החיפוש עדיין יעבוד
             const query = document.getElementById('searchInput').value.toLowerCase().trim();
             const catFilter = document.getElementById('categoryFilter').value;
             const sort = document.getElementById('sortOrder').value;
@@ -647,7 +646,7 @@
 
             sortedFullList.forEach(item => item.visualIndex = indexMap.get(item.id));
 
-            // זיהוי המקורי מול ההעתקים (הישן ביותר הוא המקורי)
+            // זיהוי המקורי מול ההעתקים
             const seenContents = new Map(); 
             chronologicalList.forEach(i => {
                 const k = i.content.toLowerCase().trim();
@@ -655,22 +654,23 @@
                     seenContents.set(k, i.id); 
                     i.isDup = false; 
                 } else {
-                    i.isDup = true; // זה ההעתק
+                    i.isDup = true; 
                 }
             });
 
             const isHashSearch = /^#\s*\d+$/.test(query);
             const searchNum = isHashSearch ? parseInt(query.replace(/\D/g, '')) : null;
             
-            // זיהוי פקודת חיפוש מיוחדת לכפילויות
             const isDupSearch = query === '#כפול' || query === '#כפולים';
 
-            // מנגנון הסינון החכם
+            // המשתנה המנצח: בודק אם אנחנו במצב "בידוד כפילויות" (דרך החיפוש או הכפתור)
+            const isolateDuplicatesMode = !state.showDuplicates || isDupSearch;
+
             let filtered = sortedFullList.filter(i => {
                 const matchesCat = !catFilter || i.category === catFilter;
 
-                // אם המשתמש הקליד #כפול או #כפולים - נציג רק את ההעתקים
-                if (isDupSearch) {
+                if (isolateDuplicatesMode) {
+                    // במצב בידוד: נציג אך ורק פריטים שהם העתקים, בהתאם לקטגוריה המסוננת
                     return i.isDup && matchesCat;
                 }
                 
@@ -706,9 +706,8 @@
                 regularItems.forEach(i => {
                     let displayCategory = i.category;
                     
-                    // הלוגיקה החכמה: גם בלחיצה על כפתור ⚠️ וגם בחיפוש #כפול - 
-                    // נקבץ את הפריטים יחד לקטגוריה בולטת אחת
-                    if ((!state.showDuplicates && i.isDup) || (isDupSearch && i.isDup)) {
+                    // אם אנחנו במצב בידוד, נדרוס את שם הקטגוריה המקורי ונקבץ הכל תחת כותרת אחת
+                    if (isolateDuplicatesMode) {
                         displayCategory = "⚠️ כפולים";
                     }
                     
@@ -716,7 +715,7 @@
                     groups[displayCategory].push(i);
                 });
 
-                // סידור הרשימה כך ש"כפולים" יופיעו תמיד למעלה
+                // סידור הרשימה כך שקבוצת הכפולים תופיע תמיד בראש המסך
                 Object.keys(groups).sort((a,b) => {
                     if (a.startsWith("⚠️")) return -1; 
                     if (b.startsWith("⚠️")) return 1;
@@ -724,7 +723,6 @@
                 }).forEach(cat => renderGroup(container, cat, groups[cat], false));
             }
         }
-
         function renderGroup(container, title, items, isPinned) {
             const section = document.createElement('div');
             section.className = 'category-block';
@@ -920,7 +918,20 @@
             }
         }
 
-        function toggleDuplicates() { state.showDuplicates = !state.showDuplicates; renderList(); }
+       function toggleDuplicates() { 
+            state.showDuplicates = !state.showDuplicates; 
+            const btn = document.getElementById('toggleDuplicatesBtn');
+            if (!state.showDuplicates) {
+                // כשהכפתור מופעל (מצב בידוד כפילויות) - נצבע אותו בזהב זוהר
+                btn.style.background = 'rgba(245, 158, 11, 0.2)';
+                btn.style.borderColor = 'var(--accent-gold)';
+            } else {
+                // כשהכפתור מכובה (מצב רגיל) - יחזור לעיצוב השקוף
+                btn.style.background = '';
+                btn.style.borderColor = '';
+            }
+            renderList(); 
+        }
 
         function importJson(e) {
             const f = e.target.files[0]; if(!f) return;
@@ -1332,6 +1343,7 @@ async function copyText(t) {
     </script>
 </body>
 </html>
+
 
 
 
