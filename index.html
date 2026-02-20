@@ -1236,7 +1236,7 @@ async function copyText(t) {
             pushToCloud();
             openTrashModal(); // מרענן את התצוגה
             
-            showToast('סל המחזור הותרק', () => {
+            showToast('סל המחזור רוקן', () => {
                 state.trash = originalTrash; // החזרת הכל לסל במידת הצורך
                 pushToCloud();
                 openTrashModal();
@@ -1289,6 +1289,7 @@ async function copyText(t) {
     </script>
 </body>
 </html>
+
 
 
 
