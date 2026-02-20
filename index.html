@@ -646,21 +646,35 @@
 
             sortedFullList.forEach(item => item.visualIndex = indexMap.get(item.id));
 
-            const seen = new Set(), dups = new Set();
-            sortedFullList.forEach(i => {
+            // אלגוריתם זיהוי כפילויות חכם: סורק מהישן לחדש כדי לשמור על הראשון כמקורי
+            const seenContents = new Map(); 
+            
+            chronologicalList.forEach(i => {
                 const k = i.content.toLowerCase().trim();
-                if (seen.has(k)) { i.isDup = true; dups.add(k); } else { i.isDup = false; seen.add(k); }
+                if (!seenContents.has(k)) {
+                    seenContents.set(k, i.id); 
+                    i.isDup = false; 
+                    i.isOriginalDup = false; 
+                } else {
+                    i.isDup = true; // פריט זה הוא העתק
+                    const originalId = seenContents.get(k);
+                    const originalItem = chronologicalList.find(orig => originalId === orig.id);
+                    if(originalItem) originalItem.isOriginalDup = true;
+                }
             });
-            sortedFullList.forEach(i => { if(dups.has(i.content.toLowerCase().trim())) i.isDup = true; });
 
             const isHashSearch = /^#\s*\d+$/.test(query);
             const searchNum = isHashSearch ? parseInt(query.replace(/\D/g, '')) : null;
 
             let filtered = sortedFullList.filter(i => {
                 if (isHashSearch) return i.visualIndex === searchNum;
-                if (!state.showDuplicates && i.isDup && state.items.indexOf(i) !== state.items.findIndex(x => x.content.toLowerCase() === i.content.toLowerCase())) return false;
+                
+                // הסתרת ההעתקים כשהכפתור כבוי (המקורי נשאר)
+                if (!state.showDuplicates && i.isDup) return false;
+                
                 const matchesSearch = !query || i.content.toLowerCase().includes(query) || i.description.toLowerCase().includes(query) || i.category.toLowerCase().includes(query) || (i.note && i.note.toLowerCase().includes(query));
                 const matchesCat = !catFilter || i.category === catFilter;
+                
                 return matchesSearch && matchesCat;
             });
 
@@ -685,12 +699,24 @@
                 if (pinnedItems.length > 0) renderGroup(container, '📌 מוצמד', pinnedItems, true);
 
                 const groups = {};
+                
                 regularItems.forEach(i => {
-                    if(!groups[i.category]) groups[i.category] = [];
-                    groups[i.category].push(i);
+                    // שיוך פריטים שהם העתקים לקטגוריית הכפילויות המיוחדת
+                    let displayCategory = i.category;
+                    if (state.showDuplicates && i.isDup) {
+                        displayCategory = "⚠️ כפילויות (למחיקה/עריכה)";
+                    }
+                    
+                    if(!groups[displayCategory]) groups[displayCategory] = [];
+                    groups[displayCategory].push(i);
                 });
 
-                Object.keys(groups).sort().forEach(cat => renderGroup(container, cat, groups[cat], false));
+                // סידור הרשימה כך שקבוצת הכפילויות תופיע למעלה (מתחת למוצמדים)
+                Object.keys(groups).sort((a,b) => {
+                    if (a.startsWith("⚠️")) return -1; 
+                    if (b.startsWith("⚠️")) return 1;
+                    return a.localeCompare(b);
+                }).forEach(cat => renderGroup(container, cat, groups[cat], false));
             }
         }
 
@@ -768,6 +794,18 @@
             e.preventDefault();
             const content = document.getElementById('itemContent').value.trim();
             if (!content) return;
+            
+            // בדיקת כפילות: מחפש פריט קיים עם בדיוק אותו תוכן (מתעלם מאותיות גדולות/קטנות)
+            const existingItem = state.items.find(i => i.content.toLowerCase() === content.toLowerCase());
+            
+            // אם קיים, קופצת הודעת התראה שמאפשרת לבחור אם להוסיף בכל זאת
+            if (existingItem) {
+                const addAnyway = confirm(`⚠️ הפריט הזה כבר קיים במאגר תחת הקטגוריה "${existingItem.category}".\n\nהאם תרצה להוסיף אותו שוב ככפילות?`);
+                if (!addAnyway) {
+                    e.target.reset(); // אם המשתמש התחרט, מנקה את הטופס ועוצר
+                    return;
+                }
+            }
             
             const newItem = {
                 id: Date.now(),
@@ -1289,6 +1327,7 @@ async function copyText(t) {
     </script>
 </body>
 </html>
+
 
 
 
