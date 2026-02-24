@@ -441,19 +441,7 @@
                     showToast('נטען ממצב גיבוי מקומי (Offline Mode)');
                 } catch(e) { console.error("Offline parse error", e); }
             }
-            // מנגנון Zero-Lag: טעינת "מטמון חם" מיידית למשתמשים מחוברים
-            if (!state.isOffline) {
-                const warmCache = localStorage.getItem('linkManager_warmCache');
-                if (warmCache) {
-                    try {
-                        const parsedCache = JSON.parse(warmCache);
-                        state.items = parsedCache.items || [];
-                        state.trash = parsedCache.trash || [];
-                        renderList(); // מצייר את הרשימה ב-0 שניות!
-                        updateCategoryDropdowns();
-                    } catch(e) { console.error("Warm cache error", e); }
-                }
-            }
+            
             initServiceWorker();
             initTheme();
             setupEventListeners();
@@ -568,13 +556,25 @@
         if (user) {
             state.user = user;
             toggleAppInterface(true);
-            // מפעיל מסך טעינה *רק* אם ה-Warm Cache ריק (מצב של משתמש חדש או אחרי ניקוי)
-            if (state.items.length === 0) {
+            state.user = user;
+            toggleAppInterface(true);
+
+            // --- אבטחה: קריאת הנתונים מהמטמון *אך ורק* עבור המשתמש שזוהה כעת ---
+            const userCacheKey = 'linkManager_cache_' + user.uid;
+            const warmCache = localStorage.getItem(userCacheKey);
+            
+            if (warmCache) {
+                try {
+                    const parsedCache = JSON.parse(warmCache);
+                    state.items = parsedCache.items || [];
+                    state.trash = parsedCache.trash || [];
+                    renderList(); 
+                    updateCategoryDropdowns();
+                } catch(e) { console.error("Cache load error", e); }
+            } else if (state.items.length === 0) {
+                // הפעלת מסך טעינה רק אם אין מטמון (משתמש חדש לגמרי במכשיר זה)
                 const loader = document.getElementById('loading-screen');
-                if(loader) {
-                    loader.style.display = 'flex';
-                    loader.style.opacity = '1';
-                }
+                if(loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
             }
             // עדכון מיידי של פרטי המשתמש כדי למנוע המתנה
             document.getElementById('userName').textContent = user.displayName;
@@ -588,8 +588,8 @@
                     const d = docSnap.data();
                     state.items = d.items || [];
                     state.trash = d.trash || [];
-                    // שמירת "מטמון חם" להפעלה מיידית בפעם הבאה
-                    localStorage.setItem('linkManager_warmCache', JSON.stringify({ items: state.items, trash: state.trash }));
+                    // שמירה מאובטחת של המטמון תחת המזהה של המשתמש הספציפי
+                    localStorage.setItem('linkManager_cache_' + user.uid, JSON.stringify({ items: state.items, trash: state.trash }));
                     // בדיקה אם המידע הגיע מהזיכרון המקומי או מהשרת
                     const isFromCache = docSnap.metadata.fromCache;
                     
@@ -637,11 +637,14 @@
 
         async function cloudLogin() { try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (e) { alert(e.message); } }
         async function cloudLogout() { 
+            if(state.user) localStorage.removeItem('linkManager_cache_' + state.user.uid); // מחיקת מטמון מאובטחת
             await signOut(auth); 
-            localStorage.removeItem('linkManager_warmCache'); // מחיקת המטמון ביציאה לאבטחה
             window.location.reload(); 
-        }        async function switchAccount() {
+        }
+        
+        async function switchAccount() {
             try {
+                if(state.user) localStorage.removeItem('linkManager_cache_' + state.user.uid); // מחיקת מטמון מאובטחת
                 await signOut(auth);
                 const provider = new GoogleAuthProvider();
                 provider.setCustomParameters({ prompt: 'select_account' });
@@ -1397,6 +1400,7 @@ async function copyText(t) {
     </script>
 </body>
 </html>
+
 
 
 
