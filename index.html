@@ -441,7 +441,19 @@
                     showToast('נטען ממצב גיבוי מקומי (Offline Mode)');
                 } catch(e) { console.error("Offline parse error", e); }
             }
-
+            // מנגנון Zero-Lag: טעינת "מטמון חם" מיידית למשתמשים מחוברים
+            if (!state.isOffline) {
+                const warmCache = localStorage.getItem('linkManager_warmCache');
+                if (warmCache) {
+                    try {
+                        const parsedCache = JSON.parse(warmCache);
+                        state.items = parsedCache.items || [];
+                        state.trash = parsedCache.trash || [];
+                        renderList(); // מצייר את הרשימה ב-0 שניות!
+                        updateCategoryDropdowns();
+                    } catch(e) { console.error("Warm cache error", e); }
+                }
+            }
             initServiceWorker();
             initTheme();
             setupEventListeners();
@@ -574,7 +586,8 @@
                     const d = docSnap.data();
                     state.items = d.items || [];
                     state.trash = d.trash || [];
-
+                    // שמירת "מטמון חם" להפעלה מיידית בפעם הבאה
+                    localStorage.setItem('linkManager_warmCache', JSON.stringify({ items: state.items, trash: state.trash }));
                     // בדיקה אם המידע הגיע מהזיכרון המקומי או מהשרת
                     const isFromCache = docSnap.metadata.fromCache;
                     
@@ -621,8 +634,11 @@
         }
 
         async function cloudLogin() { try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (e) { alert(e.message); } }
-        async function cloudLogout() { await signOut(auth); window.location.reload(); }
-        async function switchAccount() {
+        async function cloudLogout() { 
+            await signOut(auth); 
+            localStorage.removeItem('linkManager_warmCache'); // מחיקת המטמון ביציאה לאבטחה
+            window.location.reload(); 
+        }        async function switchAccount() {
             try {
                 await signOut(auth);
                 const provider = new GoogleAuthProvider();
@@ -1379,6 +1395,7 @@ async function copyText(t) {
     </script>
 </body>
 </html>
+
 
 
 
