@@ -568,11 +568,13 @@
         if (user) {
             state.user = user;
             toggleAppInterface(true);
-            // הפעלת מסך הטעינה עד שהנתונים יגיעו מהענן
-            const loader = document.getElementById('loading-screen');
-            if(loader) {
-                loader.style.display = 'flex';
-                loader.style.opacity = '1';
+            // מפעיל מסך טעינה *רק* אם ה-Warm Cache ריק (מצב של משתמש חדש או אחרי ניקוי)
+            if (state.items.length === 0) {
+                const loader = document.getElementById('loading-screen');
+                if(loader) {
+                    loader.style.display = 'flex';
+                    loader.style.opacity = '1';
+                }
             }
             // עדכון מיידי של פרטי המשתמש כדי למנוע המתנה
             document.getElementById('userName').textContent = user.displayName;
@@ -1395,6 +1397,7 @@ async function copyText(t) {
     </script>
 </body>
 </html>
+
 
 
 
