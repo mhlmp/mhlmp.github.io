@@ -10,8 +10,8 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="icon.jpg">
-    <link rel="icon" type="image/jpeg" href="icon.jpg">
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="icon" type="image/png" href="icon.png">
     
     <script id="offline-data" type="application/json"></script>
     
@@ -423,10 +423,10 @@
                     state.trash = parsed.trash || [];
                     state.isOffline = true;
                     
-                    state.user = { displayName: 'גיבוי מקומי', photoURL: 'icon.jpg', uid: 'offline' };
+                    state.user = { displayName: 'גיבוי מקומי', photoURL: 'icon.png', uid: 'offline' };
                     toggleAppInterface(true);
                     document.getElementById('userName').textContent = 'מצב לא-מקוון (קובץ)';
-                    document.getElementById('userAvatar').src = 'icon.jpg';
+                    document.getElementById('userAvatar').src = 'icon.png';
                     const cloudStatus = document.querySelector('.cloud-status');
                     cloudStatus.innerHTML = '<span class="status-dot offline"></span> עריכה מקומית (נשמר אוטומטית)';
                     
