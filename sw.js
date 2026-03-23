@@ -5,7 +5,7 @@ const urlsToCache = [
   './',
   './index.html',
   './manifest.json',
-  './icon.jpg'
+  './icon.png'
 ];
 
 // התקנה - דוחף את הגרסה החדשה מיד
@@ -60,4 +60,3 @@ self.addEventListener('fetch', event => {
       })
   );
 });
-
