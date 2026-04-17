@@ -621,11 +621,12 @@
             const userCacheKey = 'linkManager_cache_' + user.uid;
             const warmCache = localStorage.getItem(userCacheKey);
             
-            if (warmCache) {
+           if (warmCache) {
                 try {
                     const parsedCache = JSON.parse(warmCache);
                     state.items = parsedCache.items || [];
                     state.trash = parsedCache.trash || [];
+                    state.items.forEach(i => i.isScanning = false); // 🚀 חילוץ מתקיעה מהמטמון
                     renderList(); 
                     updateCategoryDropdowns();
                 } catch(e) { console.error("Cache load error", e); }
@@ -646,6 +647,7 @@
                     const d = docSnap.data();
                     state.items = d.items || [];
                     state.trash = d.trash || [];
+                    state.items.forEach(i => i.isScanning = false); // 🚀 חילוץ מתקיעה מהענן
                     // משיכת הגדרות ה-AI והמפתחות מהענן ושמירתם בדפדפן המקומי
                     if (d.aiSettings) {
                         localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
@@ -1141,19 +1143,56 @@ window.scanSingleItem = async function(id) {
             const settings = getAiSettings();
             if (!settings.keys[settings.provider]) return alert("אנא הזן מפתח API בהגדרות ה-AI תחילה.");
             
-            // המערכת תסרוק פריטים חדשים, או פריטים שנכשלו בסריקה קודמת
-            const itemsToScan = state.items.filter(i => !i.aiSummary || i.aiSummary.includes('שגיאה') || i.aiSummary.includes('Error') || i.aiSummary.includes('Timeout'));
+            // תופס כל פריט חסר סיכום, או כזה שיש בו שגיאה, או NetworkError
+            const itemsToScan = state.items.filter(i => 
+                !i.aiSummary || 
+                i.aiSummary.includes('שגיאה') || 
+                i.aiSummary.includes('Error') || 
+                i.aiSummary.includes('Timeout') ||
+                i.aiSummary.includes('לא התקבל סיכום')
+            );
+            
             if(itemsToScan.length === 0) return alert("כל הפריטים שלך כבר מנותחים בהצלחה!");
             
-            if(!confirm(`נמצאו ${itemsToScan.length} פריטים לסריקה (כולל תיקון שגיאות עבר). הסריקה תרוץ ברקע.\nהאם להתחיל?`)) return;
+            if(!confirm(`נמצאו ${itemsToScan.length} פריטים לסריקה (כולל תיקון שגיאות). הסריקה תרוץ ברקע.\nהאם להתחיל?`)) return;
             
             closeAllMenus();
             abortAiScan = false;
             document.getElementById('cancelBulkAiBtn').style.display = 'block';
             
-            // תצוגת חיווי רציפה בתחתית המסך
-            const progressToast = document.getElementById('toast');
-            const progressMsg = document.getElementById('toastMsg');
+            const t = document.getElementById('toast');
+            const msgEl = document.getElementById('toastMsg');
+            document.getElementById('undoBtn').style.display = 'none';
+            if (toastTimeout) clearTimeout(toastTimeout); // ביטול טיימרים ישנים של הטוסט
+            
+            for(let i=0; i<itemsToScan.length; i++) {
+                if (abortAiScan) { 
+                    msgEl.innerHTML = '🛑 <b>הסריקה הופסקה ידנית.</b>';
+                    setTimeout(() => t.classList.remove('visible'), 3000);
+                    break; 
+                }
+                
+                // תצוגה חיה של התקדמות בתחתית המסך
+                msgEl.innerHTML = `🤖 <b>סורק ומנתח...</b> [${i+1} מתוך ${itemsToScan.length}]<br><small style="opacity:0.8; display:block; direction:ltr; margin-top:4px;">${itemsToScan[i].content.substring(0,35)}...</small>`;
+                t.classList.add('visible');
+                
+                await scanSingleItem(itemsToScan[i].id);
+                
+                // השהיה למניעת חסימה של ה-API
+                if(i < itemsToScan.length -1) await new Promise(r => setTimeout(r, 1500)); 
+            }
+            
+            document.getElementById('cancelBulkAiBtn').style.display = 'none';
+            if(!abortAiScan) {
+                msgEl.innerHTML = "✅ <b>סריקת ה-AI הסתיימה בהצלחה!</b>";
+                setTimeout(() => t.classList.remove('visible'), 4000);
+            }
+        });
+
+        document.getElementById('cancelBulkAiBtn')?.addEventListener('click', () => {
+            abortAiScan = true;
+            document.getElementById('cancelBulkAiBtn').style.display = 'none';
+        });
             document.getElementById('undoBtn').style.display = 'none'; // מסתירים את כפתור ה-Undo בזמן טעינה
             
             for(let i=0; i<itemsToScan.length; i++) {
@@ -1188,7 +1227,12 @@ window.scanSingleItem = async function(id) {
             if(!confirm("האם למחוק את כל נתוני הניתוח של ה-AI מכל הפריטים?")) return;
             const backup = JSON.parse(JSON.stringify(state.items));
             
-            state.items.forEach(i => { delete i.aiSummary; delete i.siteStatus; });
+            state.items.forEach(i => { 
+                delete i.aiSummary; 
+                delete i.siteStatus; 
+                delete i.aiTags; 
+                i.isScanning = false; 
+            });
             pushToCloud(); renderList(); closeAllMenus();
             
             showToast('נתוני ה-AI נוקו', () => {
