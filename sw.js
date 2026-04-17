@@ -26,9 +26,6 @@ self.addEventListener('activate', event => {
   return self.clients.claim();
 });
 
-// שנה את השורה הראשונה ל:
-const CACHE_NAME = 'LinkManager-v2-AI-' + new Date().getTime(); 
-
 // ... שאר הקוד נשאר אותו דבר עד לפונקציית ה-fetch ...
 
 self.addEventListener('fetch', event => {
