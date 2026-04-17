@@ -920,6 +920,7 @@
             });
 
             div.querySelector('.btn-ai-scan').onclick = (e) => { e.stopPropagation(); scanSingleItem(item.id); };
+           div.querySelector('.btn-ai-scan').onclick = (e) => { e.stopPropagation(); scanSingleItem(item.id); };
             div.querySelector('.btn-share').onclick = (e) => { e.stopPropagation(); shareItem(item); };
             div.querySelector('.btn-copy').onclick = (e) => { e.stopPropagation(); copyText(item.content); };
             div.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); editItem(item); };
