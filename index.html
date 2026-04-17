@@ -646,6 +646,10 @@
                     const d = docSnap.data();
                     state.items = d.items || [];
                     state.trash = d.trash || [];
+                    // משיכת הגדרות ה-AI והמפתחות מהענן ושמירתם בדפדפן המקומי
+                    if (d.aiSettings) {
+                        localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
+                    }
                     // שמירה מאובטחת של המטמון תחת המזהה של המשתמש הספציפי
                     localStorage.setItem('linkManager_cache_' + user.uid, JSON.stringify({ items: state.items, trash: state.trash }));
                     // בדיקה אם המידע הגיע מהזיכרון המקומי או מהשרת
@@ -731,7 +735,7 @@
             
             if (!state.user) return;
             try {
-                await setDoc(doc(db, "users", state.user.uid), { items: state.items, trash: state.trash, lastUpdated: new Date().toISOString() });
+                await setDoc(doc(db, "users", state.user.uid), { items: state.items, trash: state.trash, aiSettings: getAiSettings(), lastUpdated: new Date().toISOString() });
             } catch (e) { showToast('שגיאה בסנכרון לענן'); }
         }
 
@@ -986,10 +990,10 @@
                 }
             };
             localStorage.setItem('aiSettingsPro', JSON.stringify(settings));
+            pushToCloud(); // <-- התוספת שדוחפת את המפתחות לענן מיד!
             document.getElementById('aiSettingsModal').style.display = 'none';
-            showToast('הגדרות AI נשמרו בהצלחה');
+            showToast('הגדרות AI נשמרו וסונכרנו לענן');
         };
-
         function getAiSettings() {
             const defaultSettings = { provider: 'gemini', autoScan: true, keys: { gemini: '', groq: '', openrouter: '' } };
             return JSON.parse(localStorage.getItem('aiSettingsPro')) || defaultSettings;
@@ -1069,7 +1073,7 @@ window.scanSingleItem = async function(id) {
 
                 if (settings.provider === 'gemini') {
                     // תיקון למודלים החדשים והיציבים של גוגל
-                    const models = ['gemini-1.5-flash-latest', 'gemini-1.5-pro-latest'];
+                const models = ['gemini-1.5-flash', 'gemini-1.5-pro'];
                     for (let model of models) {
                         try {
                             const res = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`, {
