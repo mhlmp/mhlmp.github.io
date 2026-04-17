@@ -1,5 +1,5 @@
 // 1. שנה את מספר הגרסה בכל פעם שאתה מעלה עדכון ל-GitHub
-const CACHE_NAME = 'LinkManager-v' + new Date().getTime(); 
+const CACHE_NAME = 'LinkManager-v2-AI-' + new Date().getTime();
 
 const urlsToCache = [
   './',
@@ -35,28 +35,25 @@ self.addEventListener('activate', event => {
 
 // אסטרטגיית טעינה: Network First (קודם רשת, אם נכשל - זיכרון)
 self.addEventListener('fetch', event => {
-  // התעלם מבקשות Firebase וגוגל - הן מנהלות אופליין לבד
-  if (event.request.url.includes('firestore.googleapis.com') || 
-      event.request.url.includes('googleapis.com') ||
-      event.request.url.includes('firebase')) {
+  const url = event.request.url;
+  if (url.includes('firestore.googleapis.com') || 
+      url.includes('generativelanguage.googleapis.com') || 
+      url.includes('api.groq.com') ||                      
+      url.includes('openrouter.ai') ||                     
+      url.includes('api.allorigins.win') ||                
+      url.includes('firebase')) {
       return;
   }
 
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        // אם הצלחנו להביא מהרשת, נשמור עותק עדכני בזיכרון
         if (response && response.status === 200) {
           const responseClone = response.clone();
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, responseClone);
-          });
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
         }
         return response;
       })
-      .catch(() => {
-        // אם אין אינטרנט, נטען מהזיכרון המקומי
-        return caches.match(event.request);
-      })
+      .catch(() => caches.match(event.request))
   );
 });
