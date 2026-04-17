@@ -1017,109 +1017,117 @@ window.scanSingleItem = async function(id) {
             item.isScanning = true; renderList();
 
             try {
-                let contentToAnalyze = item.content;
+                // ניקוי אלים של הקישור מסלאשים מיותרים שעושים בעיות
+                let cleanContent = item.content.trim().replace(/^[\/]+/, '');
+                let contentToAnalyze = cleanContent;
                 let isWebsite = item.type === 'link';
-                let siteStatusRaw = 'active';
+                
+                // פונקציית עזר קריטית: מונעת תקיעה של בקשות (חותכת אחרי 12 שניות)
+                const fetchWithTimeout = async (url, options = {}, time = 12000) => {
+                    const controller = new AbortController();
+                    const id = setTimeout(() => controller.abort(), time);
+                    try {
+                        const res = await fetch(url, { ...options, signal: controller.signal });
+                        clearTimeout(id);
+                        return res;
+                    } catch (err) {
+                        clearTimeout(id);
+                        throw err;
+                    }
+                };
 
-                // שליפת אתר צד-ג'
                 if (isWebsite) {
-                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(item.content)}`;
-                    const res = await fetch(proxyUrl);
-                    const data = await res.json();
-                    if (data.status.http_code >= 400 || !data.contents) {
-                        siteStatusRaw = 'dead'; contentToAnalyze = "האתר אינו זמין (שגיאת שרת). אי אפשר לנתח את התוכן.";
-                    } else {
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(data.contents, 'text/html');
-                        doc.querySelectorAll('script, style, nav, footer, noscript').forEach(el => el.remove());
-                        contentToAnalyze = doc.body ? doc.body.innerText.replace(/\s+/g, ' ').substring(0, 4000) : '';
+                    try {
+                        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(cleanContent)}`;
+                        const res = await fetchWithTimeout(proxyUrl, {}, 10000); // מקסימום 10 שניות לקריאת אתר
+                        if (!res.ok) throw new Error("Proxy failed");
+                        const data = await res.json();
+                        
+                        if ((data.status && data.status.http_code >= 400) || !data.contents) {
+                            throw new Error("Target returned error");
+                        } else {
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(data.contents, 'text/html');
+                            doc.querySelectorAll('script, style, nav, footer, noscript, iframe').forEach(el => el.remove());
+                            contentToAnalyze = doc.body ? doc.body.innerText.replace(/\s+/g, ' ').substring(0, 3500) : cleanContent;
+                        }
+                    } catch (scrapeError) {
+                        console.warn("Scraping blocked or timed out, AI will guess from URL.");
+                        contentToAnalyze = `כתובת: ${cleanContent}\nתיאור: ${item.description || 'אין'}\nהערה: קריאת התוכן נחסמה. נתח לפי כתובת ה-URL עצמה והתיאור.`;
                     }
                 }
 
-                // הפקודה המדויקת שדורשת גם סטטוס וגם תגיות
                 const promptType = isWebsite 
-                    ? `זהו טקסט שחולץ מאתר אינטרנט. 1. החזר סיכום בעברית של מה האתר עושה (עד 2 משפטים). 2. אם מדובר בעמוד חניה/למכירה ציין "status": "parked", אחרת "status": "active". 3. ייצר מערך של 3 עד 5 תגיות (Hashtags) קצרות וקולעות שמתארות את התוכן.`
-                    : `זהו טקסט חופשי. נתח אותו והחזר סיכום בעברית של מה הטקסט הזה אומר או מנסה לעשות (עד 2 משפטים). הסטטוס חייב להיות תמיד "text". ייצר מערך של 3 עד 5 תגיות (Hashtags) רלוונטיות.`;
+                    ? `זהו טקסט מאתר או כתובת URL. 1. סכם בעברית מה האתר עושה (עד 2 משפטים). 2. סטטוס: "parked" (חניה/למכירה), "dead" (שבור), או "active". 3. תגיות: 3-5 תגיות Hashtags.`
+                    : `זהו טקסט. סכם בעברית מה הוא עושה. סטטוס: "text". תגיות: 3-5 Hashtags.`;
 
-                const systemPrompt = `You are a strict data analyzer. Return ONLY valid JSON in this exact format, with no markdown tags or code blocks: {"summary": "...", "status": "active/parked/text", "tags": ["#tag1", "#tag2"]}\n\nRules:\n${promptType}\n\nContent to analyze:\n${contentToAnalyze}`;
+                const systemPrompt = `You must return ONLY valid JSON: {"summary": "...", "status": "active/parked/dead/text", "tags": ["#tag1", "#tag2"]}\n\nRules:\n${promptType}\n\nContent to analyze:\n${contentToAnalyze}`;
 
-                let aiSummaryResult = "";
-                let aiStatusResult = isWebsite ? siteStatusRaw : "text";
-                let aiTagsResult = [];
+                let jsonString = "";
+                let success = false;
+                let lastError = "";
 
-                if (siteStatusRaw !== 'dead') {
-                    let jsonString = "";
-                    let success = false;
-                    let lastError = "";
-
-                    // מערך חכם (Fallback): מתחיל מהכי חזק ויורד אם יש שגיאה
-                    if (settings.provider === 'gemini') {
-                        const models = ['gemini-1.5-pro', 'gemini-1.5-flash'];
-                        for (let model of models) {
-                            try {
-                                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`, {
-                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt }] }], generationConfig: { response_mime_type: "application/json" } })
-                                });
-                                const resData = await res.json();
-                                if(resData.error) throw new Error(resData.error.message);
-                                jsonString = resData.candidates[0].content.parts[0].text;
-                                success = true; break;
-                            } catch (err) { lastError = err.message; console.warn(`Gemini ${model} failed, trying next...`); }
-                        }
-                    } 
-                    else if (settings.provider === 'groq') {
-                        // היררכיה ל-Groq: מהמודל הכי גדול וחכם (70b) למודלים מהירים וקטנים יותר
-                        const models = ['llama3-70b-8192', 'llama-3.1-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'];
-                        for (let model of models) {
-                            try {
-                                const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-                                    method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ model: model, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
-                                });
-                                const resData = await res.json();
-                                if(resData.error) throw new Error(resData.error.message);
-                                jsonString = resData.choices[0].message.content;
-                                success = true; break;
-                            } catch (err) { lastError = err.message; console.warn(`Groq ${model} failed, trying next...`); }
-                        }
+                if (settings.provider === 'gemini') {
+                    // תיקון למודלים החדשים והיציבים של גוגל
+                    const models = ['gemini-1.5-flash-latest', 'gemini-1.5-pro-latest'];
+                    for (let model of models) {
+                        try {
+                            const res = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`, {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt }] }] })
+                            }, 15000);
+                            const resData = await res.json();
+                            if(resData.error) throw new Error(resData.error.message);
+                            jsonString = resData.candidates[0].content.parts[0].text;
+                            success = true; break;
+                        } catch (err) { lastError = err.message; }
                     }
-                    else if (settings.provider === 'openrouter') {
-                        // היררכיה חינמית ל-OpenRouter: מ-DeepSeek ל-Llama
-                        const models = ['deepseek/deepseek-chat:free', 'meta-llama/llama-3-8b-instruct:free'];
-                        for (let model of models) {
-                            try {
-                                const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                                    method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ model: model, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
-                                });
-                                const resData = await res.json();
-                                if(resData.error) throw new Error(resData.error.message);
-                                jsonString = resData.choices[0].message.content;
-                                success = true; break;
-                            } catch (err) { lastError = err.message; console.warn(`OpenRouter ${model} failed, trying next...`); }
-                        }
+                } 
+                else if (settings.provider === 'groq') {
+                    const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+                    for (let model of models) {
+                        try {
+                            const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
+                                method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ model: model, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
+                            }, 15000);
+                            const resData = await res.json();
+                            if(resData.error) throw new Error(resData.error.message);
+                            jsonString = resData.choices[0].message.content;
+                            success = true; break;
+                        } catch (err) { lastError = err.message; }
                     }
-
-                    if (!success) throw new Error("כל המודלים קרסו או חסומים (Rate Limit). " + lastError);
-
-                    // פענוח ה-JSON ותפיסת התגיות
-                    const parsed = JSON.parse(jsonString);
-                    aiSummaryResult = parsed.summary;
-                    if(isWebsite) aiStatusResult = parsed.status;
-                    aiTagsResult = parsed.tags && Array.isArray(parsed.tags) ? parsed.tags : [];
-                } else {
-                    aiSummaryResult = contentToAnalyze; 
+                }
+                else if (settings.provider === 'openrouter') {
+                    const models = ['deepseek/deepseek-chat:free', 'meta-llama/llama-3-8b-instruct:free'];
+                    for (let model of models) {
+                        try {
+                            const res = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
+                                method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ model: model, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
+                            }, 15000);
+                            const resData = await res.json();
+                            if(resData.error) throw new Error(resData.error.message);
+                            jsonString = resData.choices[0].message.content;
+                            success = true; break;
+                        } catch (err) { lastError = err.message; }
+                    }
                 }
 
-                item.aiSummary = aiSummaryResult;
-                item.siteStatus = aiStatusResult; 
-                item.aiTags = aiTagsResult;
+                if (!success) throw new Error("שגיאת שרת AI: " + lastError);
+
+                jsonString = jsonString.replace(/```json/gi, '').replace(/```/g, '').trim();
+                const parsed = JSON.parse(jsonString);
+                
+                item.aiSummary = parsed.summary || "לא התקבל סיכום.";
+                item.siteStatus = isWebsite ? (parsed.status || "active") : "text";
+                item.aiTags = parsed.tags && Array.isArray(parsed.tags) ? parsed.tags : [];
 
             } catch (e) {
-                console.error(e);
+                console.error("AI Error:", e);
                 item.siteStatus = item.type === 'link' ? 'dead' : 'text'; 
-                item.aiSummary = 'שגיאה בניתוח: ' + e.message;
+                // הודעת שגיאה קצרה וברורה
+                item.aiSummary = e.message.includes('abort') ? 'זמן הבקשה עבר (Timeout). נסה שוב.' : 'שגיאה: ' + e.message;
                 item.aiTags = [];
             } finally {
                 item.isScanning = false; pushToCloud(); renderList();
@@ -1129,31 +1137,49 @@ window.scanSingleItem = async function(id) {
             const settings = getAiSettings();
             if (!settings.keys[settings.provider]) return alert("אנא הזן מפתח API בהגדרות ה-AI תחילה.");
             
-            const itemsToScan = state.items.filter(i => !i.aiSummary);
-            if(itemsToScan.length === 0) return alert("כל הפריטים שלך כבר מנותחים!");
+            // המערכת תסרוק פריטים חדשים, או פריטים שנכשלו בסריקה קודמת
+            const itemsToScan = state.items.filter(i => !i.aiSummary || i.aiSummary.includes('שגיאה') || i.aiSummary.includes('Error') || i.aiSummary.includes('Timeout'));
+            if(itemsToScan.length === 0) return alert("כל הפריטים שלך כבר מנותחים בהצלחה!");
             
-            if(!confirm(`נמצאו ${itemsToScan.length} פריטים לסריקה. להתחיל?`)) return;
+            if(!confirm(`נמצאו ${itemsToScan.length} פריטים לסריקה (כולל תיקון שגיאות עבר). הסריקה תרוץ ברקע.\nהאם להתחיל?`)) return;
             
             closeAllMenus();
             abortAiScan = false;
             document.getElementById('cancelBulkAiBtn').style.display = 'block';
             
+            // תצוגת חיווי רציפה בתחתית המסך
+            const progressToast = document.getElementById('toast');
+            const progressMsg = document.getElementById('toastMsg');
+            document.getElementById('undoBtn').style.display = 'none'; // מסתירים את כפתור ה-Undo בזמן טעינה
+            
             for(let i=0; i<itemsToScan.length; i++) {
-                if (abortAiScan) { showToast('הסריקה ההמונית הופסקה'); break; }
-                showToast(`סורק פריט ${i+1} מתוך ${itemsToScan.length}...`);
+                if (abortAiScan) { 
+                    progressMsg.innerHTML = '🛑 <b>הסריקה הופסקה ידנית.</b>';
+                    setTimeout(() => progressToast.classList.remove('visible'), 3000);
+                    break; 
+                }
+                
+                // עדכון ה-UI בזמן אמת בלי להעלם
+                progressMsg.innerHTML = `🤖 <b>סורק...</b> ${i+1} מתוך ${itemsToScan.length}<br><small style="opacity:0.8; direction:ltr; display:inline-block;">${itemsToScan[i].content.substring(0,40)}...</small>`;
+                progressToast.classList.add('visible');
+                
                 await scanSingleItem(itemsToScan[i].id);
-                if(i < itemsToScan.length -1) await new Promise(r => setTimeout(r, 2000)); 
+                
+                // המתנה קלה כדי לא להעמיס על השרתים
+                if(i < itemsToScan.length -1) await new Promise(r => setTimeout(r, 1500)); 
             }
             
             document.getElementById('cancelBulkAiBtn').style.display = 'none';
-            if(!abortAiScan) showToast("סריקת ה-AI הסתיימה בהצלחה!");
+            if(!abortAiScan) {
+                progressMsg.innerHTML = "✅ <b>סריקת ה-AI הסתיימה בהצלחה!</b>";
+                setTimeout(() => progressToast.classList.remove('visible'), 4000);
+            }
         });
 
         document.getElementById('cancelBulkAiBtn')?.addEventListener('click', () => {
             abortAiScan = true;
             document.getElementById('cancelBulkAiBtn').style.display = 'none';
         });
-
         document.getElementById('clearAiDataBtn')?.addEventListener('click', () => {
             if(!confirm("האם למחוק את כל נתוני הניתוח של ה-AI מכל הפריטים?")) return;
             const backup = JSON.parse(JSON.stringify(state.items));
