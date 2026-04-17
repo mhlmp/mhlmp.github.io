@@ -26,20 +26,32 @@ self.addEventListener('activate', event => {
   return self.clients.claim();
 });
 
+// שנה את השורה הראשונה ל:
+const CACHE_NAME = 'LinkManager-v2-AI-' + new Date().getTime(); 
+
+// ... שאר הקוד נשאר אותו דבר עד לפונקציית ה-fetch ...
+
 self.addEventListener('fetch', event => {
-  if (event.request.url.includes('firestore.googleapis.com') || 
-      event.request.url.includes('googleapis.com') ||
-      event.request.url.includes('firebase') ||
-      event.request.url.includes('allorigins.win')) { // החרגתי את הפרוקסי כדי שכל קריאת AI תהיה בזמן אמת!
+  // התעלם מבקשות פיירבייס, שירותי גוגל, ורשתות ה-API של הבינה המלאכותית
+  const url = event.request.url;
+  if (url.includes('firestore.googleapis.com') || 
+      url.includes('generativelanguage.googleapis.com') || // Gemini API
+      url.includes('api.groq.com') ||                      // Groq API
+      url.includes('openrouter.ai') ||                     // OpenRouter/DeepSeek API
+      url.includes('api.allorigins.win') ||                // Proxy for Web Scraping
+      url.includes('firebase')) {
       return;
   }
+
   event.respondWith(
-    fetch(event.request).then(response => {
+    fetch(event.request)
+      .then(response => {
         if (response && response.status === 200) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
         }
         return response;
-      }).catch(() => caches.match(event.request))
+      })
+      .catch(() => caches.match(event.request))
   );
 });
