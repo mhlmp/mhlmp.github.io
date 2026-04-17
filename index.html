@@ -144,57 +144,38 @@
         .icon-btn:hover { color: var(--primary-color); background: rgba(127,127,127,0.1); }
         .pin-btn.active { color: var(--accent-gold); transform: rotate(45deg); opacity: 1; }
 
-        #trashModal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
-        #trashModal.open { display: flex; }
+        /* AI Card Styles */
+        .ai-box { background: rgba(127,127,127,0.05); border: 1px solid var(--glass-border); padding: 12px; border-radius: 8px; margin-top: 12px; font-size: 13px; line-height: 1.5; }
+        .ai-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: bold; border-bottom: 1px solid rgba(127,127,127,0.1); padding-bottom: 5px;}
+        .ai-status-active { color: var(--accent-green); }
+        .ai-status-parked { color: var(--accent-gold); }
+        .ai-status-dead { color: var(--accent-red); }
+        .spinner-small { width: 14px; height: 14px; border: 2px solid transparent; border-top-color: var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-left: 5px; }
+
+        #trashModal, #editModal, #settingsModal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
         .modal-content { background: var(--glass-bg); width: 90%; max-width: 600px; max-height: 80vh; border-radius: var(--radius); border: 1px solid var(--glass-border); display: flex; flex-direction: column; overflow: hidden; }
         .modal-header { padding: 15px 20px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center; }
         .modal-body { padding: 20px; overflow-y: auto; }
-        .trash-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: rgba(127,127,127,0.05); margin-bottom: 8px; border-radius: 8px; border: 1px solid var(--glass-border); }
 
         #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px); background: rgba(30, 41, 59, 0.95); color: white; border-radius: 12px; box-shadow: 0 15px 40px rgba(0,0,0,0.4); z-index: 9999; transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s; opacity: 0; border: 1px solid rgba(255,255,255,0.1); overflow: hidden; display: flex; flex-direction: column; min-width: 320px; }
         #toast.visible { transform: translateX(-50%) translateY(0); opacity: 1; }
         .toast-content { padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 15px; }
         #undoBtn { background: rgba(255,255,255,0.1); border: 1px solid var(--accent-gold); color: var(--accent-gold); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem; transition: 0.2s; white-space: nowrap; }
-        #undoBtn:hover { background: var(--accent-gold); color: #000; }
-        .toast-progress { height: 4px; background: var(--accent-green); width: 100%; transform-origin: right; transform: scaleX(1); }
-        .toast-progress.animating { animation: countdown 10s linear forwards; }
-        @keyframes countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
-
+        
         #scrollTopBtn { position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; border-radius: 50%; background: var(--primary-color); color: white; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 2000; opacity: 0; visibility: hidden; transition: 0.3s; display: flex; align-items: center; justify-content: center; }
         #scrollTopBtn.show { opacity: 1; visibility: visible; }
-        .btn-reload { padding: 4px 8px; margin-right: 5px; cursor: pointer; border: 1px solid var(--glass-border); border-radius: 4px; background: transparent; font-size: 12px; color: var(--text-secondary); }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        /* --- עיצוב מצב בחירה מרובה וסרגל פעולות --- */
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        /* Selection mode */
         .card-checkbox { display: none; position: absolute; top: 12px; right: 12px; transform: scale(1.4); accent-color: var(--primary-color); pointer-events: none; z-index: 10; }
         body.selection-mode-active .card-checkbox { display: block; }
         body.selection-mode-active .card.selected { border: 2px solid var(--primary-color); background: rgba(96, 165, 250, 0.15); }
         body.selection-mode-active .card-actions { display: none; }
         body.selection-mode-active .card { cursor: pointer; }
         body.selection-mode-active .card-link { pointer-events: none; }
-        
-        #bulkActionBar { position: fixed; top: 0; left: 0; right: 0; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--glass-border); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; z-index: 5000; transform: translateY(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        #bulkActionBar { position: fixed; top: 0; left: 0; right: 0; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--glass-border); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; z-index: 5000; transform: translateY(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         #bulkActionBar.visible { transform: translateY(0); }
         .bulk-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;}
-        .bulk-btn { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 0.9rem; transition: 0.2s; }
-        .bulk-btn:hover { background: rgba(255,255,255,0.2); }
-        .bulk-btn.delete { background: rgba(239, 68, 68, 0.2); border-color: var(--accent-red); color: #fca5a5; }
-        .bulk-btn.delete:hover { background: var(--accent-red); color: white; }
-        /* --- מסך טעינה --- */
-        #loading-screen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--bg-gradient);
-            display: none; flex-direction: column; justify-content: center; align-items: center;
-            z-index: 99999; transition: opacity 0.4s ease;
-            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-        }
-        .spinner {
-            border: 4px solid rgba(127, 127, 127, 0.2);
-            border-top: 4px solid var(--primary-color);
-            border-radius: 50%; width: 50px; height: 50px;
-            animation: spin 1s linear infinite; margin-bottom: 20px;
-        }
-        .loading-title { color: var(--text-primary); margin: 0 0 10px 0; font-size: 1.5rem; text-align: center; }
-        .loading-text { color: var(--text-secondary); font-size: 1rem; margin: 0; text-align: center; direction: rtl; }
+        .bulk-btn { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 0.9rem; }
     </style>
 </head>
 <body class="dark-mode">
@@ -205,45 +186,35 @@
         </div>
         <div class="bulk-actions">
             <button class="bulk-btn" id="bulkMoveBtn">📂 העבר לקטגוריה</button>
-            <button class="bulk-btn delete" id="bulkDeleteBtn">🗑️ מחק נבחרים</button>
+            <button class="bulk-btn delete" id="bulkDeleteBtn" style="background: rgba(239, 68, 68, 0.2); border-color: var(--accent-red); color: #fca5a5;">🗑️ מחק</button>
             <button class="bulk-btn" id="cancelBulkBtn">✖ ביטול</button>
         </div>
     </div>
-    <div id="devtools-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#090a0a; color:white; z-index:999999; text-align:center; padding-top:20%; font-family:monospace; flex-direction:column; align-items:center;">
-        <h1 style="font-size:2.5rem; margin-bottom:20px;">DevTools detected! Access denied.</h1>
-        <p>This area is restricted.</p>
+    
+    <div id="devtools-overlay" style="display:none; position:fixed; inset:0; background:#090a0a; color:white; z-index:999999; text-align:center; padding-top:20%; font-family:monospace; flex-direction:column; align-items:center;">
+        <h1>DevTools detected! Access denied.</h1>
     </div>
-<div id="loading-screen">
-        <div class="spinner"></div>
-        <h3 class="loading-title">מתחבר לענן וטוען נתונים...</h3>
-        <p class="loading-text">מוודא שהכל מעודכן ומאובטח, זה ייקח רק רגע.</p>
-    </div>
+
     <header>
         <h1>MH Link Manager Pro</h1>
-        <button id="installAppBtn">⬇️ התקן אפליקציה</button>
         <div id="itemCount">ממתין להתחברות...</div>
     </header>
 
     <div id="userSection" class="glass-panel">
         <div id="loggedOutView" style="display:flex; width:100%; justify-content:center;">
-            <button id="googleLoginBtn" class="btn-login">
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" alt="G">
-                התחבר עם Google
-            </button>
+            <button id="googleLoginBtn" class="btn-login"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" alt="G"> התחבר עם Google</button>
         </div>
         <div id="loggedInView" style="display:none; width:100%; justify-content:space-between; align-items:center;">
             <div class="user-info">
                 <img id="userAvatar" src="" class="user-avatar" alt="Avatar">
                 <div>
                     <div id="userName" class="user-name">שם משתמש</div>
-                    <div class="cloud-status">
-                        <span class="status-dot online"></span> מחובר 
-                        <button id="forceReloadBtn" class="btn-reload" title="רענן נתונים">🔄</button>
-                    </div>
+                    <div class="cloud-status"><span class="status-dot online"></span> מחובר <button id="forceReloadBtn" class="btn-action-sm" style="padding: 2px 5px">🔄</button></div>
                 </div>
             </div>
             <div>
-                <button id="switchAccountBtn" class="btn-action-sm">🔄 החלף</button>
+                <button id="openSettingsBtn" class="btn-action-sm" title="הגדרות מערכת">⚙️</button>
+                <button id="switchAccountBtn" class="btn-action-sm">🔄</button>
                 <button id="logoutBtn" class="btn-action-sm">יציאה</button>
             </div>
         </div>
@@ -251,74 +222,49 @@
 
     <div id="welcomeScreen" class="visible">
         <div class="lock-icon">🔒</div>
-         <h2>ברוך הבא לאתר של MH</h2>
-        <h2>הנתונים מוגנים</h2>
-        <p>כדי לשמור על פרטיותך, הקישורים נטענים מהענן בלבד.</p>
-        <p>בעת יציאה (Logout) הכל נמחק מהמכשיר.</p>
+        <h2>ברוך הבא לניהול הקישורים</h2>
+        <p>הנתונים מסונכרנים לענן ומאובטחים.</p>
     </div>
 
     <div id="protectedContent" class="auth-required locked">
         <div id="controlsArea" class="glass-panel">
-            <div class="search-container">
-                <input type="search" id="searchInput" placeholder="🔍 חפש קישור, תיאור או #מספר...">
-            </div>
-
+            <div class="search-container"><input type="search" id="searchInput" placeholder="🔍 חפש קישור, תיאור..."></div>
             <div class="filters-container">
                 <select id="categoryFilter"><option value="">📂 כל הקטגוריות</option></select>
                 <select id="sortOrder">
                     <option value="date-new" selected>📅 תאריך (חדש לישן)</option>
                     <option value="name">🔤 שם (א-ת)</option>
-                    <option value="index-asc">🔢 מספר (1 עד אחרון)</option>
-                    <option value="index-desc">🔢 מספר (אחרון עד 1)</option>
                 </select>
             </div>
 
             <div class="actions-container">
                 <div class="dropdown">
-                    <button class="action-btn btn-json drop-trigger" data-target="jsonMenu"><span>📂</span> ניהול JSON <span>▼</span></button>
+                    <button class="action-btn btn-json drop-trigger" data-target="jsonMenu"><span>📂</span> נתונים <span>▼</span></button>
                     <div id="jsonMenu" class="dropdown-content">
-                        <label for="importJsonInput">📥 ייבוא קובץ JSON</label>
-                        <input type="file" id="importJsonInput" accept=".json">
-                        <div class="dropdown-divider"></div>
-                        <button id="exportJsonBtn">📤 ייצוא לקובץ JSON</button>
+                        <label for="importJsonInput">📥 ייבוא JSON</label><input type="file" id="importJsonInput" accept=".json">
+                        <button id="exportJsonBtn">📤 ייצוא JSON</button>
                     </div>
                 </div>
-
-               <div class="dropdown">
-    <button class="action-btn btn-txt drop-trigger" data-target="txtMenu"><span>📄</span> ניהול טקסט <span>▼</span></button>
-    <div id="txtMenu" class="dropdown-content">
-        <button id="exportTxtBtn">📤 ייצוא רשימה ל-TXT</button>
-        <div class="dropdown-divider"></div>
-        <label for="smartImportInput">🔄 <b>ייבוא חכם (מיזוג)</b></label>
-        <input type="file" id="smartImportInput" accept=".txt">
-        <div class="dropdown-divider"></div>
-        <label for="wipeDataInput" style="color: var(--accent-red);">⚠️ <b>מחק הכל(קובץ ריק)</b></label>
-        <input type="file" id="wipeDataInput" accept=".txt">
-    </div>
-</div>
-
                 <div class="dropdown">
-                    <button class="action-btn btn-site drop-trigger" data-target="siteMenu"><span>💾</span> ניהול אתר <span>▼</span></button>
+                    <button class="action-btn btn-site drop-trigger" data-target="siteMenu"><span>🤖</span> אתר ו-AI <span>▼</span></button>
                     <div id="siteMenu" class="dropdown-content">
-                        <button id="downloadHtmlBtn"><span style="font-size:1.2em">🌐</span> שמור אתר מלא (HTML)</button>
-                        <button id="downloadSourceBtn"><span style="font-size:1.2em">💻</span> הורד קוד מקור (TXT)</button>
+                        <button id="bulkAiScanBtn">✨ סרוק אוטומטית קישורים חסרים</button>
+                        <div class="dropdown-divider"></div>
+                        <button id="downloadHtmlBtn">🌐 שמור אתר (HTML)</button>
                     </div>
                 </div>
-
-                <button id="trashBtn" class="action-btn btn-trash-view" title="סל מחזור">🗑️ סל מחזור</button>
-                <button id="toggleDuplicatesBtn" class="action-btn btn-toggle" title="הצג/הסתר כפילויות">👥</button>
-                <button id="toggleDarkModeBtn" class="action-btn btn-toggle" title="מצב לילה">☀️</button>
+                <button id="trashBtn" class="action-btn btn-trash-view">🗑️ סל מחזור</button>
+                <button id="toggleDarkModeBtn" class="action-btn btn-toggle">☀️</button>
             </div>
         </div>
 
         <details class="glass-panel">
-            <summary>▼ הוספת פריט חדש ידנית ▼</summary>
+            <summary>▼ הוספת פריט חדש ▼</summary>
             <form id="addItemForm">
-                <textarea id="itemContent" rows="2" required placeholder="הדבק כאן קישור או פקודה..."></textarea>
+                <textarea id="itemContent" rows="2" required placeholder="הדבק קישור..."></textarea>
                 <input type="text" id="itemDescription" placeholder="תיאור הפריט">
                 <input type="text" id="itemCategory" list="categoriesDatalist" placeholder="קטגוריה">
                 <datalist id="categoriesDatalist"></datalist>
-                <input type="text" id="itemNote" placeholder="הערה אישית (אופציונלי)">
                 <button type="submit">הוסף למאגר</button>
             </form>
         </details>
@@ -326,44 +272,22 @@
         <div id="listContainer" class="list-container"></div>
     </div>
 
-    <div id="trashModal">
-        <div class="modal-content">
-          <div class="modal-header">
-                <h3>🗑️ סל מחזור</h3>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <button id="restoreAllBtn" style="background: rgba(0, 166, 81, 0.1); color: #86efac; border: 1px solid var(--accent-green); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem;">♻️ שחזר הכל</button>
-                    <button id="emptyTrashBtn" style="background: rgba(239, 68, 68, 0.1); color: #fca5a5; border: 1px solid var(--accent-red); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem;">🧹 רוקן הכל</button>
-                    <button class="btn-close-modal">✖</button>
-                </div>
+    <div id="trashModal"><div class="modal-content"><div class="modal-header"><h3>🗑️ סל מחזור</h3><button class="btn-close-modal" onclick="document.getElementById('trashModal').style.display='none'">✖</button></div><div id="trashList" class="modal-body"></div></div></div>
+    
+    <div id="settingsModal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header"><h3>⚙️ הגדרות מערכת</h3><button class="btn-close-modal" onclick="document.getElementById('settingsModal').style.display='none'">✖</button></div>
+            <div class="modal-body">
+                <label style="display:block; margin-bottom:8px; font-weight:bold;">מפתח Gemini API (עבור סיכומי בינה מלאכותית):</label>
+                <input type="password" id="geminiApiKeyInput" placeholder="AIzaSy..." style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--glass-border); background:rgba(127,127,127,0.1); color:var(--text-primary); margin-bottom: 15px;">
+                <p style="font-size:12px; color:var(--text-secondary);">המפתח נשמר בדפדפן בלבד ואינו נשלח לשרת. <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--primary-color);">השג מפתח חינם כאן</a>.</p>
+                <button onclick="saveSettings()" style="width:100%; padding:10px; background:var(--primary-color); color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">שמור הגדרות</button>
             </div>
-            <div id="trashList" class="modal-body"></div>
         </div>
-    </div>
-<div id="editModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
-        <div class="modal-content" style="padding: 20px; width: 90%; max-width: 400px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border);">
-            <h3 style="margin-top:0; color: var(--text-primary);">✏️ עריכת פריט</h3>
-            <form id="editItemForm" style="display: flex; flex-direction: column; gap: 12px;">
-                <input type="hidden" id="editItemId">
-                <textarea id="editItemContent" rows="2" required placeholder="תוכן..." style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%; box-sizing: border-box;"></textarea>
-                <input type="text" id="editItemDescription" placeholder="תיאור הפריט" style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%; box-sizing: border-box;">
-                <input type="text" id="editItemCategory" list="categoriesDatalist" placeholder="קטגוריה (בחר או הקלד)" style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%; box-sizing: border-box;">
-                <input type="text" id="editItemNote" placeholder="הערה אישית" style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%; box-sizing: border-box;">
-                <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <button type="submit" style="flex: 1; background: var(--accent-green); color: white; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">שמור שינויים</button>
-                    <button type="button" onclick="document.getElementById('editModal').style.display='none'" style="flex: 1; background: rgba(127,127,127,0.2); color: var(--text-primary); padding: 12px; border: 1px solid var(--glass-border); border-radius: 8px; cursor: pointer; font-weight: bold;">ביטול</button>
-                </div>
-            </form>
-        </div>
-    </div>
-    <div id="toast">
-        <div class="toast-content">
-            <span id="toastMsg">הודעה</span>
-            <button id="undoBtn">↪ בטל (Undo)</button>
-        </div>
-        <div id="toastProgress" class="toast-progress"></div>
     </div>
 
-    <button id="scrollTopBtn" title="גלול למעלה">☝️</button>
+    <div id="toast"><div class="toast-content"><span id="toastMsg">הודעה</span><button id="undoBtn">↪ בטל (Undo)</button></div></div>
+    <button id="scrollTopBtn">☝️</button>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -376,1055 +300,253 @@
             projectId: "linkmeir-dada4",
             storageBucket: "linkmeir-dada4.firebasestorage.app",
             messagingSenderId: "933486826829",
-            appId: "1:933486826829:web:6e61498d88a55623c65304",
-            measurementId: "G-46D3WMVFK5"
+            appId: "1:933486826829:web:6e61498d88a55623c65304"
         };
 
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
         let app, auth, db;
-        let toastTimeout;
-        let deferredPrompt; 
-        
-        let state = {
-            items: [], trash: [], user: null, unsubscribe: null, showDuplicates: true, isOffline: false,
-            selectedIds: new Set(), isSelectionMode: false // הוספנו משתנים לבחירה מרובה
-        };
+        let state = { items: [], trash: [], user: null, selectedIds: new Set(), isSelectionMode: false };
 
         try {
-            app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            setPersistence(auth, browserLocalPersistence);
-            db = getFirestore(app);
-            enableIndexedDbPersistence(db).catch((err) => {
-                    if (err.code == 'failed-precondition') {
-                        console.log('Persistence failed: Multiple tabs open');
-                    } else if (err.code == 'unimplemented') {
-                        console.log('Persistence not supported by browser');
-                    }
-                });
+            app = initializeApp(firebaseConfig); auth = getAuth(app); setPersistence(auth, browserLocalPersistence);
+            db = getFirestore(app); enableIndexedDbPersistence(db).catch(e => console.log('DB persistence issue', e));
         } catch (e) { console.error("Firebase Init Error:", e); }
 
         document.addEventListener('DOMContentLoaded', () => {
-            const offlineDataEl = document.getElementById('offline-data');
-            // מנגנון חכם: מנסה לקרוא קודם כל מהזיכרון של הדפדפן (כדי לזכור שינויים אחרונים)
-            const localCache = localStorage.getItem('linkManagerLocalData');
-            
-            if (localCache || (offlineDataEl && offlineDataEl.textContent.trim())) {
-                try {
-                    let parsed;
-                    if (localCache) {
-                        parsed = JSON.parse(localCache); // טוען מהזיכרון העדכני
-                    } else {
-                        parsed = JSON.parse(offlineDataEl.textContent); // טוען מהקובץ בפעם הראשונה
-                        localStorage.setItem('linkManagerLocalData', JSON.stringify(parsed)); // שומר מיד לזיכרון
-                    }
-                    
-                    state.items = parsed.items || [];
-                    state.trash = parsed.trash || [];
-                    state.isOffline = true;
-                    
-                    state.user = { displayName: 'גיבוי מקומי', photoURL: 'icon.png', uid: 'offline' };
-                    toggleAppInterface(true);
-                    document.getElementById('userName').textContent = 'מצב לא-מקוון (קובץ)';
-                    document.getElementById('userAvatar').src = 'icon.png';
-                    const cloudStatus = document.querySelector('.cloud-status');
-                    cloudStatus.innerHTML = '<span class="status-dot offline"></span> עריכה מקומית (נשמר אוטומטית)';
-                    
-                    updateCategoryDropdowns();
-                    renderList();
-                    // כיבוי מסך הטעינה למצב לא-מקוון
-                    const loaderEl = document.getElementById('loading-screen');
-                    if (loaderEl) {
-                        loaderEl.style.opacity = '0';
-                        setTimeout(() => loaderEl.style.display = 'none', 400);
-                    }
-                    showToast('נטען ממצב גיבוי מקומי (Offline Mode)');
-                } catch(e) { console.error("Offline parse error", e); }
-            }
-            
-            initServiceWorker();
-            initTheme();
-            setupEventListeners();
-            
-            // If not offline file, listen to Firebase
-            if (!state.isOffline) {
-                setupFirebaseListeners();
-            }
-            
-            setupScrollToTop();
-            
-            window.addEventListener('beforeinstallprompt', (e) => {
-                e.preventDefault();
-                deferredPrompt = e;
-                const installBtn = document.getElementById('installAppBtn');
-                if(installBtn) {
-                    installBtn.style.display = 'block';
-                    installBtn.addEventListener('click', () => {
-                        installBtn.style.display = 'none';
-                        deferredPrompt.prompt();
-                        deferredPrompt.userChoice.then((choiceResult) => {
-                            if (choiceResult.outcome === 'accepted') { console.log('User accepted the install prompt'); }
-                            deferredPrompt = null;
-                        });
-                    });
-                }
-            });
+            initTheme(); setupEventListeners(); setupFirebaseListeners();
+            // טעינת מפתח API השמור
+            const savedKey = localStorage.getItem('geminiApiKey');
+            if(savedKey) document.getElementById('geminiApiKeyInput').value = savedKey;
         });
-
-        function initServiceWorker() {
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./sw.js').then(reg => {
-            // בדיקה אם יש עדכון שמחכה ברקע בזמן שהאתר פתוח
-            reg.addEventListener('updatefound', () => {
-                const newWorker = reg.installing;
-                newWorker.addEventListener('statechange', () => {
-                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        // ברגע שהגרסה החדשה הותקנה, נציע לך לעבור אליה
-                        if (confirm("נמצא עדכון גרסה חדש ל-LINK MANAGER! האם לרענן כדי לעדכן עכשיו?")) {
-                            window.location.reload();
-                        }
-                    }
-                });
-            });
-        }).catch(console.error);
-    }
-}
 
         function setupEventListeners() {
             document.querySelectorAll('.drop-trigger').forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const targetId = btn.getAttribute('data-target');
-                    const targetMenu = document.getElementById(targetId);
-                    const isOpen = targetMenu.classList.contains('show');
-                    closeAllMenus();
-                    if (!isOpen) { targetMenu.classList.add('show'); btn.classList.add('active'); }
+                    e.stopPropagation(); const tId = btn.getAttribute('data-target');
+                    const isOpen = document.getElementById(tId).classList.contains('show');
+                    document.querySelectorAll('.dropdown-content').forEach(el => el.classList.remove('show'));
+                    if (!isOpen) document.getElementById(tId).classList.add('show');
                 });
             });
-            window.addEventListener('click', () => closeAllMenus());
+            window.addEventListener('click', () => document.querySelectorAll('.dropdown-content').forEach(el => el.classList.remove('show')));
 
-            document.getElementById('searchInput')?.addEventListener('input', () => window.requestAnimationFrame(renderList));
-            document.getElementById('categoryFilter')?.addEventListener('change', renderList);
-// מנגנון חכם לשמירת המיון האחרון
-            const sortSelect = document.getElementById('sortOrder');
-            if (sortSelect) {
-                // 1. בטעינה: נבדוק מה היה שמור בזיכרון ונפעיל אותו מיד
-                const savedSort = localStorage.getItem('lastSortOrder');
-                if (savedSort) {
-                    sortSelect.value = savedSort;
-                    // שימוש ב-setTimeout קטן מבטיח שהרשימה קיימת לפני המיון
-                    setTimeout(renderList, 0); 
-                }
+            document.getElementById('searchInput').addEventListener('input', renderList);
+            document.getElementById('categoryFilter').addEventListener('change', renderList);
+            document.getElementById('sortOrder').addEventListener('change', renderList);
+            document.getElementById('addItemForm').addEventListener('submit', handleAdd);
+            document.getElementById('toggleDarkModeBtn').addEventListener('click', toggleTheme);
+            document.getElementById('googleLoginBtn').addEventListener('click', () => signInWithPopup(auth, new GoogleAuthProvider()));
+            document.getElementById('logoutBtn').addEventListener('click', () => { signOut(auth); window.location.reload(); });
+            document.getElementById('openSettingsBtn').addEventListener('click', () => document.getElementById('settingsModal').style.display='flex');
+            document.getElementById('bulkAiScanBtn').addEventListener('click', startBulkAIScan);
+        }
 
-                // 2. בשינוי: נשמור את הבחירה החדשה לזיכרון
-                sortSelect.addEventListener('change', (e) => {
-                    localStorage.setItem('lastSortOrder', e.target.value);
-                    renderList();
-                });
-            }            document.getElementById('addItemForm')?.addEventListener('submit', handleAdd);
-            document.getElementById('toggleDarkModeBtn')?.addEventListener('click', toggleTheme);
-            document.getElementById('toggleDuplicatesBtn')?.addEventListener('click', toggleDuplicates);
-            
-            document.getElementById('googleLoginBtn')?.addEventListener('click', cloudLogin);
-            document.getElementById('logoutBtn')?.addEventListener('click', cloudLogout);
-            document.getElementById('switchAccountBtn')?.addEventListener('click', switchAccount);
-            
-            document.getElementById('trashBtn')?.addEventListener('click', openTrashModal);
-            document.querySelector('.btn-close-modal')?.addEventListener('click', closeTrashModal);
-            document.getElementById('forceReloadBtn')?.addEventListener('click', forceReload);
-
-           ['importJsonInput', 'smartImportInput', 'wipeDataInput'].forEach(id => {
-                const el = document.getElementById(id);
-                if(el) {
-                    el.addEventListener('click', (e) => e.target.value = null);
-                    el.addEventListener('change', (e) => {
-                        if (id === 'importJsonInput') importJson(e);
-                        else if (id === 'smartImportInput') smartImport(e);
-                        else if (id === 'wipeDataInput') handleWipeData(e);
-                    });
-                }
-            });
-            document.getElementById('editItemForm')?.addEventListener('submit', handleEditSubmit);
-            document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
-            document.getElementById('exportTxtBtn')?.addEventListener('click', exportTxt);
-            document.getElementById('downloadHtmlBtn')?.addEventListener('click', downloadSite);
-            document.getElementById('downloadSourceBtn')?.addEventListener('click', downloadSource);
+        window.saveSettings = function() {
+            const key = document.getElementById('geminiApiKeyInput').value.trim();
+            localStorage.setItem('geminiApiKey', key);
+            document.getElementById('settingsModal').style.display='none';
+            showToast('הגדרות נשמרו בהצלחה');
         }
 
         function setupFirebaseListeners() {
-    onAuthStateChanged(auth, (user) => {
-        if (user) {
-            state.user = user;
-            toggleAppInterface(true);
-            state.user = user;
-            toggleAppInterface(true);
-
-            // --- אבטחה: קריאת הנתונים מהמטמון *אך ורק* עבור המשתמש שזוהה כעת ---
-            const userCacheKey = 'linkManager_cache_' + user.uid;
-            const warmCache = localStorage.getItem(userCacheKey);
-            
-            if (warmCache) {
-                try {
-                    const parsedCache = JSON.parse(warmCache);
-                    state.items = parsedCache.items || [];
-                    state.trash = parsedCache.trash || [];
-                    renderList(); 
-                    updateCategoryDropdowns();
-                } catch(e) { console.error("Cache load error", e); }
-            } else if (state.items.length === 0) {
-                // הפעלת מסך טעינה רק אם אין מטמון (משתמש חדש לגמרי במכשיר זה)
-                const loader = document.getElementById('loading-screen');
-                if(loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
-            }
-            // עדכון מיידי של פרטי המשתמש כדי למנוע המתנה
-            document.getElementById('userName').textContent = user.displayName;
-            document.getElementById('userAvatar').src = user.photoURL;
-
-            const userDoc = doc(db, "users", user.uid);
-
-            // הוספת { includeMetadataChanges: true } - זה מה שמאפשר טעינה מיידית מה-Cache
-            state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
-                if (docSnap.exists()) {
-                    const d = docSnap.data();
-                    state.items = d.items || [];
-                    state.trash = d.trash || [];
-                    // שמירה מאובטחת של המטמון תחת המזהה של המשתמש הספציפי
-                    localStorage.setItem('linkManager_cache_' + user.uid, JSON.stringify({ items: state.items, trash: state.trash }));
-                    // בדיקה אם המידע הגיע מהזיכרון המקומי או מהשרת
-                    const isFromCache = docSnap.metadata.fromCache;
-                    
-                    renderList();
-                    updateCategoryDropdowns();
-                    // העלמת מסך הטעינה ברכות
-                    const loaderEl = document.getElementById('loading-screen');
-                    if (loaderEl) {
-                        loaderEl.style.opacity = '0';
-                        setTimeout(() => loaderEl.style.display = 'none', 400);
-                    }
-                    // עדכון הסטטוס: מעלים את ה"ממתין" ברגע שיש נתונים
-                    const statusLabel = document.getElementById('connectionStatus'); // וודא שזה ה-ID אצלך
-                    if (statusLabel) {
-                        statusLabel.textContent = isFromCache ? "טוען מהזיכרון..." : "מחובר";
-                        statusLabel.style.color = isFromCache ? "#ffcc00" : "#00ff00";
-                    }
-                }
-                updateSyncStatus('online');
-            }, (err) => {
-                console.error(err);
-                updateSyncStatus('error');
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    state.user = user; toggleAppInterface(true);
+                    document.getElementById('userName').textContent = user.displayName;
+                    document.getElementById('userAvatar').src = user.photoURL;
+                    onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+                        if (docSnap.exists()) { const d = docSnap.data(); state.items = d.items || []; state.trash = d.trash || []; }
+                        renderList(); updateCategoryDropdowns();
+                    });
+                } else { toggleAppInterface(false); }
             });
-        } else {
-            toggleAppInterface(false);
         }
-    });
-}
 
         function toggleAppInterface(isLoggedIn) {
             document.getElementById('loggedInView').style.display = isLoggedIn ? 'flex' : 'none';
             document.getElementById('loggedOutView').style.display = isLoggedIn ? 'none' : 'flex';
             document.getElementById('welcomeScreen').classList.toggle('visible', !isLoggedIn);
             document.getElementById('protectedContent').classList.toggle('locked', !isLoggedIn);
-            if (!isLoggedIn) document.getElementById('itemCount').textContent = "ממתין להתחברות...";
         }
 
-        function updateSyncStatus(status) {
-            const el = document.querySelector('.cloud-status');
-            if(el) {
-                const dot = el.querySelector('.status-dot');
-                if(dot) dot.className = `status-dot ${status}`;
-            }
-        }
+        async function pushToCloud() { if(state.user) await setDoc(doc(db, "users", state.user.uid), { items: state.items, trash: state.trash }); }
 
-        async function cloudLogin() { try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (e) { alert(e.message); } }
-        async function cloudLogout() { 
-            if(state.user) localStorage.removeItem('linkManager_cache_' + state.user.uid); // מחיקת מטמון מאובטחת
-            await signOut(auth); 
-            window.location.reload(); 
-        }
-        
-        async function switchAccount() {
-            try {
-                if(state.user) localStorage.removeItem('linkManager_cache_' + state.user.uid); // מחיקת מטמון מאובטחת
-                await signOut(auth);
-                const provider = new GoogleAuthProvider();
-                provider.setCustomParameters({ prompt: 'select_account' });
-                await signInWithPopup(auth, provider);
-            } catch (e) { alert(e.message); }
-        }
-
-        function forceReload() {
-            if(!state.user || state.isOffline) return;
-            if (state.unsubscribe) state.unsubscribe();
-            setupFirebaseListeners();
-            showToast("רענון נתונים מהענן בוצע");
-        }
-
-        async function pushToCloud() {
-           if (state.isOffline) {
-                // שומר את השינויים לזיכרון המקומי כדי שישרדו רענון/סגירה
-                const dataToSave = JSON.stringify({ items: state.items, trash: state.trash });
-                localStorage.setItem('linkManagerLocalData', dataToSave);
-                document.getElementById('offline-data').textContent = dataToSave; // מעדכן גם את ה-DOM להורדה עתידית
-                updateCategoryDropdowns(); // <--- התיקון: מעדכן מיד את רשימת הקטגוריות בסרגל העליון!
-                renderList();
-                showToast("נשמר מקומית בהצלחה!");
-                return;
-            }
-            
+        function renderList() {
             if (!state.user) return;
-            try {
-                await setDoc(doc(db, "users", state.user.uid), { items: state.items, trash: state.trash, lastUpdated: new Date().toISOString() });
-            } catch (e) { showToast('שגיאה בסנכרון לענן'); }
-        }
-
-        // === Logic ===
-       function renderList() {
-            if (!state.user) return;
-            const container = document.getElementById('listContainer');
-            container.innerHTML = '';
-
+            const container = document.getElementById('listContainer'); container.innerHTML = '';
             const query = document.getElementById('searchInput').value.toLowerCase().trim();
             const catFilter = document.getElementById('categoryFilter').value;
-            const sort = document.getElementById('sortOrder').value;
-
-            const chronologicalList = [...state.items].sort((a, b) => a.date.localeCompare(b.date));
-            const indexMap = new Map();
-            chronologicalList.forEach((item, index) => indexMap.set(item.id, index + 1));
-
-            const isIndexSort = sort === 'index-asc' || sort === 'index-desc';
-
-            let sortedFullList = [...state.items];
-            sortedFullList.sort((a, b) => {
-                if (sort === 'name') return a.content.localeCompare(b.content);
-                if (sort === 'index-asc') return indexMap.get(a.id) - indexMap.get(b.id);
-                if (sort === 'index-desc') return indexMap.get(b.id) - indexMap.get(a.id);
-                return b.date.localeCompare(a.date); 
-            });
-
-            sortedFullList.forEach(item => item.visualIndex = indexMap.get(item.id));
-
-            // זיהוי המקורי מול ההעתקים
-            const seenContents = new Map(); 
-            chronologicalList.forEach(i => {
-                const k = i.content.toLowerCase().trim();
-                if (!seenContents.has(k)) {
-                    seenContents.set(k, i.id); 
-                    i.isDup = false; 
-                } else {
-                    i.isDup = true; 
-                }
-            });
-
-            const isHashSearch = /^#\s*\d+$/.test(query);
-            const searchNum = isHashSearch ? parseInt(query.replace(/\D/g, '')) : null;
             
-            const isDupSearch = query === '#כפול' || query === '#כפולים';
+            let sorted = [...state.items].sort((a,b) => b.date.localeCompare(a.date));
+            let filtered = sorted.filter(i => (!catFilter || i.category === catFilter) && (!query || i.content.toLowerCase().includes(query) || i.description.toLowerCase().includes(query)));
 
-            // המשתנה המנצח: בודק אם אנחנו במצב "בידוד כפילויות" (דרך החיפוש או הכפתור)
-            const isolateDuplicatesMode = !state.showDuplicates || isDupSearch;
-
-            let filtered = sortedFullList.filter(i => {
-                const matchesCat = !catFilter || i.category === catFilter;
-
-                if (isolateDuplicatesMode) {
-                    // במצב בידוד: נציג אך ורק פריטים שהם העתקים, בהתאם לקטגוריה המסוננת
-                    return i.isDup && matchesCat;
-                }
-                
-                if (isHashSearch) return i.visualIndex === searchNum;
-                
-                const matchesSearch = !query || i.content.toLowerCase().includes(query) || i.description.toLowerCase().includes(query) || i.category.toLowerCase().includes(query) || (i.note && i.note.toLowerCase().includes(query));
-                
-                return matchesSearch && matchesCat;
-            });
-
-            document.getElementById('itemCount').textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
-
-            if (filtered.length === 0) {
-                container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-secondary);">לא נמצאו תוצאות</div>';
-                return;
-            }
-
-            if (isIndexSort) {
-                const section = document.createElement('div');
-                section.className = 'category-block';
-                section.innerHTML = `<div class="items-grid"></div>`;
-                const grid = section.querySelector('.items-grid');
-                filtered.forEach(item => grid.appendChild(createCard(item)));
-                container.appendChild(section);
-            } else {
-                const pinnedItems = filtered.filter(i => i.isPinned);
-                const regularItems = filtered.filter(i => !i.isPinned);
-
-                if (pinnedItems.length > 0) renderGroup(container, '📌 מוצמד', pinnedItems, true);
-
-                const groups = {};
-                
-                regularItems.forEach(i => {
-                    let displayCategory = i.category;
-                    
-                    // אם אנחנו במצב בידוד, נדרוס את שם הקטגוריה המקורי ונקבץ הכל תחת כותרת אחת
-                    if (isolateDuplicatesMode) {
-                        displayCategory = "⚠️ כפולים";
-                    }
-                    
-                    if(!groups[displayCategory]) groups[displayCategory] = [];
-                    groups[displayCategory].push(i);
-                });
-
-                // סידור הרשימה כך שקבוצת הכפולים תופיע תמיד בראש המסך
-                Object.keys(groups).sort((a,b) => {
-                    if (a.startsWith("⚠️")) return -1; 
-                    if (b.startsWith("⚠️")) return 1;
-                    return a.localeCompare(b);
-                }).forEach(cat => renderGroup(container, cat, groups[cat], false));
-            }
-        }
-        function renderGroup(container, title, items, isPinned) {
-            const section = document.createElement('div');
-            section.className = 'category-block';
-            const headerStyle = isPinned ? 'style="border-bottom: 2px solid var(--accent-gold); color: var(--accent-gold);"' : '';
-            section.innerHTML = `<div class="category-header" ${headerStyle}><h2>${escapeHtml(title)}</h2><span class="category-badge">${items.length}</span></div><div class="items-grid"></div>`;
-            const grid = section.querySelector('.items-grid');
-            items.forEach(i => grid.appendChild(createCard(i)));
-            container.appendChild(section);
+            document.getElementById('itemCount').textContent = `מציג ${filtered.length} פריטים`;
+            
+            const grid = document.createElement('div'); grid.className = 'items-grid';
+            filtered.forEach((item, idx) => grid.appendChild(createCard(item, idx + 1)));
+            container.appendChild(grid);
         }
 
-        function createCard(item) {
+        function createCard(item, idx) {
             const div = document.createElement('div');
-           div.className = `card ${item.isPinned ? 'pinned' : ''} ${state.selectedIds.has(item.id) ? 'selected' : ''}`;
-            const safeContent = escapeHtml(item.content);
-            const contentHtml = item.type === 'link' 
-                ? `<a href="${safeContent}" class="card-link" target="_blank">${safeContent}</a>`
-                : `<div class="card-text-content">${safeContent}</div>`;
-            const noteHtml = item.note ? `<div class="card-note">📝 ${escapeHtml(item.note)}</div>` : '';
+            div.className = `card ${item.isPinned ? 'pinned' : ''}`;
+            
+            // יצירת תוכן ה-AI במידה וקיים
+            let aiHtml = '';
+            if (item.isScanning) {
+                aiHtml = `<div class="ai-box"><div class="spinner-small"></div> סורק אתר ומנתח...</div>`;
+            } else if (item.aiSummary) {
+                let statusClass = 'ai-status-unknown'; let statusText = 'לא ידוע';
+                if(item.siteStatus === 'active') { statusClass = 'ai-status-active'; statusText = '🟢 מחובר ופעיל'; }
+                else if(item.siteStatus === 'parked') { statusClass = 'ai-status-parked'; statusText = '🟠 דומיין למכירה/חניה'; }
+                else if(item.siteStatus === 'dead') { statusClass = 'ai-status-dead'; statusText = '🔴 לא זמין/שבור'; }
+                
+                aiHtml = `<div class="ai-box">
+                            <div class="ai-header"><span class="${statusClass}">${statusText}</span> <span style="font-size:11px; opacity:0.7">🤖 ניתוח AI</span></div>
+                            <div>${escapeHtml(item.aiSummary)}</div>
+                          </div>`;
+            }
 
+            const isLink = item.type === 'link';
             div.innerHTML = `
-                <input type="checkbox" class="card-checkbox" ${state.selectedIds.has(item.id) ? 'checked' : ''}>
-                <div class="card-index">#${item.visualIndex}</div>
+                <div class="card-index">#${idx}</div>
                 <div class="card-body">
-                    ${contentHtml}
+                    ${isLink ? `<a href="${escapeHtml(item.content)}" class="card-link" target="_blank">${escapeHtml(item.content)}</a>` : `<div class="card-text-content">${escapeHtml(item.content)}</div>`}
                     <div class="card-desc">${escapeHtml(item.description)}</div>
-                    ${noteHtml}
+                    ${aiHtml}
                 </div>
                 <div class="card-footer">
-                    <div><span class="tag-category">${escapeHtml(item.category)}</span><span class="duplicate-badge" style="display:${item.isDup ? 'inline' : 'none'}">כפול</span></div>
+                    <span class="tag-category">${escapeHtml(item.category)}</span>
                     <div class="card-actions">
-                        <button class="icon-btn btn-share" title="שתף"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg></button>
-                        <button class="icon-btn btn-copy" title="העתק">📋</button>
-                        <button class="icon-btn btn-edit" title="ערוך">✏️</button>
-                        <button class="icon-btn pin-btn ${item.isPinned ? 'active' : ''}" title="נעץ">📌</button>
-                        <button class="icon-btn trash-btn" title="מחק">🗑️</button>
+                        ${isLink ? `<button class="icon-btn" onclick="scanSingleLink(${item.id})" title="נתח אתר עם בינה מלאכותית">🤖</button>` : ''}
+                        <button class="icon-btn" onclick="copyText('${item.content}')" title="העתק">📋</button>
+                        <button class="icon-btn trash-btn" onclick="moveToTrash(${item.id})" title="מחק">🗑️</button>
                     </div>
                 </div>
             `;
-            
-            // מנגנון בחירה מרובה (לחיצה רגילה בזמן מצב בחירה)
-            div.onclick = (e) => {
-                if (state.isSelectionMode) {
-                    e.preventDefault(); // מונע פתיחת קישור
-                    toggleSelection(item.id);
-                }
-            };
-
-            // לחיצה ארוכה בטלפון / מקש ימני במחשב מפעילים את מצב הבחירה
-            div.addEventListener('contextmenu', (e) => {
-                if (e.target.closest('.card-actions')) return; // אל תפעיל אם לחצו על כפתור עריכה/מחיקה
-                e.preventDefault(); 
-                if (!state.isSelectionMode) enterSelectionMode(item.id);
-            });
-
-            div.querySelector('.btn-share').onclick = (e) => { e.stopPropagation(); shareItem(item); };
-            div.querySelector('.btn-copy').onclick = (e) => { e.stopPropagation(); copyText(item.content); };
-            div.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); editItem(item); };
-            div.querySelector('.pin-btn').onclick = (e) => { e.stopPropagation(); togglePin(item.id); };
-            div.querySelector('.trash-btn').onclick = (e) => { e.stopPropagation(); moveToTrash(item.id); };
-            
-            const linkElement = div.querySelector('.card-link');
-            if (linkElement) {
-                linkElement.onclick = (e) => {
-                    if(state.isSelectionMode) { e.preventDefault(); return; } // חוסם פתיחה במצב עריכה
-                    window.open(item.content, '_blank');
-                };
-            }
             return div;
         }
 
+        // ==========================
+        // מנוע הבינה המלאכותית (AI)
+        // ==========================
+        window.scanSingleLink = async function(id) {
+            const item = state.items.find(i => i.id === id);
+            if (!item || item.type !== 'link') return;
+            
+            const apiKey = localStorage.getItem('geminiApiKey');
+            if (!apiKey) return alert("כדי להשתמש בבינה מלאכותית, עליך להזין מפתח Gemini API בהגדרות המערכת (כפתור גלגל השיניים למעלה).");
+
+            item.isScanning = true; renderList();
+
+            try {
+                // 1. קריאת האתר דרך שירות Proxy חינמי כדי לעקוף חסימת CORS
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(item.content)}`;
+                const res = await fetch(proxyUrl);
+                const data = await res.json();
+                
+                if (data.status.http_code >= 400 || !data.contents) {
+                    item.siteStatus = 'dead';
+                    item.aiSummary = `האתר אינו זמין (שגיאה ${data.status.http_code}). השרת למטה או שהדומיין נמחק.`;
+                } else {
+                    // חילוץ טקסט נקי מהקוד של האתר
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(data.contents, 'text/html');
+                    doc.querySelectorAll('script, style, nav, footer, noscript').forEach(el => el.remove());
+                    const textContent = doc.body ? doc.body.innerText.replace(/\s+/g, ' ').substring(0, 3000) : '';
+
+                    // 2. פנייה למודל Gemini של גוגל
+                    const prompt = `קרא את הטקסט הבא מאתר אינטרנט. החזר אך ורק אובייקט JSON חוקי עם 2 שדות:
+                    1. "summary": סיכום בעברית של 1-2 משפטים על מה האתר הזה עושה.
+                    2. "status": המילה "active" (אם זה אתר עם תוכן אמיתי) או "parked" (אם זה עמוד פרסומות, GoDaddy, דומיין למכירה).
+                    טקסט האתר: ${textContent}`;
+
+                    const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: prompt }] }],
+                            generationConfig: { response_mime_type: "application/json" }
+                        })
+                    });
+                    
+                    const aiData = await aiRes.json();
+                    if(aiData.error) throw new Error(aiData.error.message);
+                    
+                    const jsonStr = aiData.candidates[0].content.parts[0].text;
+                    const parsed = JSON.parse(jsonStr);
+                    
+                    item.aiSummary = parsed.summary;
+                    item.siteStatus = parsed.status; 
+                }
+            } catch (e) {
+                console.error(e);
+                item.siteStatus = 'dead'; item.aiSummary = 'שגיאה: לא הצלחנו לקרוא את תוכן האתר (ייתכן שישנה חסימת אבטחה באתר היעד).';
+            } finally {
+                item.isScanning = false; pushToCloud(); renderList();
+            }
+        };
+
+        window.startBulkAIScan = async function() {
+            const apiKey = localStorage.getItem('geminiApiKey');
+            if (!apiKey) return alert("אנא הזן מפתח API בהגדרות תחילה.");
+            
+            const linksToScan = state.items.filter(i => i.type === 'link' && !i.aiSummary);
+            if(linksToScan.length === 0) return alert("כל הקישורים שלך כבר מנותחים!");
+            
+            if(!confirm(`נמצאו ${linksToScan.length} קישורים לסריקה. הפעולה תתבצע בהדרגה (כדי לא לחסום את המכסה של גוגל). להתחיל?`)) return;
+            
+            for(let i=0; i<linksToScan.length; i++) {
+                showToast(`סורק ומנתח קישור ${i+1} מתוך ${linksToScan.length}...`);
+                await scanSingleLink(linksToScan[i].id);
+                // המתנה של 4 שניות בין בקשה לבקשה (15 בקשות בדקה בחינם)
+                if(i < linksToScan.length -1) await new Promise(r => setTimeout(r, 4500)); 
+            }
+            showToast("סריקת ה-AI לכל האתרים הסתיימה בהצלחה!");
+        };
+
+        // פונקציות מערכת רגילות (הוספה, מחיקה)
         function handleAdd(e) {
             e.preventDefault();
             const content = document.getElementById('itemContent').value.trim();
             if (!content) return;
             
-            // בדיקת כפילות: מחפש פריט קיים עם בדיוק אותו תוכן (מתעלם מאותיות גדולות/קטנות)
-            const existingItem = state.items.find(i => i.content.toLowerCase() === content.toLowerCase());
-            
-            // אם קיים, קופצת הודעת התראה שמאפשרת לבחור אם להוסיף בכל זאת
-            if (existingItem) {
-                const addAnyway = confirm(`⚠️ הפריט הזה כבר קיים במאגר תחת הקטגוריה "${existingItem.category}".\n\nהאם תרצה להוסיף אותו שוב ככפילות?`);
-                if (!addAnyway) {
-                    e.target.reset(); // אם המשתמש התחרט, מנקה את הטופס ועוצר
-                    return;
-                }
-            }
-            
             const newItem = {
-                id: Date.now(),
-                content,
+                id: Date.now(), content,
                 description: document.getElementById('itemDescription').value.trim(),
                 category: document.getElementById('itemCategory').value.trim() || 'כללי',
-                note: document.getElementById('itemNote').value.trim(),
                 date: new Date().toISOString(), 
                 type: URL_REGEX.test(content) ? 'link' : 'text',
-                isPinned: false
             };
             
-            state.items.unshift(newItem); 
-            pushToCloud();
-            e.target.reset();
+            state.items.unshift(newItem); pushToCloud(); e.target.reset(); updateCategoryDropdowns();
+            showToast('פריט נוסף בהצלחה');
             
-            showToast('פריט נוסף', () => {
-                const idx = state.items.findIndex(i => i.id === newItem.id);
-                if (idx > -1) {
-                    state.items.splice(idx, 1);
-                    pushToCloud();
-                }
-            });
-        }
-
-        function moveToTrash(id) {
-            const idx = state.items.findIndex(i => i.id === id);
-            if(idx === -1) return;
-            
-            const itemToTrash = JSON.parse(JSON.stringify(state.items[idx]));
-            state.items[idx].deletedAt = new Date().toISOString();
-            state.trash.unshift(state.items[idx]);
-            state.items.splice(idx, 1);
-            pushToCloud();
-            
-            showToast('הועבר לסל המחזור', () => {
-                state.items.splice(idx, 0, itemToTrash); 
-                const trashIdx = state.trash.findIndex(t => t.id === id);
-                if (trashIdx > -1) state.trash.splice(trashIdx, 1);
-                pushToCloud();
-            });
-        }
-
-        function togglePin(id) {
-            const item = state.items.find(i => i.id === id);
-            if(item) { 
-                item.isPinned = !item.isPinned; 
-                pushToCloud();
-                showToast(item.isPinned ? 'ננעץ' : 'שוחרר', () => {
-                    const currentItem = state.items.find(i => i.id === id);
-                    if (currentItem) {
-                        currentItem.isPinned = !currentItem.isPinned;
-                        pushToCloud();
-                    }
-                });
+            // מפעיל סריקת AI אוטומטית אם זה קישור ויש מפתח
+            if (newItem.type === 'link' && localStorage.getItem('geminiApiKey')) {
+                scanSingleLink(newItem.id);
             }
         }
 
-       function editItem(item) {
-            // פותח את חלון העריכה וממלא אותו בנתונים הקיימים
-            document.getElementById('editItemId').value = item.id;
-            document.getElementById('editItemContent').value = item.content;
-            document.getElementById('editItemDescription').value = item.description || '';
-            document.getElementById('editItemCategory').value = item.category || '';
-            document.getElementById('editItemNote').value = item.note || '';
-            document.getElementById('editModal').style.display = 'flex';
+        window.moveToTrash = function(id) {
+            const idx = state.items.findIndex(i => i.id === id); if(idx === -1) return;
+            state.trash.unshift(state.items[idx]); state.items.splice(idx, 1);
+            pushToCloud(); showToast('הועבר לסל');
         }
 
-        function handleEditSubmit(e) {
-            e.preventDefault();
-            const idValue = document.getElementById('editItemId').value;
-            // הופך בבטחה למספר גדול (מזהה הפריט) ומוודא שהחיפוש מדויק
-            const item = state.items.find(i => String(i.id) === idValue);
-            if (!item) return;
-            
-            const originalItem = JSON.parse(JSON.stringify(item));
-            
-            const c = document.getElementById('editItemContent').value.trim();
-            item.content = c;
-            item.description = document.getElementById('editItemDescription').value.trim();
-            item.category = document.getElementById('editItemCategory').value.trim() || 'כללי';
-            item.note = document.getElementById('editItemNote').value.trim();
-            item.type = URL_REGEX.test(c) ? 'link' : 'text';
-            
-            pushToCloud();
-            document.getElementById('editModal').style.display = 'none';
-            
-            showToast('עודכן בהצלחה', () => {
-                const currentItem = state.items.find(i => i.id === originalItem.id);
-                if (currentItem) {
-                    Object.assign(currentItem, originalItem);
-                    pushToCloud();
-                }
-            });
-        }
-
-        async function shareItem(item) {
-            if (navigator.share) {
-                try {
-                    await navigator.share({
-                        title: 'Link Manager',
-                        text: item.type === 'link' ? item.description : `${item.description}\n${item.content}`,                        url: item.type === 'link' ? item.content : null
-                    });
-                } catch (err) { }
-            } else {
-                copyText(item.content);
-            }
-        }
-
-       function toggleDuplicates() { 
-            state.showDuplicates = !state.showDuplicates; 
-            const btn = document.getElementById('toggleDuplicatesBtn');
-            if (!state.showDuplicates) {
-                // כשהכפתור מופעל (מצב בידוד כפילויות) - נצבע אותו בזהב זוהר
-                btn.style.background = 'rgba(245, 158, 11, 0.2)';
-                btn.style.borderColor = 'var(--accent-gold)';
-            } else {
-                // כשהכפתור מכובה (מצב רגיל) - יחזור לעיצוב השקוף
-                btn.style.background = '';
-                btn.style.borderColor = '';
-            }
-            renderList(); 
-        }
-
-        function importJson(e) {
-            const f = e.target.files[0]; if(!f) return;
-            const r = new FileReader();
-            r.onload = ev => { 
-                try { 
-                    const d = JSON.parse(ev.target.result);
-                    if(confirm('האם להחליף את כל הנתונים?')) {
-                        const backup = JSON.parse(JSON.stringify(state)); 
-                        if(Array.isArray(d)) state.items = d; else { state.items = d.items||[]; state.trash = d.trash||[]; }
-                        pushToCloud(); closeAllMenus(); 
-                        showToast('נטען בהצלחה!', () => {
-                            state.items = backup.items;
-                            state.trash = backup.trash;
-                            pushToCloud();
-                        });
-                    }
-                } catch(e){ alert('שגיאה בקובץ'); } 
-            };
-            r.readAsText(f);
-        }
-
-        function smartImport(e) {
-            const f = e.target.files[0]; if (!f) return;
-            const r = new FileReader();
-            r.onload = (ev) => {
-                const lines = ev.target.result.split('\n');
-                let added = 0;
-                const backupItems = JSON.parse(JSON.stringify(state.items));
-                
-                const map = new Map(state.items.map(i => [i.content.toLowerCase().trim(), i]));
-                lines.forEach(l => {
-                    const p = l.split('|').map(s => s.trim());
-                    if (!p[0]) return;
-                    if (!map.has(p[0].toLowerCase())) {
-                        state.items.unshift({ id: Date.now()+added, content: p[0], description: p[1]||'', category: p[2]||'כללי', date: new Date().toISOString(), type: URL_REGEX.test(p[0])?'link':'text', isPinned: false });
-                        added++;
-                    }
-                });
-                
-                if(added > 0) { 
-                    pushToCloud(); 
-                    showToast(`נוספו ${added} פריטים`, () => {
-                        state.items = backupItems;
-                        pushToCloud();
-                    });
-                } else { alert('לא נמצאו פריטים חדשים'); }
-                closeAllMenus();
-            };
-            r.readAsText(f);
-        }
-function handleWipeData(e) {
-            const f = e.target.files[0]; if (!f) return;
-            const r = new FileReader();
-            r.onload = (ev) => {
-                const text = ev.target.result.trim();
-                // בודק אם הקובץ אכן ריק לחלוטין
-                if (text === "") {
-                    if (confirm("הקובץ ריק! האם אתה בטוח שברצונך למחוק את כל הנתונים בחשבון זה? פעולה זו אינה הפיכה!")) {
-                        const backupItems = JSON.parse(JSON.stringify(state.items)); // שומר גיבוי ליתר ביטחון
-                        state.items = [];
-                        pushToCloud();
-                        showToast('⚠️ כל הנתונים נמחקו', () => {
-                            // כפתור חרטה (Undo) מובנה בתוך הטוסט!
-                            state.items = backupItems;
-                            pushToCloud();
-                        });
-                        closeAllMenus();
-                    }
-                } else {
-                    alert("פעולת המחיקה בוטלה: הקובץ שהעלית אינו ריק!");
-                }
-            };
-            r.readAsText(f);
-        }
-        function exportJson() { downloadFile('backup.json', JSON.stringify({ items: state.items, trash: state.trash }, null, 2), 'application/json'); closeAllMenus(); }
-        function exportTxt() { downloadFile('links.txt', state.items.map(i=>`${i.content} | ${i.description} | ${i.category}`).join('\n'), 'text/plain'); closeAllMenus(); }
-        
-        function downloadSite() { 
-            closeAllMenus();
-            // Inject current data into the DOM before saving
-            document.getElementById('offline-data').textContent = JSON.stringify({
-                items: state.items,
-                trash: state.trash
-            });
-            downloadFile(`LinkManager_Backup_${new Date().toISOString().slice(0,10)}.html`, '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/html'); 
-        }
-        
-        function downloadSource() { closeAllMenus(); downloadFile('source.txt', '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/plain'); }
-        function downloadFile(n, c, t) { const b=new Blob([c],{type:t}), u=URL.createObjectURL(b), a=document.createElement('a'); a.href=u; a.download=n; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
-async function copyText(t) {
-            try {
-                // נסיון 1: השיטה המודרנית (עובדת כשיש HTTPS/אונליין)
-                await navigator.clipboard.writeText(t);
-                showToast('הועתק ללוח');
-            } catch (err) {
-                // נסיון 2: השיטה היחידה שעובדת בקבצים מקומיים באנדרואיד/אייפון
-                try {
-                    const textArea = document.createElement("textarea");
-                    textArea.value = t;
-                    
-                    // הגדרות קריטיות למניעת קפיצות מסך במובייל
-                    textArea.style.position = "fixed";
-                    textArea.style.left = "0";
-                    textArea.style.top = "0";
-                    textArea.style.opacity = "0"; // שקוף כדי לא להסתיר
-                    textArea.setAttribute("readonly", ""); // מונע פתיחת מקלדת בטלפון!
-                    
-                    document.body.appendChild(textArea);
-                    textArea.focus();
-                    
-                    // הפקודה הקריטית לאנדרואיד - בחירת הטקסט בכוח
-                    textArea.setSelectionRange(0, 999999); 
-                    
-                    const successful = document.execCommand('copy');
-                    document.body.removeChild(textArea);
-                    
-                    if (successful) {
-                        showToast('הועתק (מצב מקומי)');
-                    } else {
-                        throw new Error('Fallback failed');
-                    }
-                } catch (e) {
-                    // אם הכל נכשל (נדיר מאוד), נבקש מהמשתמש
-                    prompt("העתקה אוטומטית נחסמה. העתק מכאן:", t);
-                }
-            }
-        }        function escapeHtml(text) { return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : ''; }
-        function closeAllMenus() { document.querySelectorAll('.dropdown-content, .drop-trigger').forEach(el => el.classList.remove('show', 'active')); }
+        window.copyText = function(t) { navigator.clipboard.writeText(t).then(()=>showToast('הועתק ללוח')); }
+        function escapeHtml(text) { return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : ''; }
+        function initTheme() { if(localStorage.getItem('theme')==='light') document.body.classList.remove('dark-mode'); }
+        function toggleTheme() { document.body.classList.toggle('dark-mode'); localStorage.setItem('theme', document.body.classList.contains('dark-mode')?'dark':'light'); }
         function updateCategoryDropdowns() {
             const cats = new Set(state.items.map(i => i.category));
-            const select = document.getElementById('categoryFilter');
-            const datalist = document.getElementById('categoriesDatalist');
-            const currentVal = select.value;
-            let html = '<option value="">📂 כל הקטגוריות</option>';
-            let listHtml = '';
-            [...cats].sort().forEach(c => { const s = escapeHtml(c); html += `<option value="${s}">${s}</option>`; listHtml += `<option value="${s}">`; });
-            select.innerHTML = html; datalist.innerHTML = listHtml;
-            if(currentVal && cats.has(currentVal)) select.value = currentVal;
+            let html = '<option value="">📂 כל הקטגוריות</option>'; let listHtml = '';
+            [...cats].sort().forEach(c => { html += `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`; listHtml += `<option value="${escapeHtml(c)}">`; });
+            document.getElementById('categoryFilter').innerHTML = html; document.getElementById('categoriesDatalist').innerHTML = listHtml;
         }
-
-        function initTheme() { if(localStorage.getItem('theme')==='light') { document.body.classList.remove('dark-mode'); document.getElementById('toggleDarkModeBtn').textContent='🌙'; } }
-        function toggleTheme() { document.body.classList.toggle('dark-mode'); localStorage.setItem('theme', document.body.classList.contains('dark-mode')?'dark':'light'); document.getElementById('toggleDarkModeBtn').textContent=document.body.classList.contains('dark-mode')?'☀️':'🌙'; }
-
-        // Trash UI
-        function openTrashModal() {
-            const list = document.getElementById('trashList'); list.innerHTML = '';
-            if(state.trash.length === 0) list.innerHTML = '<div style="text-align:center; padding:20px;">ריק</div>';
-            else state.trash.forEach(item => {
-                const el = document.createElement('div'); el.className = 'trash-item';
-                el.innerHTML = `<div style="flex-grow:1; margin-left:10px;"><strong>${escapeHtml(item.description)}</strong><br><small style="opacity:0.7">${escapeHtml(item.content)}</small></div><div><button onclick="restoreItem(${item.id})" style="cursor:pointer; background:none; border:none; font-size:1.2em;">♻️</button><button onclick="deleteForever(${item.id})" style="cursor:pointer; background:none; border:none; font-size:1.2em;">❌</button></div>`;
-                list.appendChild(el);
-            });
-            document.getElementById('trashModal').classList.add('open');
+        function showToast(msg) {
+            const t = document.getElementById('toast'); document.getElementById('toastMsg').textContent = msg;
+            t.classList.add('visible'); setTimeout(() => t.classList.remove('visible'), 4000);
         }
-        function closeTrashModal() { document.getElementById('trashModal').classList.remove('open'); }
-       window.restoreItem = function(id) {
-            const idx = state.trash.findIndex(i => i.id === id); 
-            if(idx === -1) return;
-            
-            const item = JSON.parse(JSON.stringify(state.trash[idx])); 
-            delete item.deletedAt;
-            
-            state.items.unshift(item);
-            state.trash.splice(idx, 1);
-            
-            pushToCloud(); 
-            openTrashModal(); 
-            
-            showToast('הפריט שוחזר', () => {
-                const itemToTrash = state.items.find(i => i.id === id);
-                if (itemToTrash) {
-                    itemToTrash.deletedAt = new Date().toISOString();
-                    state.trash.splice(idx, 0, itemToTrash);
-                    state.items = state.items.filter(i => i.id !== id);
-                    pushToCloud();
-                    openTrashModal();
-                }
-            });
-        };
-
-        window.deleteForever = function(id) {
-            const idx = state.trash.findIndex(i => i.id === id); 
-            if(idx === -1) return;
-            
-            const itemToDelete = JSON.parse(JSON.stringify(state.trash[idx]));
-            state.trash.splice(idx, 1);
-            
-            pushToCloud(); 
-            openTrashModal(); 
-            
-            showToast('הפריט נמחק לצמיתות', () => {
-                state.trash.splice(idx, 0, itemToDelete);
-                pushToCloud();
-                openTrashModal();
-            });
-        };
-
-        function setupScrollToTop() {
-            const btn = document.getElementById('scrollTopBtn');
-            window.onscroll = () => { if (document.body.scrollTop > 200 || document.documentElement.scrollTop > 200) btn.classList.add('show'); else btn.classList.remove('show'); };
-            btn.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-
-        function showToast(msg, undoCallback = null) {
-            const t = document.getElementById('toast');
-            const undoBtn = document.getElementById('undoBtn');
-            const progress = document.getElementById('toastProgress');
-            
-            if (toastTimeout) clearTimeout(toastTimeout);
-            progress.classList.remove('animating');
-            void progress.offsetWidth; 
-            
-            document.getElementById('toastMsg').textContent = msg;
-            
-            if (undoCallback) {
-                undoBtn.style.display = 'block';
-                undoBtn.onclick = () => { undoCallback(); t.classList.remove('visible'); };
-                progress.classList.add('animating'); 
-            } else {
-                undoBtn.style.display = 'none';
-            }
-            
-            t.classList.add('visible');
-            toastTimeout = setTimeout(() => { t.classList.remove('visible'); }, 10000);
-        }
-        // --- פונקציות בחירה מרובה (Multi-Select) ---
-        function enterSelectionMode(firstId) {
-            state.isSelectionMode = true;
-            state.selectedIds.add(firstId);
-            document.body.classList.add('selection-mode-active');
-            updateBulkActionBar();
-            renderList();
-            if ('vibrate' in navigator) navigator.vibrate(50); // רטט קטן למובייל
-        }
-
-        function toggleSelection(id) {
-            if (state.selectedIds.has(id)) state.selectedIds.delete(id);
-            else state.selectedIds.add(id);
-            
-            if (state.selectedIds.size === 0) exitSelectionMode();
-            else { updateBulkActionBar(); renderList(); }
-        }
-
-        function exitSelectionMode() {
-            state.isSelectionMode = false;
-            state.selectedIds.clear();
-            document.body.classList.remove('selection-mode-active');
-            document.getElementById('bulkActionBar').classList.remove('visible');
-            renderList();
-        }
-
-        function updateBulkActionBar() {
-            const bar = document.getElementById('bulkActionBar');
-            document.getElementById('selectedCount').textContent = `${state.selectedIds.size} פריטים נבחרו`;
-            
-            // בודק אם כל הפריטים הנוכחיים בסינון נבחרו
-            const currentFilteredItems = document.querySelectorAll('.card').length;
-            document.getElementById('selectAllCheckbox').checked = (state.selectedIds.size > 0 && state.selectedIds.size === state.items.length);
-            bar.classList.add('visible');
-        }
-
-        // כפתורי הסרגל העליון
-        document.getElementById('cancelBulkBtn')?.addEventListener('click', exitSelectionMode);
-        
-        document.getElementById('selectAllCheckbox')?.addEventListener('change', (e) => {
-            if (e.target.checked) {
-                state.items.forEach(i => state.selectedIds.add(i.id));
-            } else {
-                state.selectedIds.clear();
-            }
-            if (state.selectedIds.size === 0) exitSelectionMode();
-            else { updateBulkActionBar(); renderList(); }
-        });
-
-        document.getElementById('bulkDeleteBtn')?.addEventListener('click', () => {
-            if(!confirm(`האם אתה בטוח שברצונך להעביר ${state.selectedIds.size} פריטים לסל המחזור?`)) return;
-            
-            const originalItems = [...state.items]; // גיבוי לצורך UNDO
-            const selectedIdsArray = Array.from(state.selectedIds);
-            const itemsToTrash = state.items.filter(i => state.selectedIds.has(i.id));
-            
-            itemsToTrash.forEach(i => i.deletedAt = new Date().toISOString());
-            
-            state.trash.unshift(...itemsToTrash);
-            state.items = state.items.filter(i => !state.selectedIds.has(i.id));
-            
-            pushToCloud();
-            exitSelectionMode();
-            
-            // הוספת ה-Callback שמאפשר את כפתור ה-UNDO בטוסט
-            showToast(`הועברו ${itemsToTrash.length} פריטים לסל המחזור`, () => {
-                state.items = originalItems; // מחזיר את הפריטים לרשימה
-                state.trash = state.trash.filter(t => !selectedIdsArray.includes(t.id)); // מוציא אותם מהסל
-                pushToCloud();
-            });
-        });
-
-       document.getElementById('bulkMoveBtn')?.addEventListener('click', () => {
-            const newCat = prompt('לאיזו קטגוריה תרצה להעביר את כל הפריטים הנבחרים? (הקלד שם או השאר "כללי")');
-            if (newCat === null) return;
-            
-            const catName = newCat.trim() || 'כללי';
-            // יצירת גיבוי עמוק לפני השינוי
-            const originalItems = JSON.parse(JSON.stringify(state.items)); 
-            
-            state.items.forEach(i => {
-                if (state.selectedIds.has(i.id)) i.category = catName;
-            });
-            
-            pushToCloud();
-            updateCategoryDropdowns(); // מעדכן את הרשימה למעלה אם נוצרה קטגוריה חדשה
-            const count = state.selectedIds.size;
-            exitSelectionMode();
-            
-            // הודעה עם כפתור ביטול שמחזיר הכל לקדמותו
-            showToast(`${count} פריטים הועברו לקטגוריה "${catName}"`, () => {
-                state.items = originalItems; 
-                pushToCloud();
-                updateCategoryDropdowns();
-            });
-        });
-        
-// לוגיקה לשחזור מלא של סל המחזור עם אפשרות UNDO
-        window.restoreAllTrash = function() {
-            if (state.trash.length === 0) return;
-            if (!confirm(`האם אתה בטוח שברצונך לשחזר את כל ${state.trash.length} הפריטים?`)) return;
-            
-            const originalItems = [...state.items]; // גיבוי רשימה ראשית
-            const itemsToRestore = JSON.parse(JSON.stringify(state.trash)); // העתקה עמוקה של הסל
-            
-            itemsToRestore.forEach(item => delete item.deletedAt); // ניקוי חותמת המחיקה
-            
-            state.items = [...itemsToRestore, ...state.items]; // הוספה לראש הרשימה
-            state.trash = []; // ריקון הסל
-            
-            pushToCloud();
-            openTrashModal(); // רענון התצוגה במודאל
-            
-            showToast(`שוחזרו ${itemsToRestore.length} פריטים`, () => {
-                state.items = originalItems; // ביטול: מחזיר רשימה מקורית
-                state.trash = itemsToRestore; // מחזיר פריטים לסל
-                pushToCloud();
-                openTrashModal();
-            });
-        };
-        
-        // לוגיקה לריקון מלא של סל המחזור עם אפשרות UNDO
-        window.emptyTrash = function() {
-            if (state.trash.length === 0) return;
-            if (!confirm(`האם אתה בטוח שברצונך למחוק לצמיתות את כל ${state.trash.length} הפריטים?`)) return;
-            
-            const originalTrash = [...state.trash]; // גיבוי לצורך ביטול
-            state.trash = [];
-            
-            pushToCloud();
-            openTrashModal(); // מרענן את התצוגה
-            
-            showToast('סל המחזור רוקן', () => {
-                state.trash = originalTrash; // החזרת הכל לסל במידת הצורך
-                pushToCloud();
-                openTrashModal();
-            });
-        };
-
-        document.getElementById('restoreAllBtn')?.addEventListener('click', restoreAllTrash);
-        // חיבור הכפתור מה-HTML לפונקציה
-        document.getElementById('emptyTrashBtn')?.addEventListener('click', emptyTrash);
-       // --- אבטחה נגד DevTools ---
-        const ADMIN_EMAIL = "meirhadad74@gmail.com"; // ⚠️ שנה לאימייל שלך בדיוק!
-
-        function checkDevTools() {
-            // אם זה האדמין או אם אנחנו מריצים קובץ גיבוי מקומי - שחרר הכל
-            if (state.isOffline || (state.user && state.user.email === ADMIN_EMAIL)) {
-                document.getElementById('devtools-overlay').style.display = 'none';
-                return;
-            }
-
-            // הגדרות זיהוי
-            const threshold = 160;
-            const widthThreshold = window.outerWidth - window.innerWidth > threshold;
-            const heightThreshold = window.outerHeight - window.innerHeight > threshold;
-            
-            // בדיקה אם הכלים פתוחים
-            if ((widthThreshold || heightThreshold) && !document.fullscreenElement) {
-                document.getElementById('devtools-overlay').style.display = 'flex';
-                // דיבאגר שתוקע את הדפדפן למי שלא אדמין
-                debugger; 
-            } else {
-                document.getElementById('devtools-overlay').style.display = 'none';
-            }
-        }
-
-        // הפעלת הבדיקה כל שנייה
-        setInterval(checkDevTools, 1000);
-
-        // חסימת מקשים (F12, עכבר ימני וכו')
-        document.addEventListener('contextmenu', e => {
-            if (state.isOffline || (state.user && state.user.email === ADMIN_EMAIL)) return;
-            if (!state.isSelectionMode) e.preventDefault(); // מאפשר לחצן ימני רק במצב אופליין/אדמין
-        });
-        
-        document.addEventListener('keydown', e => {
-            if (state.isOffline || (state.user && state.user.email === ADMIN_EMAIL)) return;
-            if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) || (e.ctrlKey && e.key === 'u')) {
-                e.preventDefault();
-            }
-        });
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
