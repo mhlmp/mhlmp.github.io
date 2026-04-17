@@ -374,24 +374,33 @@
             </form>
         </div>
     </div>
-    <div id="aiSettingsModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
+   <div id="aiSettingsModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
     <div class="modal-content" style="padding: 20px; width: 90%; max-width: 400px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border);">
         <div class="modal-header"><h3>⚙️ הגדרות מנוע AI</h3><button type="button" class="btn-close-modal" onclick="document.getElementById('aiSettingsModal').style.display='none'">✖</button></div>
         <div class="modal-body">
             <label style="display:block; margin-bottom:5px;">מנוע מועדף לסריקה:</label>
             <select id="aiProviderSelect" style="width:100%; padding:10px; margin-bottom:15px; border-radius:8px; background:rgba(127,127,127,0.1); color:var(--text-primary);">
-                <option value="gemini">Google Gemini (מומלץ)</option>
-                <option value="groq">Groq (Llama 3 - סופר מהיר)</option>
-                <option value="openrouter">OpenRouter (תומך DeepSeek/Claude)</option>
+                <option value="gemini">Google Gemini (מומלץ - הכי יציב)</option>
+                <option value="groq">Groq (Llama 3 - הכי מהיר)</option>
+                <option value="openrouter">OpenRouter (חינמי חלופי)</option>
             </select>
             
-            <label style="display:block; margin-bottom:5px;">מפתח Gemini API:</label>
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                <label>מפתח Gemini API:</label>
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--primary-color); font-size:12px; text-decoration:none;">🔗 קבל מפתח כאן</a>
+            </div>
             <input type="password" id="keyGemini" placeholder="AIzaSy..." style="width:100%; padding:10px; margin-bottom:15px; border-radius:8px; background:rgba(127,127,127,0.1); color:var(--text-primary); border:1px solid var(--glass-border);">
             
-            <label style="display:block; margin-bottom:5px;">מפתח Groq API:</label>
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                <label>מפתח Groq API:</label>
+                <a href="https://console.groq.com/keys" target="_blank" style="color:var(--primary-color); font-size:12px; text-decoration:none;">🔗 קבל מפתח כאן</a>
+            </div>
             <input type="password" id="keyGroq" placeholder="gsk_..." style="width:100%; padding:10px; margin-bottom:15px; border-radius:8px; background:rgba(127,127,127,0.1); color:var(--text-primary); border:1px solid var(--glass-border);">
             
-            <label style="display:block; margin-bottom:5px;">מפתח OpenRouter (אופציונלי):</label>
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                <label>מפתח OpenRouter:</label>
+                <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--primary-color); font-size:12px; text-decoration:none;">🔗 קבל מפתח כאן</a>
+            </div>
             <input type="password" id="keyOpenRouter" placeholder="sk-or-v1-..." style="width:100%; padding:10px; margin-bottom:15px; border-radius:8px; background:rgba(127,127,127,0.1); color:var(--text-primary); border:1px solid var(--glass-border);">
             
             <div style="display:flex; align-items:center; gap:10px; margin-bottom: 20px;">
@@ -782,8 +791,8 @@
                 
                 if (isHashSearch) return i.visualIndex === searchNum;
                 
-                const matchesSearch = !query || i.content.toLowerCase().includes(query) || i.description.toLowerCase().includes(query) || i.category.toLowerCase().includes(query) || (i.note && i.note.toLowerCase().includes(query));
-                
+                const safeTags = (i.aiTags || []).join(' ').toLowerCase();
+                const matchesSearch = !query || i.content.toLowerCase().includes(query) || i.description.toLowerCase().includes(query) || i.category.toLowerCase().includes(query) || (i.note && i.note.toLowerCase().includes(query)) || safeTags.includes(query);                
                 return matchesSearch && matchesCat;
             });
 
@@ -848,19 +857,27 @@
                 : `<div class="card-text-content">${safeContent}</div>`;
             const noteHtml = item.note ? `<div class="card-note">📝 ${escapeHtml(item.note)}</div>` : '';
 
-            // AI HTML Injection
+          // AI HTML Injection
             let aiHtml = '';
             if (item.isScanning) {
-                aiHtml = `<div class="ai-box"><div class="spinner-small"></div> סורק מנתח...</div>`;
+                aiHtml = `<div class="ai-box"><div class="spinner-small"></div> סורק ומנתח...</div>`;
             } else if (item.aiSummary) {
                 let statusClass = 'ai-status-text'; let statusText = '📄 ניתוח טקסט';
                 if(item.siteStatus === 'active') { statusClass = 'ai-status-active'; statusText = '🟢 רשת: פעיל'; }
                 else if(item.siteStatus === 'parked') { statusClass = 'ai-status-parked'; statusText = '🟠 רשת: דומיין/חניה'; }
                 else if(item.siteStatus === 'dead') { statusClass = 'ai-status-dead'; statusText = '🔴 רשת: לא זמין'; }
                 
+                let tagsHtml = '';
+                if (item.aiTags && item.aiTags.length > 0) {
+                    tagsHtml = `<div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px;">
+                        ${item.aiTags.map(tag => `<span style="background: rgba(96, 165, 250, 0.15); color: var(--primary-color); padding: 3px 10px; border-radius: 12px; font-size: 11px; border: 1px solid rgba(96, 165, 250, 0.3); font-weight: bold; cursor:pointer;" onclick="event.stopPropagation(); document.getElementById('searchInput').value='${tag}'; document.getElementById('searchInput').dispatchEvent(new Event('input'));">${escapeHtml(tag)}</span>`).join('')}
+                    </div>`;
+                }
+
                 aiHtml = `<div class="ai-box">
                             <div class="ai-header"><span class="${statusClass}">${statusText}</span> <span style="font-size:11px; opacity:0.7">🤖 AI</span></div>
                             <div>${escapeHtml(item.aiSummary)}</div>
+                            ${tagsHtml}
                           </div>`;
             }
 
@@ -988,8 +1005,7 @@
             document.getElementById('aiSettingsModal').style.display = 'flex';
             closeAllMenus();
         });
-
-        window.scanSingleItem = async function(id) {
+window.scanSingleItem = async function(id) {
             const item = state.items.find(i => i.id === id);
             if (!item) return;
             
@@ -1005,14 +1021,13 @@
                 let isWebsite = item.type === 'link';
                 let siteStatusRaw = 'active';
 
+                // שליפת אתר צד-ג'
                 if (isWebsite) {
                     const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(item.content)}`;
                     const res = await fetch(proxyUrl);
                     const data = await res.json();
-                    
                     if (data.status.http_code >= 400 || !data.contents) {
-                        siteStatusRaw = 'dead';
-                        contentToAnalyze = "האתר אינו זמין (שגיאת שרת). אי אפשר לנתח את התוכן.";
+                        siteStatusRaw = 'dead'; contentToAnalyze = "האתר אינו זמין (שגיאת שרת). אי אפשר לנתח את התוכן.";
                     } else {
                         const parser = new DOMParser();
                         const doc = parser.parseFromString(data.contents, 'text/html');
@@ -1021,64 +1036,95 @@
                     }
                 }
 
+                // הפקודה המדויקת שדורשת גם סטטוס וגם תגיות
                 const promptType = isWebsite 
-                    ? `זהו טקסט שחולץ מאתר אינטרנט. 1. החזר סיכום בעברית של מה האתר עושה (עד 2 משפטים). 2. אם מדובר בעמוד חניה/למכירה (Parked Domain/For Sale) ציין "status": "parked", אחרת "status": "active".`
-                    : `זהו טקסט חופשי/פקודה מהמשתמש. נתח אותו והחזר סיכום בעברית של מה הטקסט הזה אומר או מנסה לעשות (עד 2 משפטים). סטטוס חייב להיות תמיד "text".`;
+                    ? `זהו טקסט שחולץ מאתר אינטרנט. 1. החזר סיכום בעברית של מה האתר עושה (עד 2 משפטים). 2. אם מדובר בעמוד חניה/למכירה ציין "status": "parked", אחרת "status": "active". 3. ייצר מערך של 3 עד 5 תגיות (Hashtags) קצרות וקולעות שמתארות את התוכן.`
+                    : `זהו טקסט חופשי. נתח אותו והחזר סיכום בעברית של מה הטקסט הזה אומר או מנסה לעשות (עד 2 משפטים). הסטטוס חייב להיות תמיד "text". ייצר מערך של 3 עד 5 תגיות (Hashtags) רלוונטיות.`;
 
-                const systemPrompt = `You are a strict data analyzer. Return ONLY valid JSON in this exact format, with no markdown tags or code blocks: {"summary": "...", "status": "active/parked/text"}\n\nRules:\n${promptType}\n\nContent to analyze:\n${contentToAnalyze}`;
+                const systemPrompt = `You are a strict data analyzer. Return ONLY valid JSON in this exact format, with no markdown tags or code blocks: {"summary": "...", "status": "active/parked/text", "tags": ["#tag1", "#tag2"]}\n\nRules:\n${promptType}\n\nContent to analyze:\n${contentToAnalyze}`;
 
                 let aiSummaryResult = "";
                 let aiStatusResult = isWebsite ? siteStatusRaw : "text";
+                let aiTagsResult = [];
 
                 if (siteStatusRaw !== 'dead') {
                     let jsonString = "";
-                    
+                    let success = false;
+                    let lastError = "";
+
+                    // מערך חכם (Fallback): מתחיל מהכי חזק ויורד אם יש שגיאה
                     if (settings.provider === 'gemini') {
-                        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${activeKey}`, {
-                            method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt }] }], generationConfig: { response_mime_type: "application/json" } })
-                        });
-                        const resData = await res.json();
-                        if(resData.error) throw new Error(resData.error.message);
-                        jsonString = resData.candidates[0].content.parts[0].text;
+                        const models = ['gemini-1.5-pro', 'gemini-1.5-flash'];
+                        for (let model of models) {
+                            try {
+                                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`, {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt }] }], generationConfig: { response_mime_type: "application/json" } })
+                                });
+                                const resData = await res.json();
+                                if(resData.error) throw new Error(resData.error.message);
+                                jsonString = resData.candidates[0].content.parts[0].text;
+                                success = true; break;
+                            } catch (err) { lastError = err.message; console.warn(`Gemini ${model} failed, trying next...`); }
+                        }
                     } 
-                    else if (settings.provider === 'groq' || settings.provider === 'openrouter') {
-                        const endpoint = settings.provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions';
-                        const model = settings.provider === 'groq' ? 'llama3-8b-8192' : 'deepseek/deepseek-chat:free';
-                        
-                        const res = await fetch(endpoint, {
-                            method: 'POST',
-                            headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                model: model,
-                                messages: [{ role: "user", content: systemPrompt }],
-                                response_format: { type: "json_object" }
-                            })
-                        });
-                        const resData = await res.json();
-                        if(resData.error) throw new Error(resData.error.message);
-                        jsonString = resData.choices[0].message.content;
+                    else if (settings.provider === 'groq') {
+                        // היררכיה ל-Groq: מהמודל הכי גדול וחכם (70b) למודלים מהירים וקטנים יותר
+                        const models = ['llama3-70b-8192', 'llama-3.1-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'];
+                        for (let model of models) {
+                            try {
+                                const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                                    method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ model: model, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
+                                });
+                                const resData = await res.json();
+                                if(resData.error) throw new Error(resData.error.message);
+                                jsonString = resData.choices[0].message.content;
+                                success = true; break;
+                            } catch (err) { lastError = err.message; console.warn(`Groq ${model} failed, trying next...`); }
+                        }
+                    }
+                    else if (settings.provider === 'openrouter') {
+                        // היררכיה חינמית ל-OpenRouter: מ-DeepSeek ל-Llama
+                        const models = ['deepseek/deepseek-chat:free', 'meta-llama/llama-3-8b-instruct:free'];
+                        for (let model of models) {
+                            try {
+                                const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                                    method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ model: model, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
+                                });
+                                const resData = await res.json();
+                                if(resData.error) throw new Error(resData.error.message);
+                                jsonString = resData.choices[0].message.content;
+                                success = true; break;
+                            } catch (err) { lastError = err.message; console.warn(`OpenRouter ${model} failed, trying next...`); }
+                        }
                     }
 
+                    if (!success) throw new Error("כל המודלים קרסו או חסומים (Rate Limit). " + lastError);
+
+                    // פענוח ה-JSON ותפיסת התגיות
                     const parsed = JSON.parse(jsonString);
                     aiSummaryResult = parsed.summary;
                     if(isWebsite) aiStatusResult = parsed.status;
+                    aiTagsResult = parsed.tags && Array.isArray(parsed.tags) ? parsed.tags : [];
                 } else {
                     aiSummaryResult = contentToAnalyze; 
                 }
 
                 item.aiSummary = aiSummaryResult;
                 item.siteStatus = aiStatusResult; 
+                item.aiTags = aiTagsResult;
 
             } catch (e) {
                 console.error(e);
                 item.siteStatus = item.type === 'link' ? 'dead' : 'text'; 
                 item.aiSummary = 'שגיאה בניתוח: ' + e.message;
+                item.aiTags = [];
             } finally {
                 item.isScanning = false; pushToCloud(); renderList();
             }
         };
-
         document.getElementById('bulkAiScanBtn')?.addEventListener('click', async () => {
             const settings = getAiSettings();
             if (!settings.keys[settings.provider]) return alert("אנא הזן מפתח API בהגדרות ה-AI תחילה.");
