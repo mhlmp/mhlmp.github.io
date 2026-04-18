@@ -1126,14 +1126,32 @@ ${promptType}
 
 Content to analyze:
 ${contentToAnalyze}`;
-
-                let jsonString = "";
+let jsonString = "";
                 let success = false;
                 let lastError = "";
 
                 if (settings.provider === 'gemini') {
-                    const models = ['gemini-1.5-flash', 'gemini-1.5-pro'];
-                    for (let model of models) {
+                    // מנגנון חכם: שואב את רשימת המודלים המותרים ישירות מגוגל לפי המפתח שלך (בלי שמות קשיחים!)
+                    let availableModels = window.dynamicGeminiModels;
+                    if (!availableModels) {
+                        try {
+                            const req = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models?key=${activeKey}`, {}, 8000);
+                            const data = await req.json();
+                            if (data.models) {
+                                availableModels = data.models
+                                    .filter(m => m.supportedGenerationMethods?.includes('generateContent') && m.name.includes('gemini'))
+                                    .map(m => m.name.replace('models/', ''));
+                                // נסדר כדי שהמודלים המהירים/החדשים יהיו בראש התור
+                                availableModels.sort((a, b) => (a.includes('flash') ? -1 : 1));
+                                window.dynamicGeminiModels = availableModels;
+                            }
+                        } catch (e) {
+                            availableModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']; // גיבוי אחרון
+                        }
+                    }
+                    if (!availableModels || availableModels.length === 0) availableModels = ['gemini-1.5-flash'];
+
+                    for (let model of availableModels) {
                         try {
                             const res = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`, {
                                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1145,61 +1163,66 @@ ${contentToAnalyze}`;
                             const resData = await res.json();
                             if(resData.error) throw new Error(resData.error.message);
                             jsonString = resData.candidates[0].content.parts[0].text;
-                            success = true; break;
-                        } catch (err) { lastError = err.message; console.warn("Gemini Error:", err.message); }
+                            success = true; 
+                            window.dynamicGeminiModels = [model]; // שומר את המודל המנצח לפעם הבאה כדי לחסוך זמן!
+                            break;
+                        } catch (err) { 
+                            lastError = err.message; 
+                            console.warn(`Gemini [${model}] failed, trying next... Error:`, err.message); 
+                        }
                     }
-                }
+                } 
                 else if (settings.provider === 'groq') {
-                    const models = ['llama-3.3-70b-versatile', 'llama-3.1-70b-versatile', 'llama-3.1-8b-instant'];
-                    for (let model of models) {
+                    // מנגנון חכם: שואב את הרשימה ישירות מהשרתים של Groq!
+                    let availableModels = window.dynamicGroqModels;
+                    if (!availableModels) {
+                        try {
+                            const req = await fetchWithTimeout('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': `Bearer ${activeKey}` } }, 8000);
+                            const data = await req.json();
+                            if (data.data) {
+                                availableModels = data.data.map(m => m.id);
+                                // נסדר כדי ש-Llama יהיה בראש התור
+                                availableModels.sort((a, b) => (a.includes('llama') ? -1 : 1));
+                                window.dynamicGroqModels = availableModels;
+                            }
+                        } catch (e) {
+                            availableModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+                        }
+                    }
+                    if (!availableModels || availableModels.length === 0) availableModels = ['llama-3.3-70b-versatile'];
+
+                    for (let model of availableModels) {
                         try {
                             const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
-                                method: 'POST',
-                                headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    model, temperature: 0.1, max_tokens: 512,
-                                    messages: [{ role: "user", content: systemPrompt }],
-                                    response_format: { type: "json_object" }
-                                })
-                            }, 18000);
+                                method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ model: model, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
+                            }, 15000);
                             const resData = await res.json();
-                            if (resData.error) throw new Error(resData.error.message);
-                            const content = resData.choices?.[0]?.message?.content;
-                            if (!content) throw new Error('empty response');
-                            jsonString = content;
-                            success = true; break;
-                        } catch (err) { lastError = err.message; console.warn(`Groq ${model} failed:`, err.message); }
+                            if(resData.error) throw new Error(resData.error.message);
+                            jsonString = resData.choices[0].message.content;
+                            success = true; 
+                            window.dynamicGroqModels = [model]; // שומר את המודל המנצח לפעם הבאה!
+                            break;
+                        } catch (err) { lastError = err.message; console.warn(`Groq [${model}] failed, trying next...`); }
                     }
                 }
                 else if (settings.provider === 'openrouter') {
-                    const models = ['deepseek/deepseek-chat:free', 'meta-llama/llama-3.1-8b-instruct:free', 'google/gemma-2-9b-it:free'];
+                    const models = ['deepseek/deepseek-chat:free', 'meta-llama/llama-3-8b-instruct:free'];
                     for (let model of models) {
                         try {
                             const res = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
-                                method: 'POST',
-                                headers: {
-                                    'Authorization': `Bearer ${activeKey}`,
-                                    'Content-Type': 'application/json',
-                                    'HTTP-Referer': window.location.href,
-                                    'X-Title': 'MH Link Manager'
-                                },
-                                body: JSON.stringify({
-                                    model, temperature: 0.1, max_tokens: 512,
-                                    messages: [{ role: "user", content: systemPrompt }]
-                                })
-                            }, 18000);
+                                method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ model: model, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
+                            }, 15000);
                             const resData = await res.json();
-                            if (resData.error) throw new Error(resData.error.message);
-                            const content = resData.choices?.[0]?.message?.content;
-                            if (!content) throw new Error('empty response');
-                            jsonString = content;
+                            if(resData.error) throw new Error(resData.error.message);
+                            jsonString = resData.choices[0].message.content;
                             success = true; break;
-                        } catch (err) { lastError = err.message; console.warn(`OpenRouter ${model} failed:`, err.message); }
+                        } catch (err) { lastError = err.message; }
                     }
                 }
 
                 if (!success) throw new Error("שגיאת שרת AI: " + lastError);
-
                 // ניקוי תשובה – מודלים מסוימים עוטפים ב-markdown או בטקסט נוסף
                 jsonString = jsonString
                     .replace(/```json\s*/gi, '')
