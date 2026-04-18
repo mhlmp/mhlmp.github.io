@@ -441,8 +441,14 @@
 
     <button id="scrollTopBtn" title="גלול למעלה">☝️</button>
     
-<div id="aiFloatingMenu" class="dropdown-content" style="position: fixed; display: none; z-index: 9999; box-shadow: 0 15px 40px rgba(0,0,0,0.5); border: 1px solid var(--glass-border); background: var(--glass-bg); backdrop-filter: blur(20px); border-radius: var(--radius); min-width: 180px; right: auto; top: auto; padding: 8px 0;">
+<div id="aiFloatingMenu" class="dropdown-content" style="position: fixed; display: none; z-index: 9999; box-shadow: 0 15px 40px rgba(0,0,0,0.5); border: 1px solid var(--glass-border); background: var(--glass-bg); backdrop-filter: blur(20px); border-radius: var(--radius); min-width: 220px; right: auto; top: auto; padding: 8px 0;">
         <div style="padding: 8px 15px; font-size: 11px; opacity: 0.7; font-weight: bold; border-bottom: 1px solid var(--glass-border);">בחר מנוע פענוח:</div>
+        
+        <div style="padding: 10px 15px; border-bottom: 1px solid rgba(127,127,127,0.1); display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="aiUrlOnlyCheckbox" style="transform: scale(1.3); cursor: pointer; accent-color: var(--primary-color);">
+            <label for="aiUrlOnlyCheckbox" style="font-size: 13px; cursor: pointer; color: var(--text-primary); user-select: none;">נתח לפי כתובת בלבד<br><span style="font-size: 10px; opacity: 0.7;">(עוקף אימות אבטחה)</span></label>
+        </div>
+
         <button class="ai-provider-btn" data-provider="gemini" style="text-align: right; width: 100%; background: none; border: none; padding: 12px 15px; color: var(--text-primary); cursor: pointer; transition: 0.2s;">🔹 Google Gemini</button>
         <button class="ai-provider-btn" data-provider="groq" style="text-align: right; width: 100%; background: none; border: none; padding: 12px 15px; color: var(--text-primary); cursor: pointer; transition: 0.2s;">⚡ Groq (Llama)</button>
         <button class="ai-provider-btn" data-provider="openrouter" style="text-align: right; width: 100%; background: none; border: none; padding: 12px 15px; color: var(--text-primary); cursor: pointer; transition: 0.2s;">🌐 OpenRouter</button>
@@ -1075,7 +1081,7 @@
             closeAllMenus();
         });
 
-        window.scanSingleItem = async function(id, overrideProvider = null) {
+        window.scanSingleItem = async function(id, overrideProvider = null, forceUrlOnly = false) {
             const item = state.items.find(i => i.id === id);
             if (!item) return;
             
@@ -1105,7 +1111,10 @@
                     }
                 };
 
-                if (isWebsite) {
+                if (isWebsite && forceUrlOnly) {
+                    // אם המשתמש סימן את התיבה, מדלגים על הקריאה לאתר ומנתחים ישר את הטקסט
+                    contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: User bypassed page scanning due to security blocks. Analyze this website purely based on its URL text, domain name, and the provided description.`;
+                } else if (isWebsite) {
                     // מערך של פרוקסי-שרתים בסדר עדיפות – ינסה אחד אחרי השני
                     const proxies = [
                         (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
@@ -1641,6 +1650,9 @@ ${contentToAnalyze}`;
             window.activeAiScanId = id;
             closeAllMenus(); 
             
+            const checkbox = document.getElementById('aiUrlOnlyCheckbox');
+            if (checkbox) checkbox.checked = false; // מאפס את הסימון בכל פתיחה 
+            
             const menu = document.getElementById('aiFloatingMenu');
             menu.style.display = 'block';
 
@@ -1675,9 +1687,10 @@ ${contentToAnalyze}`;
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const selectedProvider = e.target.getAttribute('data-provider');
+                const isUrlOnly = document.getElementById('aiUrlOnlyCheckbox').checked;
                 document.getElementById('aiFloatingMenu').style.display = 'none';
                 if (window.activeAiScanId) {
-                    scanSingleItem(window.activeAiScanId, selectedProvider);
+                    scanSingleItem(window.activeAiScanId, selectedProvider, isUrlOnly);
                 }
             });
         });
