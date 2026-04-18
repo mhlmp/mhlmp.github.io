@@ -440,7 +440,14 @@
     </div>
 
     <button id="scrollTopBtn" title="גלול למעלה">☝️</button>
-
+    
+<div id="aiFloatingMenu" class="dropdown-content" style="position: fixed; display: none; z-index: 9999; box-shadow: 0 15px 40px rgba(0,0,0,0.5); border: 1px solid var(--glass-border); background: var(--glass-bg); backdrop-filter: blur(20px); border-radius: var(--radius); min-width: 180px; right: auto; top: auto; padding: 8px 0;">
+        <div style="padding: 8px 15px; font-size: 11px; opacity: 0.7; font-weight: bold; border-bottom: 1px solid var(--glass-border);">בחר מנוע פענוח:</div>
+        <button class="ai-provider-btn" data-provider="gemini" style="text-align: right; width: 100%; background: none; border: none; padding: 12px 15px; color: var(--text-primary); cursor: pointer; transition: 0.2s;">🔹 Google Gemini</button>
+        <button class="ai-provider-btn" data-provider="groq" style="text-align: right; width: 100%; background: none; border: none; padding: 12px 15px; color: var(--text-primary); cursor: pointer; transition: 0.2s;">⚡ Groq (Llama)</button>
+        <button class="ai-provider-btn" data-provider="openrouter" style="text-align: right; width: 100%; background: none; border: none; padding: 12px 15px; color: var(--text-primary); cursor: pointer; transition: 0.2s;">🌐 OpenRouter</button>
+    </div>
+    
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
@@ -934,7 +941,40 @@
                 if (!state.isSelectionMode) enterSelectionMode(item.id);
             });
 
-            div.querySelector('.btn-ai-scan').onclick = (e) => { e.stopPropagation(); scanSingleItem(item.id); };
+            const btnAi = div.querySelector('.btn-ai-scan');
+            let pressTimer;
+            let isLongPress = false;
+
+            const startPress = (e) => {
+                if (e.button !== 0 && e.type === 'mousedown') return;
+                isLongPress = false;
+                pressTimer = setTimeout(() => {
+                    isLongPress = true;
+                    openAiFloatingMenu(item.id, e);
+                }, 500);
+            };
+
+            const cancelPress = () => { clearTimeout(pressTimer); };
+
+            btnAi.addEventListener('mousedown', startPress);
+            btnAi.addEventListener('touchstart', startPress, {passive: true});
+            btnAi.addEventListener('mouseup', cancelPress);
+            btnAi.addEventListener('mouseleave', cancelPress);
+            btnAi.addEventListener('touchend', cancelPress);
+            btnAi.addEventListener('touchmove', cancelPress, {passive: true});
+            
+            btnAi.addEventListener('contextmenu', (e) => {
+                e.preventDefault(); 
+                e.stopPropagation();
+                openAiFloatingMenu(item.id, e);
+            });
+
+            btnAi.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!isLongPress) {
+                    scanSingleItem(item.id);
+                }
+            });
             div.querySelector('.btn-share').onclick = (e) => { e.stopPropagation(); shareItem(item); };
             div.querySelector('.btn-copy').onclick = (e) => { e.stopPropagation(); copyText(item.content); };
             div.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); editItem(item); };
@@ -1035,14 +1075,15 @@
             closeAllMenus();
         });
 
-        window.scanSingleItem = async function(id) {
+        window.scanSingleItem = async function(id, overrideProvider = null) {
             const item = state.items.find(i => i.id === id);
             if (!item) return;
             
             const settings = getAiSettings();
-            const activeKey = settings.keys[settings.provider];
+            const providerToUse = overrideProvider || settings.provider;
+            const activeKey = settings.keys[providerToUse];
             
-            if (!activeKey) return alert("עליך להזין מפתח API בהגדרות ה-AI כדי לבצע סריקה.");
+            if (!activeKey) return alert(`עליך להזין מפתח API עבור ${providerToUse} בהגדרות ה-AI כדי לבצע סריקה.`);
 
             item.isScanning = true; renderList();
 
@@ -1126,11 +1167,11 @@ ${promptType}
 
 Content to analyze:
 ${contentToAnalyze}`;
-let jsonString = "";
+                let jsonString = "";
                 let success = false;
                 let lastError = "";
 
-                if (settings.provider === 'gemini') {
+                if (providerToUse === 'gemini') {
                     // שאיבה אוטומטית של המודלים
                     let availableModels = window.dynamicGeminiModels;
                     if (!availableModels) {
@@ -1178,7 +1219,7 @@ let jsonString = "";
                         }
                     }
                 } 
-                else if (settings.provider === 'groq') {
+                else if (providerToUse === 'groq') {
                     let availableModels = window.dynamicGroqModels;
                     if (!availableModels) {
                         try {
@@ -1216,7 +1257,7 @@ let jsonString = "";
                         } catch (err) { lastError = err.message; console.warn(`Groq [${model}] failed...`); }
                     }
                 }
-                else if (settings.provider === 'openrouter') {
+                else if (providerToUse === 'openrouter') {
                     const models = ['deepseek/deepseek-chat:free', 'meta-llama/llama-3.1-8b-instruct:free', 'google/gemma-2-9b-it:free'];
                     for (let model of models) {
                         try {
@@ -1566,7 +1607,60 @@ let jsonString = "";
         }
 
         function escapeHtml(text) { return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : ''; }
-        function closeAllMenus() { document.querySelectorAll('.dropdown-content, .drop-trigger').forEach(el => el.classList.remove('show', 'active')); }
+        function closeAllMenus() { 
+            document.querySelectorAll('.dropdown-content, .drop-trigger').forEach(el => el.classList.remove('show', 'active')); 
+            const aiMenu = document.getElementById('aiFloatingMenu');
+            if (aiMenu) aiMenu.style.display = 'none';
+        }
+
+        window.activeAiScanId = null;
+
+        window.openAiFloatingMenu = function(id, e) {
+            e.preventDefault(); 
+            e.stopPropagation();
+            window.activeAiScanId = id;
+            closeAllMenus(); 
+            
+            const menu = document.getElementById('aiFloatingMenu');
+            menu.style.display = 'block';
+
+            let clientX = e.clientX;
+            let clientY = e.clientY;
+
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else if (!clientX) { 
+                const rect = e.target.getBoundingClientRect();
+                clientX = rect.left;
+                clientY = rect.bottom;
+            }
+
+            let topPos = clientY + 10;
+            let leftPos = clientX - (menu.offsetWidth / 2);
+
+            if (topPos + menu.offsetHeight > window.innerHeight) {
+                topPos = clientY - menu.offsetHeight - 10;
+            }
+            if (leftPos < 10) leftPos = 10;
+            if (leftPos + menu.offsetWidth > window.innerWidth) {
+                leftPos = window.innerWidth - menu.offsetWidth - 10;
+            }
+
+            menu.style.top = `${topPos}px`;
+            menu.style.left = `${leftPos}px`;
+        };
+
+        document.querySelectorAll('.ai-provider-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const selectedProvider = e.target.getAttribute('data-provider');
+                document.getElementById('aiFloatingMenu').style.display = 'none';
+                if (window.activeAiScanId) {
+                    scanSingleItem(window.activeAiScanId, selectedProvider);
+                }
+            });
+        });
         function updateCategoryDropdowns() {
             const cats = new Set(state.items.map(i => i.category));
             const select = document.getElementById('categoryFilter');
