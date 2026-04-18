@@ -978,7 +978,9 @@
             btnAi.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (!isLongPress) {
-                    scanSingleItem(item.id);
+                    // קורא את ההגדרות שנשמרו מהתפריט הצף (או משתמש בברירת מחדל אם אין)
+                    const quickSet = JSON.parse(localStorage.getItem('aiQuickSettings')) || { provider: null, urlOnly: false };
+                    scanSingleItem(item.id, quickSet.provider, quickSet.urlOnly);
                 }
             });
             div.querySelector('.btn-share').onclick = (e) => { e.stopPropagation(); shareItem(item); };
@@ -1644,14 +1646,28 @@ ${contentToAnalyze}`;
 
         window.activeAiScanId = null;
 
-        window.openAiFloatingMenu = function(id, e) {
+       window.openAiFloatingMenu = function(id, e) {
             e.preventDefault(); 
             e.stopPropagation();
             window.activeAiScanId = id;
             closeAllMenus(); 
             
+            // שולף את ההגדרות שנשמרו
+            const quickSet = JSON.parse(localStorage.getItem('aiQuickSettings')) || { provider: getAiSettings().provider, urlOnly: false };
+            
             const checkbox = document.getElementById('aiUrlOnlyCheckbox');
-            if (checkbox) checkbox.checked = false; // מאפס את הסימון בכל פתיחה 
+            if (checkbox) checkbox.checked = quickSet.urlOnly; 
+            
+            // מדגיש את המודל שנבחר בפעם הקודמת
+            document.querySelectorAll('.ai-provider-btn').forEach(btn => {
+                if (btn.getAttribute('data-provider') === quickSet.provider) {
+                    btn.style.fontWeight = 'bold';
+                    btn.style.background = 'rgba(127,127,127,0.2)';
+                } else {
+                    btn.style.fontWeight = 'normal';
+                    btn.style.background = 'none';
+                }
+            });
             
             const menu = document.getElementById('aiFloatingMenu');
             menu.style.display = 'block';
@@ -1683,15 +1699,24 @@ ${contentToAnalyze}`;
             menu.style.left = `${leftPos}px`;
         };
 
+        // שומר את מצב הצ'קבוקס ברגע שלוחצים עליו
+        document.getElementById('aiUrlOnlyCheckbox')?.addEventListener('change', (e) => {
+            const quickSet = JSON.parse(localStorage.getItem('aiQuickSettings')) || { provider: getAiSettings().provider, urlOnly: false };
+            quickSet.urlOnly = e.target.checked;
+            localStorage.setItem('aiQuickSettings', JSON.stringify(quickSet));
+        });
+
+        // שומר את המודל הנבחר, סוגר את התפריט, ומודיע למשתמש (ללא סריקה)
         document.querySelectorAll('.ai-provider-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const selectedProvider = e.target.getAttribute('data-provider');
                 const isUrlOnly = document.getElementById('aiUrlOnlyCheckbox').checked;
+                
+                localStorage.setItem('aiQuickSettings', JSON.stringify({ provider: selectedProvider, urlOnly: isUrlOnly }));
+                
                 document.getElementById('aiFloatingMenu').style.display = 'none';
-                if (window.activeAiScanId) {
-                    scanSingleItem(window.activeAiScanId, selectedProvider, isUrlOnly);
-                }
+                showToast('הגדרות AI נשמרו. לחץ כעת לחיצה רגילה על ✨ לסריקה.');
             });
         });
         function updateCategoryDropdowns() {
