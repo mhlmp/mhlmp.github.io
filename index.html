@@ -944,8 +944,16 @@
             const linkElement = div.querySelector('.card-link');
             if (linkElement) {
                 linkElement.onclick = (e) => {
-                    if(state.isSelectionMode) { e.preventDefault(); return; } 
-                    window.open(item.content, '_blank');
+                    // ===================================================
+                    // תיקון באג #5: פתיחה כפולה של חלונות
+                    // הסיבה: ל-<a> יש target="_blank" (פותח tab)
+                    // וגם window.open (פותח עוד tab) – שניהם ירו יחד.
+                    // e.preventDefault() עוצר את ה-<a> המובנה,
+                    // ורק window.open שלנו יפעל.
+                    // ===================================================
+                    e.preventDefault();
+                    if (state.isSelectionMode) return;
+                    window.open(item.content, '_blank', 'noopener,noreferrer');
                 };
             }
             return div;
