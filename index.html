@@ -1136,6 +1136,21 @@
                             parsedDoc.querySelectorAll('script, style, nav, footer, noscript, iframe, header').forEach(el => el.remove());
                             const bodyText = (parsedDoc.body?.innerText || '').replace(/\s+/g, ' ').trim();
                             if (bodyText.length < 30) throw new Error('empty body');
+
+                            // --- זיהוי חסימות אבטחה (Cloudflare וכו') ---
+                            const lowerBody = bodyText.toLowerCase();
+                            const isBlocked = lowerBody.includes('just a moment') || 
+                                              lowerBody.includes('enable javascript and cookies') || 
+                                              lowerBody.includes('checking your browser') ||
+                                              lowerBody.includes('verify you are human') ||
+                                              (lowerBody.includes('cloudflare') && lowerBody.includes('ray id'));
+                            
+                            if (isBlocked) {
+                                console.warn("זוהתה חסימת אבטחה, עובר לניתוח לפי URL בלבד.");
+                                throw new Error('cloudflare_blocked');
+                            }
+                            // ---------------------------------------------
+
                             contentToAnalyze = bodyText.substring(0, 3500);
                             scrapedOk = true;
                             break; // הצלחנו – יוצאים מהלולאה
@@ -1258,7 +1273,12 @@ ${contentToAnalyze}`;
                     }
                 }
                 else if (providerToUse === 'openrouter') {
-                    const models = ['deepseek/deepseek-chat:free', 'meta-llama/llama-3.1-8b-instruct:free', 'google/gemma-2-9b-it:free'];
+                    const models = [
+                        'google/gemini-2.0-flash-lite-preview-02-05:free', 
+                        'meta-llama/llama-3.3-70b-instruct:free', 
+                        'qwen/qwen-2.5-coder-32b-instruct:free',
+                        'deepseek/deepseek-chat:free'
+                    ];
                     for (let model of models) {
                         try {
                             const res = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
