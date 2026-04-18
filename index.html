@@ -1131,7 +1131,7 @@ let jsonString = "";
                 let lastError = "";
 
                 if (settings.provider === 'gemini') {
-                    // מנגנון חכם: שואב את רשימת המודלים המותרים ישירות מגוגל לפי המפתח שלך (בלי שמות קשיחים!)
+                    // שאיבה אוטומטית של המודלים
                     let availableModels = window.dynamicGeminiModels;
                     if (!availableModels) {
                         try {
@@ -1141,12 +1141,11 @@ let jsonString = "";
                                 availableModels = data.models
                                     .filter(m => m.supportedGenerationMethods?.includes('generateContent') && m.name.includes('gemini'))
                                     .map(m => m.name.replace('models/', ''));
-                                // נסדר כדי שהמודלים המהירים/החדשים יהיו בראש התור
                                 availableModels.sort((a, b) => (a.includes('flash') ? -1 : 1));
                                 window.dynamicGeminiModels = availableModels;
                             }
                         } catch (e) {
-                            availableModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']; // גיבוי אחרון
+                            availableModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']; // גיבוי חירום
                         }
                     }
                     if (!availableModels || availableModels.length === 0) availableModels = ['gemini-1.5-flash'];
@@ -1157,14 +1156,21 @@ let jsonString = "";
                                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ 
                                     contents: [{ parts: [{ text: systemPrompt }] }],
-                                    generationConfig: { response_mime_type: "application/json" }
+                                    generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
                                 })
                             }, 15000);
                             const resData = await res.json();
                             if(resData.error) throw new Error(resData.error.message);
-                            jsonString = resData.candidates[0].content.parts[0].text;
+                            
+                            let rawText = resData.candidates[0].content.parts[0].text;
+                            // ניקוי אגרסיבי ששולף רק את המבנה המסודר (JSON)
+                            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+                            if (!jsonMatch) throw new Error("לא נמצא JSON תקין בתשובה");
+                            jsonString = jsonMatch[0];
+                            JSON.parse(jsonString); // מוודא שזה לא קורס
+                            
                             success = true; 
-                            window.dynamicGeminiModels = [model]; // שומר את המודל המנצח לפעם הבאה כדי לחסוך זמן!
+                            window.dynamicGeminiModels = [model]; // שומר את המודל המנצח
                             break;
                         } catch (err) { 
                             lastError = err.message; 
@@ -1173,7 +1179,6 @@ let jsonString = "";
                     }
                 } 
                 else if (settings.provider === 'groq') {
-                    // מנגנון חכם: שואב את הרשימה ישירות מהשרתים של Groq!
                     let availableModels = window.dynamicGroqModels;
                     if (!availableModels) {
                         try {
@@ -1181,12 +1186,11 @@ let jsonString = "";
                             const data = await req.json();
                             if (data.data) {
                                 availableModels = data.data.map(m => m.id);
-                                // נסדר כדי ש-Llama יהיה בראש התור
                                 availableModels.sort((a, b) => (a.includes('llama') ? -1 : 1));
                                 window.dynamicGroqModels = availableModels;
                             }
                         } catch (e) {
-                            availableModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+                            availableModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']; // גיבוי חירום
                         }
                     }
                     if (!availableModels || availableModels.length === 0) availableModels = ['llama-3.3-70b-versatile'];
@@ -1195,34 +1199,46 @@ let jsonString = "";
                         try {
                             const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
                                 method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ model: model, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
+                                body: JSON.stringify({ model: model, temperature: 0.1, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
                             }, 15000);
                             const resData = await res.json();
                             if(resData.error) throw new Error(resData.error.message);
-                            jsonString = resData.choices[0].message.content;
+                            
+                            let rawText = resData.choices[0].message.content;
+                            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+                            if (!jsonMatch) throw new Error("לא נמצא JSON תקין בתשובה");
+                            jsonString = jsonMatch[0];
+                            JSON.parse(jsonString);
+                            
                             success = true; 
-                            window.dynamicGroqModels = [model]; // שומר את המודל המנצח לפעם הבאה!
+                            window.dynamicGroqModels = [model];
                             break;
-                        } catch (err) { lastError = err.message; console.warn(`Groq [${model}] failed, trying next...`); }
+                        } catch (err) { lastError = err.message; console.warn(`Groq [${model}] failed...`); }
                     }
                 }
                 else if (settings.provider === 'openrouter') {
-                    const models = ['deepseek/deepseek-chat:free', 'meta-llama/llama-3-8b-instruct:free'];
+                    const models = ['deepseek/deepseek-chat:free', 'meta-llama/llama-3.1-8b-instruct:free', 'google/gemma-2-9b-it:free'];
                     for (let model of models) {
                         try {
                             const res = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
-                                method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ model: model, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
+                                method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': window.location.href },
+                                body: JSON.stringify({ model: model, temperature: 0.1, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
                             }, 15000);
                             const resData = await res.json();
                             if(resData.error) throw new Error(resData.error.message);
-                            jsonString = resData.choices[0].message.content;
+                            
+                            let rawText = resData.choices[0].message.content;
+                            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+                            if (!jsonMatch) throw new Error("לא נמצא JSON תקין בתשובה");
+                            jsonString = jsonMatch[0];
+                            JSON.parse(jsonString);
+                            
                             success = true; break;
-                        } catch (err) { lastError = err.message; }
+                        } catch (err) { lastError = err.message; console.warn(`OpenRouter [${model}] failed...`); }
                     }
                 }
 
-                if (!success) throw new Error("שגיאת שרת AI: " + lastError);
+                if (!success) throw new Error("כל המודלים נכשלו: " + lastError);
                 // ניקוי תשובה – מודלים מסוימים עוטפים ב-markdown או בטקסט נוסף
                 jsonString = jsonString
                     .replace(/```json\s*/gi, '')
