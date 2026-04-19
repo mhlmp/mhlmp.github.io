@@ -46,6 +46,10 @@
 
         * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
 
+       html, body {
+            overflow-x: hidden; /* מונע גלילה אופקית ותזוזה של המסך */
+        }
+        
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background: var(--bg-gradient);
@@ -667,9 +671,15 @@
                     state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
                         if (docSnap.exists()) {
                             const d = docSnap.data();
+                            // שומר את מצב הטעינה כדי שסנכרון לא יעצור סריקות פעילות
+                            const scanningIds = new Set(state.items.filter(i => i.isScanning).map(i => i.id));
+                            
                             state.items = d.items || [];
                             state.trash = d.trash || [];
-                            state.items.forEach(i => i.isScanning = false);
+                            
+                            state.items.forEach(i => {
+                                i.isScanning = scanningIds.has(i.id);
+                            });
                             if (d.aiSettings) {
                                 localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
                             }
@@ -733,9 +743,15 @@
             state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
                 if (docSnap.exists()) {
                     const d = docSnap.data();
-                    state.items = d.items || [];
-                    state.trash = d.trash || [];
-                    state.items.forEach(i => i.isScanning = false);
+                            // שומר את מצב הטעינה כדי שסנכרון לא יעצור סריקות פעילות
+                            const scanningIds = new Set(state.items.filter(i => i.isScanning).map(i => i.id));
+                            
+                            state.items = d.items || [];
+                            state.trash = d.trash || [];
+                            
+                            state.items.forEach(i => {
+                                i.isScanning = scanningIds.has(i.id);
+                            });
                     if (d.aiSettings) {
                         localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
                     }
@@ -1360,17 +1376,27 @@ ${contentToAnalyze}`;
 
                 const parsed = JSON.parse(jsonString);
                 
-                item.aiSummary = parsed.summary || "לא התקבל סיכום.";
-                item.siteStatus = isWebsite ? (parsed.status || "active") : "text";
-                item.aiTags = parsed.tags && Array.isArray(parsed.tags) ? parsed.tags : [];
+                // משיכת האובייקט מחדש מהמערך הנוכחי לאחר ההמתנה כדי למנוע דריסה מול ענן
+                let currentItem = state.items.find(i => i.id === id);
+                if (currentItem) {
+                    currentItem.aiSummary = parsed.summary || "לא התקבל סיכום.";
+                    currentItem.siteStatus = isWebsite ? (parsed.status || "active") : "text";
+                    currentItem.aiTags = parsed.tags && Array.isArray(parsed.tags) ? parsed.tags : [];
+                }
 
             } catch (e) {
                 console.error("AI Error:", e);
-                item.siteStatus = item.type === 'link' ? 'dead' : 'text'; 
-                item.aiSummary = e.message.includes('abort') ? 'זמן הבקשה עבר (Timeout). נסה שוב.' : 'שגיאה: ' + e.message;
-                item.aiTags = [];
+                let currentItem = state.items.find(i => i.id === id);
+                if (currentItem) {
+                    currentItem.siteStatus = currentItem.type === 'link' ? 'dead' : 'text'; 
+                    currentItem.aiSummary = e.message.includes('abort') ? 'זמן הבקשה עבר (Timeout). נסה שוב.' : 'שגיאה: ' + e.message;
+                    currentItem.aiTags = [];
+                }
             } finally {
-                item.isScanning = false; pushToCloud(); renderList();
+                let currentItem = state.items.find(i => i.id === id);
+                if (currentItem) currentItem.isScanning = false; 
+                pushToCloud(); 
+                renderList();
             }
         };
 
