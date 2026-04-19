@@ -115,6 +115,20 @@
         .btn-toggle.dead-active { background: rgba(217, 48, 37, 0.2) !important; border-color: var(--accent-red) !important; box-shadow: 0 0 8px rgba(217,48,37,0.4); }
 
         .dropdown-content { display: none; position: absolute; background: var(--glass-bg); backdrop-filter: blur(20px); min-width: 240px; box-shadow: 0 15px 40px rgba(0,0,0,0.3); border-radius: var(--radius); border: 1px solid var(--glass-border); z-index: 2000; right: 0; top: calc(100% + 8px); padding: 8px 0; }
+        /* תיקון כיוון הפתיחה של התפריטים השמאליים כדי שלא ייחתכו */
+        #siteMenu, #aiMenu {
+            right: auto;
+            left: 0;
+        }
+
+        /* הגנה נוספת למסכים קטנים מאוד - מבטיח שאף תפריט לא יעבור את רוחב המסך */
+        @media (max-width: 480px) {
+            .dropdown-content {
+                min-width: 200px;
+                max-width: calc(100vw - 30px);
+                white-space: normal;
+            }
+        }
         .dropdown-content.show { display: block; }
         .dropdown-content button, .dropdown-content label { color: var(--text-primary); padding: 12px 20px; display: block; background: none; border: none; width: 100%; text-align: right; cursor: pointer; font-size: 14px; }
         .dropdown-content button:hover, .dropdown-content label:hover { background-color: rgba(127,127,127,0.1); color: var(--primary-color); }
@@ -165,9 +179,22 @@
         .toast-progress { height: 4px; background: var(--accent-green); width: 100%; transform-origin: right; transform: scaleX(1); }
         .toast-progress.animating { animation: countdown 10s linear forwards; }
 
-        /* FIX: scroll top button above toast (z-index 10001 > toast 9999) */
-        #scrollTopBtn { position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; border-radius: 50%; background: var(--primary-color); color: white; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 10001; opacity: 0; visibility: hidden; transition: 0.3s; display: flex; align-items: center; justify-content: center; }
+        /* FIX: scroll top button dynamic position */
+        #scrollTopBtn { 
+            position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; 
+            border-radius: 50%; background: var(--primary-color); color: white; 
+            border: none; font-size: 24px; cursor: pointer; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 10001; 
+            opacity: 0; visibility: hidden; 
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            display: flex; align-items: center; justify-content: center; 
+        }
         #scrollTopBtn.show { opacity: 1; visibility: visible; }
+        
+        /* דוחף את הכפתור כלפי מעלה ברגע שהבועה מופיעה במסך */
+        #toast.visible ~ #scrollTopBtn { 
+            transform: translateY(-80px); 
+        }
         .btn-reload { padding: 4px 8px; margin-right: 5px; cursor: pointer; border: 1px solid var(--glass-border); border-radius: 4px; background: transparent; font-size: 12px; color: var(--text-secondary); }
 
         @keyframes spin {
@@ -1103,10 +1130,10 @@
             const item = state.items.find(i => i.id === id);
             if (!item) return;
             
-            const settings = getAiSettings();
+           const settings = getAiSettings();
 
-            // FIX: Build provider fallback order — try preferred first, then others
-            const preferredProvider = overrideProvider || settings.provider;
+            // זיכרון חכם: תעדוף הספק האחרון שעבד כדי לדלג על מנועים חסומים במהירות
+            const preferredProvider = overrideProvider || window.lastWorkingAiProvider || settings.provider;
             const allProviders = [preferredProvider, 'gemini', 'groq', 'openrouter'].filter((p, i, a) => a.indexOf(p) === i);
             const providersWithKeys = allProviders.filter(p => settings.keys[p]);
 
@@ -1256,6 +1283,7 @@ ${contentToAnalyze}`;
                                 JSON.parse(jsonString);
                                 
                                 success = true;
+                                window.lastWorkingAiProvider = 'gemini'; // שמירת הספק התקין
                                 window.dynamicGeminiModels = [model];
                                 break;
                             } catch (err) {
@@ -1309,6 +1337,7 @@ ${contentToAnalyze}`;
                                 JSON.parse(jsonString);
                                 
                                 success = true;
+                                window.lastWorkingAiProvider = 'groq'; // שמירת הספק התקין
                                 window.dynamicGroqModels = [model];
                                 break;
                             } catch (err) {
@@ -1349,7 +1378,9 @@ ${contentToAnalyze}`;
                                 jsonString = jsonMatch[0];
                                 JSON.parse(jsonString);
                                 
-                                success = true; break;
+                               success = true; 
+                                window.lastWorkingAiProvider = 'openrouter'; // שמירת הספק התקין
+                                break;
                             } catch (err) {
                                 lastError = err.message;
                                 if (isQuotaError(err.message)) {
@@ -1439,7 +1470,24 @@ ${contentToAnalyze}`;
                 
                 await scanSingleItem(itemsToScan[i].id);
                 
-                if(i < itemsToScan.length -1) await new Promise(r => setTimeout(r, 1500)); 
+                // מנגנון השהייה חכם ומהיר
+                if (i < itemsToScan.length - 1) {
+                    const currentItemResult = state.items.find(item => item.id === itemsToScan[i].id);
+                    let delay = 300; // השהייה מינימלית למהירות מקסימלית (שליש שניה בלבד!)
+                    
+                    // אם כל הספקים נכשלו ויש שגיאת מכסה, נבצע השהייה להתאוששות
+                    if (currentItemResult && currentItemResult.aiSummary && 
+                       (currentItemResult.aiSummary.toLowerCase().includes('quota') || 
+                        currentItemResult.aiSummary.toLowerCase().includes('limit') || 
+                        currentItemResult.aiSummary.includes('429') ||
+                        currentItemResult.aiSummary.toLowerCase().includes('exceeded'))) {
+                        msgEl.innerHTML = `⚠️ <b>כל המנועים חסומים זמנית.</b><br><small>ממתין 20 שניות להתאוששות כוללת...</small>`;
+                        delay = 20000;
+                        window.lastWorkingAiProvider = null; // איפוס הזיכרון כדי לנסות את כולם שוב מאפס
+                    }
+                    
+                    await new Promise(r => setTimeout(r, delay)); 
+                }
             }
             
             document.getElementById('cancelBulkAiBtn').style.display = 'none';
