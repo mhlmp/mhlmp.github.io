@@ -107,6 +107,8 @@
         .btn-site { background: linear-gradient(135deg, #6366f1, #4f46e5); } 
         .btn-trash-view { background: linear-gradient(135deg, #64748b, #475569); }
         .btn-toggle { background: rgba(127,127,127,0.1); color: var(--text-primary); border: 1px solid var(--glass-border); flex-grow: 0 !important; width: 44px; font-size: 1.2rem; }
+        /* FIX: dead filter active state */
+        .btn-toggle.dead-active { background: rgba(217, 48, 37, 0.2) !important; border-color: var(--accent-red) !important; box-shadow: 0 0 8px rgba(217,48,37,0.4); }
 
         .dropdown-content { display: none; position: absolute; background: var(--glass-bg); backdrop-filter: blur(20px); min-width: 240px; box-shadow: 0 15px 40px rgba(0,0,0,0.3); border-radius: var(--radius); border: 1px solid var(--glass-border); z-index: 2000; right: 0; top: calc(100% + 8px); padding: 8px 0; }
         .dropdown-content.show { display: block; }
@@ -151,7 +153,7 @@
         .modal-body { padding: 20px; overflow-y: auto; }
         .trash-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: rgba(127,127,127,0.05); margin-bottom: 8px; border-radius: 8px; border: 1px solid var(--glass-border); }
 
-        #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px); background: rgba(30, 41, 59, 0.95); color: white; border-radius: 12px; box-shadow: 0 15px 40px rgba(0,0,0,0.4); z-index: 9999; transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s; opacity: 0; border: 1px solid rgba(255,255,255,0.1); overflow: hidden; display: flex; flex-direction: column; min-width: 320px; }
+        #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px); background: rgba(30, 41, 59, 0.95); color: white; border-radius: 12px; box-shadow: 0 15px 40px rgba(0,0,0,0.4); z-index: 9999; transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s; opacity: 0; border: 1px solid rgba(255,255,255,0.1); overflow: hidden; display: flex; flex-direction: column; min-width: 280px; max-width: calc(100vw - 80px); }
         #toast.visible { transform: translateX(-50%) translateY(0); opacity: 1; }
         .toast-content { padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 15px; }
         #undoBtn { background: rgba(255,255,255,0.1); border: 1px solid var(--accent-gold); color: var(--accent-gold); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem; transition: 0.2s; white-space: nowrap; }
@@ -159,14 +161,11 @@
         .toast-progress { height: 4px; background: var(--accent-green); width: 100%; transform-origin: right; transform: scaleX(1); }
         .toast-progress.animating { animation: countdown 10s linear forwards; }
 
-        #scrollTopBtn { position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; border-radius: 50%; background: var(--primary-color); color: white; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 2000; opacity: 0; visibility: hidden; transition: 0.3s; display: flex; align-items: center; justify-content: center; }
+        /* FIX: scroll top button above toast (z-index 10001 > toast 9999) */
+        #scrollTopBtn { position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; border-radius: 50%; background: var(--primary-color); color: white; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 10001; opacity: 0; visibility: hidden; transition: 0.3s; display: flex; align-items: center; justify-content: center; }
         #scrollTopBtn.show { opacity: 1; visibility: visible; }
         .btn-reload { padding: 4px 8px; margin-right: 5px; cursor: pointer; border: 1px solid var(--glass-border); border-radius: 4px; background: transparent; font-size: 12px; color: var(--text-secondary); }
 
-        /* ===================================================
-           תיקון באג #1: הוספת @keyframes spin שהיה חסר לחלוטין!
-           בלי זה: ה-spinner לא מסתובב כלל (נקודה קפואה).
-           =================================================== */
         @keyframes spin {
             from { transform: rotate(0deg); }
             to   { transform: rotate(360deg); }
@@ -175,7 +174,6 @@
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
-        /* --- עיצוב מצב בחירה מרובה וסרגל פעולות --- */
         .card-checkbox { display: none; position: absolute; top: 12px; right: 12px; transform: scale(1.4); accent-color: var(--primary-color); pointer-events: none; z-index: 10; }
         body.selection-mode-active .card-checkbox { display: block; }
         body.selection-mode-active .card.selected { border: 2px solid var(--primary-color); background: rgba(96, 165, 250, 0.15); }
@@ -191,7 +189,6 @@
         .bulk-btn.delete { background: rgba(239, 68, 68, 0.2); border-color: var(--accent-red); color: #fca5a5; }
         .bulk-btn.delete:hover { background: var(--accent-red); color: white; }
 
-        /* --- מסך טעינה --- */
         #loading-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: var(--bg-gradient);
@@ -208,7 +205,6 @@
         .loading-title { color: var(--text-primary); margin: 0 0 10px 0; font-size: 1.5rem; text-align: center; }
         .loading-text { color: var(--text-secondary); font-size: 1rem; margin: 0; text-align: center; direction: rtl; }
 
-        /* AI Styles */
         .ai-box { background: rgba(127,127,127,0.05); border: 1px solid var(--glass-border); padding: 12px; border-radius: 8px; margin-top: 12px; font-size: 13px; line-height: 1.5; }
         .ai-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: bold; border-bottom: 1px solid rgba(127,127,127,0.1); padding-bottom: 5px;}
         .ai-status-active { color: var(--accent-green); }
@@ -338,6 +334,7 @@
                     </div>
                 </div>
                 <button id="trashBtn" class="action-btn btn-trash-view" title="סל מחזור">🗑️ סל מחזור</button>
+                <button id="toggleDeadBtn" class="action-btn btn-toggle" title="הצג רק אתרים לא זמינים (🔴)">🔴</button>
                 <button id="toggleDuplicatesBtn" class="action-btn btn-toggle" title="הצג/הסתר כפילויות">👥</button>
                 <button id="toggleDarkModeBtn" class="action-btn btn-toggle" title="מצב לילה">☀️</button>
             </div>
@@ -439,6 +436,7 @@
         <div id="toastProgress" class="toast-progress"></div>
     </div>
 
+    <!-- FIX: z-index 10001 so it stays above toast (9999) -->
     <button id="scrollTopBtn" title="גלול למעלה">☝️</button>
     
 <div id="aiFloatingMenu" class="dropdown-content" style="position: fixed; display: none; z-index: 9999; box-shadow: 0 15px 40px rgba(0,0,0,0.5); border: 1px solid var(--glass-border); background: var(--glass-bg); backdrop-filter: blur(20px); border-radius: var(--radius); min-width: 220px; right: auto; top: auto; padding: 8px 0;">
@@ -475,7 +473,9 @@
         let deferredPrompt; 
         
         let state = {
-            items: [], trash: [], user: null, unsubscribe: null, showDuplicates: true, isOffline: false,
+            items: [], trash: [], user: null, unsubscribe: null,
+            showDuplicates: true, showOnlyDead: false,  // FIX: added showOnlyDead
+            isOffline: false,
             selectedIds: new Set(), isSelectionMode: false
         };
         let abortAiScan = false;
@@ -607,19 +607,15 @@
             document.getElementById('addItemForm')?.addEventListener('submit', handleAdd);
             document.getElementById('toggleDarkModeBtn')?.addEventListener('click', toggleTheme);
             document.getElementById('toggleDuplicatesBtn')?.addEventListener('click', toggleDuplicates);
+            // FIX: dead filter button
+            document.getElementById('toggleDeadBtn')?.addEventListener('click', toggleDeadFilter);
             
             document.getElementById('googleLoginBtn')?.addEventListener('click', cloudLogin);
             document.getElementById('logoutBtn')?.addEventListener('click', cloudLogout);
             document.getElementById('switchAccountBtn')?.addEventListener('click', switchAccount);
             
             document.getElementById('trashBtn')?.addEventListener('click', openTrashModal);
-
-            // ===================================================
-            // תיקון באג #3: לכל מודאל close button ייעודי משלו
-            // (במקום querySelector ששיים רק אחד)
-            // ===================================================
             document.getElementById('closeTrashModalBtn')?.addEventListener('click', closeTrashModal);
-
             document.getElementById('forceReloadBtn')?.addEventListener('click', forceReload);
 
             ['importJsonInput', 'smartImportInput', 'wipeDataInput'].forEach(id => {
@@ -730,11 +726,6 @@
             } catch (e) { alert(e.message); }
         }
 
-        // ===================================================
-        // תיקון באג #4: forceReload רשם listener נוסף לאימות
-        // (onAuthStateChanged) בכל לחיצה. עכשיו מתחבר ישירות
-        // ל-Firestore בלי לרשום listener חדש על האימות.
-        // ===================================================
         function forceReload() {
             if (!state.user || state.isOffline) return;
             if (state.unsubscribe) state.unsubscribe();
@@ -821,6 +812,11 @@
             let filtered = sortedFullList.filter(i => {
                 const matchesCat = !catFilter || i.category === catFilter;
 
+                // FIX: dead filter takes priority
+                if (state.showOnlyDead) {
+                    return i.siteStatus === 'dead' && matchesCat;
+                }
+
                 if (isolateDuplicatesMode) {
                     return i.isDup && matchesCat;
                 }
@@ -860,6 +856,8 @@
                     let displayCategory = i.category;
                     if (isolateDuplicatesMode) {
                         displayCategory = "⚠️ כפולים";
+                    } else if (state.showOnlyDead) {
+                        displayCategory = "🔴 אתרים לא זמינים";
                     }
                     if(!groups[displayCategory]) groups[displayCategory] = [];
                     groups[displayCategory].push(i);
@@ -978,7 +976,6 @@
             btnAi.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (!isLongPress) {
-                    // קורא את ההגדרות שנשמרו מהתפריט הצף (או משתמש בברירת מחדל אם אין)
                     const quickSet = JSON.parse(localStorage.getItem('aiQuickSettings')) || { provider: null, urlOnly: false };
                     scanSingleItem(item.id, quickSet.provider, quickSet.urlOnly);
                 }
@@ -992,13 +989,6 @@
             const linkElement = div.querySelector('.card-link');
             if (linkElement) {
                 linkElement.onclick = (e) => {
-                    // ===================================================
-                    // תיקון באג #5: פתיחה כפולה של חלונות
-                    // הסיבה: ל-<a> יש target="_blank" (פותח tab)
-                    // וגם window.open (פותח עוד tab) – שניהם ירו יחד.
-                    // e.preventDefault() עוצר את ה-<a> המובנה,
-                    // ורק window.open שלנו יפעל.
-                    // ===================================================
                     e.preventDefault();
                     if (state.isSelectionMode) return;
                     window.open(item.content, '_blank', 'noopener,noreferrer');
@@ -1041,9 +1031,10 @@
                 }
             });
 
+            // FIX: auto scan on new item - runs immediately after add
             const settings = getAiSettings();
-            if (settings.autoScan && settings.keys[settings.provider]) {
-                scanSingleItem(newItem.id);
+            if (settings.autoScan && (settings.keys.gemini || settings.keys.groq || settings.keys.openrouter)) {
+                setTimeout(() => scanSingleItem(newItem.id, null, false), 500);
             }
         }
 
@@ -1083,41 +1074,53 @@
             closeAllMenus();
         });
 
+        // FIX: isQuotaError detection helper
+        function isQuotaError(msg) {
+            const lower = msg.toLowerCase();
+            return lower.includes('quota') || lower.includes('resource_exhausted') || 
+                   lower.includes('rate_limit') || lower.includes('rate limit') ||
+                   lower.includes('exceeded') || lower.includes('too many requests') ||
+                   lower.includes('429');
+        }
+
         window.scanSingleItem = async function(id, overrideProvider = null, forceUrlOnly = false) {
             const item = state.items.find(i => i.id === id);
             if (!item) return;
             
             const settings = getAiSettings();
-            const providerToUse = overrideProvider || settings.provider;
-            const activeKey = settings.keys[providerToUse];
-            
-            if (!activeKey) return alert(`עליך להזין מפתח API עבור ${providerToUse} בהגדרות ה-AI כדי לבצע סריקה.`);
+
+            // FIX: Build provider fallback order — try preferred first, then others
+            const preferredProvider = overrideProvider || settings.provider;
+            const allProviders = [preferredProvider, 'gemini', 'groq', 'openrouter'].filter((p, i, a) => a.indexOf(p) === i);
+            const providersWithKeys = allProviders.filter(p => settings.keys[p]);
+
+            if (providersWithKeys.length === 0) {
+                return alert('עליך להזין לפחות מפתח API אחד בהגדרות ה-AI.');
+            }
 
             item.isScanning = true; renderList();
+
+            const fetchWithTimeout = async (url, options = {}, time = 12000) => {
+                const controller = new AbortController();
+                const timerId = setTimeout(() => controller.abort(), time);
+                try {
+                    const res = await fetch(url, { ...options, signal: controller.signal });
+                    clearTimeout(timerId);
+                    return res;
+                } catch (err) {
+                    clearTimeout(timerId);
+                    throw err;
+                }
+            };
 
             try {
                 let cleanContent = item.content.trim().replace(/^[\/]+/, '');
                 let contentToAnalyze = cleanContent;
                 let isWebsite = item.type === 'link';
                 
-                const fetchWithTimeout = async (url, options = {}, time = 12000) => {
-                    const controller = new AbortController();
-                    const timerId = setTimeout(() => controller.abort(), time);
-                    try {
-                        const res = await fetch(url, { ...options, signal: controller.signal });
-                        clearTimeout(timerId);
-                        return res;
-                    } catch (err) {
-                        clearTimeout(timerId);
-                        throw err;
-                    }
-                };
-
                 if (isWebsite && forceUrlOnly) {
-                    // אם המשתמש סימן את התיבה, מדלגים על הקריאה לאתר ומנתחים ישר את הטקסט
                     contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: User bypassed page scanning due to security blocks. Analyze this website purely based on its URL text, domain name, and the provided description.`;
                 } else if (isWebsite) {
-                    // מערך של פרוקסי-שרתים בסדר עדיפות – ינסה אחד אחרי השני
                     const proxies = [
                         (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
                         (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
@@ -1131,7 +1134,6 @@
                             const res = await fetchWithTimeout(proxyUrl, {}, 8000);
                             if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-                            // allorigins מחזיר JSON; השאר מחזירים HTML ישיר
                             const isAllOrigins = proxyUrl.includes('allorigins');
                             let htmlText;
                             if (isAllOrigins) {
@@ -1148,7 +1150,6 @@
                             const bodyText = (parsedDoc.body?.innerText || '').replace(/\s+/g, ' ').trim();
                             if (bodyText.length < 30) throw new Error('empty body');
 
-                            // --- זיהוי חסימות אבטחה (Cloudflare וכו') ---
                             const lowerBody = bodyText.toLowerCase();
                             const isBlocked = lowerBody.includes('just a moment') || 
                                               lowerBody.includes('enable javascript and cookies') || 
@@ -1157,21 +1158,18 @@
                                               (lowerBody.includes('cloudflare') && lowerBody.includes('ray id'));
                             
                             if (isBlocked) {
-                                console.warn("זוהתה חסימת אבטחה, עובר לניתוח לפי URL בלבד.");
                                 throw new Error('cloudflare_blocked');
                             }
-                            // ---------------------------------------------
 
                             contentToAnalyze = bodyText.substring(0, 3500);
                             scrapedOk = true;
-                            break; // הצלחנו – יוצאים מהלולאה
+                            break;
                         } catch (proxyErr) {
-                            console.warn(`Proxy failed (${proxyFn(cleanContent).split('?')[0]}):`, proxyErr.message);
+                            console.warn(`Proxy failed:`, proxyErr.message);
                         }
                     }
 
                     if (!scrapedOk) {
-                        // כל הפרוקסי נכשלו – ה-AI ינתח לפי ה-URL והתיאור בלבד
                         contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: Page content blocked. Analyze based on URL structure and description only.`;
                     }
                 }
@@ -1193,134 +1191,172 @@ ${promptType}
 
 Content to analyze:
 ${contentToAnalyze}`;
+
                 let jsonString = "";
                 let success = false;
-                let lastError = "";
+                let lastError = "לא ניתן להגיע לאף ספק AI";
 
-                if (providerToUse === 'gemini') {
-                    // שאיבה אוטומטית של המודלים
-                    let availableModels = window.dynamicGeminiModels;
-                    if (!availableModels) {
-                        try {
-                            const req = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models?key=${activeKey}`, {}, 8000);
-                            const data = await req.json();
-                            if (data.models) {
-                                availableModels = data.models
-                                    .filter(m => m.supportedGenerationMethods?.includes('generateContent') && m.name.includes('gemini'))
-                                    .map(m => m.name.replace('models/', ''));
-                                availableModels.sort((a, b) => (a.includes('flash') ? -1 : 1));
-                                window.dynamicGeminiModels = availableModels;
+                // FIX: Try each provider in fallback order
+                for (const currentProvider of providersWithKeys) {
+                    if (success) break;
+                    const activeKey = settings.keys[currentProvider];
+                    let providerQuotaExhausted = false;
+
+                    if (currentProvider === 'gemini') {
+                        let availableModels = window.dynamicGeminiModels;
+                        if (!availableModels) {
+                            try {
+                                const req = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models?key=${activeKey}`, {}, 8000);
+                                const data = await req.json();
+                                if (data.models) {
+                                    availableModels = data.models
+                                        .filter(m => m.supportedGenerationMethods?.includes('generateContent') && m.name.includes('gemini'))
+                                        .map(m => m.name.replace('models/', ''));
+                                    availableModels.sort((a, b) => (a.includes('flash') ? -1 : 1));
+                                    window.dynamicGeminiModels = availableModels;
+                                }
+                            } catch (e) {
+                                availableModels = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
                             }
-                        } catch (e) {
-                            availableModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']; // גיבוי חירום
                         }
-                    }
-                    if (!availableModels || availableModels.length === 0) availableModels = ['gemini-1.5-flash'];
+                        if (!availableModels || availableModels.length === 0) availableModels = ['gemini-1.5-flash'];
 
-                    for (let model of availableModels) {
-                        try {
-                            const res = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`, {
-                                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ 
-                                    contents: [{ parts: [{ text: systemPrompt }] }],
-                                    generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
-                                })
-                            }, 15000);
-                            const resData = await res.json();
-                            if(resData.error) throw new Error(resData.error.message);
-                            
-                            let rawText = resData.candidates[0].content.parts[0].text;
-                            // ניקוי אגרסיבי ששולף רק את המבנה המסודר (JSON)
-                            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-                            if (!jsonMatch) throw new Error("לא נמצא JSON תקין בתשובה");
-                            jsonString = jsonMatch[0];
-                            JSON.parse(jsonString); // מוודא שזה לא קורס
-                            
-                            success = true; 
-                            window.dynamicGeminiModels = [model]; // שומר את המודל המנצח
-                            break;
-                        } catch (err) { 
-                            lastError = err.message; 
-                            console.warn(`Gemini [${model}] failed, trying next... Error:`, err.message); 
-                        }
-                    }
-                } 
-                else if (providerToUse === 'groq') {
-                    let availableModels = window.dynamicGroqModels;
-                    if (!availableModels) {
-                        try {
-                            const req = await fetchWithTimeout('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': `Bearer ${activeKey}` } }, 8000);
-                            const data = await req.json();
-                            if (data.data) {
-                                availableModels = data.data.map(m => m.id);
-                                availableModels.sort((a, b) => (a.includes('llama') ? -1 : 1));
-                                window.dynamicGroqModels = availableModels;
+                        for (let model of availableModels) {
+                            try {
+                                const res = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`, {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ 
+                                        contents: [{ parts: [{ text: systemPrompt }] }],
+                                        generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
+                                    })
+                                }, 15000);
+                                const resData = await res.json();
+                                if (resData.error) throw new Error(resData.error.message);
+                                
+                                let rawText = resData.candidates[0].content.parts[0].text;
+                                const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+                                if (!jsonMatch) throw new Error("לא נמצא JSON תקין בתשובה");
+                                jsonString = jsonMatch[0];
+                                JSON.parse(jsonString);
+                                
+                                success = true;
+                                window.dynamicGeminiModels = [model];
+                                break;
+                            } catch (err) {
+                                lastError = err.message;
+                                if (isQuotaError(err.message)) {
+                                    console.warn(`Gemini [${model}] quota exceeded, trying next model...`);
+                                    providerQuotaExhausted = true;
+                                    // continue trying other models
+                                } else {
+                                    console.warn(`Gemini [${model}] error:`, err.message);
+                                }
                             }
-                        } catch (e) {
-                            availableModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']; // גיבוי חירום
+                        }
+                        // If all gemini models quota-exhausted, try next provider
+                        if (!success && providerQuotaExhausted) {
+                            console.warn('Gemini quota exhausted on all models, trying next provider...');
+                            window.dynamicGeminiModels = null; // reset for next time
+                            continue;
+                        }
+                    } 
+                    else if (currentProvider === 'groq') {
+                        let availableModels = window.dynamicGroqModels;
+                        if (!availableModels) {
+                            try {
+                                const req = await fetchWithTimeout('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': `Bearer ${activeKey}` } }, 8000);
+                                const data = await req.json();
+                                if (data.data) {
+                                    availableModels = data.data.map(m => m.id);
+                                    availableModels.sort((a, b) => (a.includes('llama') ? -1 : 1));
+                                    window.dynamicGroqModels = availableModels;
+                                }
+                            } catch (e) {
+                                availableModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+                            }
+                        }
+                        if (!availableModels || availableModels.length === 0) availableModels = ['llama-3.3-70b-versatile'];
+
+                        for (let model of availableModels) {
+                            try {
+                                const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
+                                    method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ model: model, temperature: 0.1, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
+                                }, 15000);
+                                const resData = await res.json();
+                                if (resData.error) throw new Error(resData.error.message);
+                                
+                                let rawText = resData.choices[0].message.content;
+                                const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+                                if (!jsonMatch) throw new Error("לא נמצא JSON תקין בתשובה");
+                                jsonString = jsonMatch[0];
+                                JSON.parse(jsonString);
+                                
+                                success = true;
+                                window.dynamicGroqModels = [model];
+                                break;
+                            } catch (err) {
+                                lastError = err.message;
+                                if (isQuotaError(err.message)) {
+                                    providerQuotaExhausted = true;
+                                    console.warn(`Groq [${model}] quota exceeded, trying next...`);
+                                } else {
+                                    console.warn(`Groq [${model}] error:`, err.message);
+                                }
+                            }
+                        }
+                        if (!success && providerQuotaExhausted) {
+                            console.warn('Groq quota exhausted, trying next provider...');
+                            window.dynamicGroqModels = null;
+                            continue;
                         }
                     }
-                    if (!availableModels || availableModels.length === 0) availableModels = ['llama-3.3-70b-versatile'];
-
-                    for (let model of availableModels) {
-                        try {
-                            const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
-                                method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ model: model, temperature: 0.1, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
-                            }, 15000);
-                            const resData = await res.json();
-                            if(resData.error) throw new Error(resData.error.message);
-                            
-                            let rawText = resData.choices[0].message.content;
-                            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-                            if (!jsonMatch) throw new Error("לא נמצא JSON תקין בתשובה");
-                            jsonString = jsonMatch[0];
-                            JSON.parse(jsonString);
-                            
-                            success = true; 
-                            window.dynamicGroqModels = [model];
-                            break;
-                        } catch (err) { lastError = err.message; console.warn(`Groq [${model}] failed...`); }
+                    else if (currentProvider === 'openrouter') {
+                        const models = [
+                            'google/gemini-2.0-flash-lite-preview-02-05:free', 
+                            'meta-llama/llama-3.3-70b-instruct:free', 
+                            'qwen/qwen-2.5-coder-32b-instruct:free',
+                            'deepseek/deepseek-chat:free'
+                        ];
+                        for (let model of models) {
+                            try {
+                                const res = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
+                                    method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': window.location.href },
+                                    body: JSON.stringify({ model: model, temperature: 0.1, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
+                                }, 15000);
+                                const resData = await res.json();
+                                if (resData.error) throw new Error(resData.error.message);
+                                
+                                let rawText = resData.choices[0].message.content;
+                                const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+                                if (!jsonMatch) throw new Error("לא נמצא JSON תקין בתשובה");
+                                jsonString = jsonMatch[0];
+                                JSON.parse(jsonString);
+                                
+                                success = true; break;
+                            } catch (err) {
+                                lastError = err.message;
+                                if (isQuotaError(err.message)) {
+                                    providerQuotaExhausted = true;
+                                    console.warn(`OpenRouter [${model}] quota exceeded, trying next...`);
+                                } else {
+                                    console.warn(`OpenRouter [${model}] error:`, err.message);
+                                }
+                            }
+                        }
+                        if (!success && providerQuotaExhausted) {
+                            console.warn('OpenRouter quota exhausted.');
+                            continue;
+                        }
                     }
                 }
-                else if (providerToUse === 'openrouter') {
-                    const models = [
-                        'google/gemini-2.0-flash-lite-preview-02-05:free', 
-                        'meta-llama/llama-3.3-70b-instruct:free', 
-                        'qwen/qwen-2.5-coder-32b-instruct:free',
-                        'deepseek/deepseek-chat:free'
-                    ];
-                    for (let model of models) {
-                        try {
-                            const res = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
-                                method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': window.location.href },
-                                body: JSON.stringify({ model: model, temperature: 0.1, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
-                            }, 15000);
-                            const resData = await res.json();
-                            if(resData.error) throw new Error(resData.error.message);
-                            
-                            let rawText = resData.choices[0].message.content;
-                            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-                            if (!jsonMatch) throw new Error("לא נמצא JSON תקין בתשובה");
-                            jsonString = jsonMatch[0];
-                            JSON.parse(jsonString);
-                            
-                            success = true; break;
-                        } catch (err) { lastError = err.message; console.warn(`OpenRouter [${model}] failed...`); }
-                    }
-                }
 
-                if (!success) throw new Error("כל המודלים נכשלו: " + lastError);
-                // ניקוי תשובה – מודלים מסוימים עוטפים ב-markdown או בטקסט נוסף
-                jsonString = jsonString
-                    .replace(/```json\s*/gi, '')
-                    .replace(/```\s*/g, '')
-                    .trim();
+                if (!success) throw new Error("כל הספקים והמודלים נכשלו: " + lastError);
 
-                // אם התשובה מכילה JSON בתוך טקסט – נחלץ אותו
-                const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
-                if (!jsonMatch) throw new Error('לא נמצא JSON תקין בתשובת ה-AI');
-                jsonString = jsonMatch[0];
+                jsonString = jsonString.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+                const jsonMatch2 = jsonString.match(/\{[\s\S]*\}/);
+                if (!jsonMatch2) throw new Error('לא נמצא JSON תקין בתשובת ה-AI');
+                jsonString = jsonMatch2[0];
 
                 const parsed = JSON.parse(jsonString);
                 
@@ -1338,15 +1374,11 @@ ${contentToAnalyze}`;
             }
         };
 
-        // ===================================================
-        // תיקון באג #2: הוסר כאן הבלוק הכפול והשבור לחלוטין.
-        // הבלוק הישן השתמש במשתנים לא מוגדרים (progressMsg,
-        // progressToast, itemsToScan) וגרם ל-ReferenceError
-        // שקרס את כל ה-JS של הדף. נשאר רק הגרסה הנכונה:
-        // ===================================================
         document.getElementById('bulkAiScanBtn')?.addEventListener('click', async () => {
             const settings = getAiSettings();
-            if (!settings.keys[settings.provider]) return alert("אנא הזן מפתח API בהגדרות ה-AI תחילה.");
+            if (!settings.keys.gemini && !settings.keys.groq && !settings.keys.openrouter) {
+                return alert("אנא הזן לפחות מפתח API אחד בהגדרות ה-AI תחילה.");
+            }
             
             const itemsToScan = state.items.filter(i => 
                 !i.aiSummary || 
@@ -1391,14 +1423,16 @@ ${contentToAnalyze}`;
             }
         });
 
-        // listener אחד בלבד – הכפול הוסר
         document.getElementById('cancelBulkAiBtn')?.addEventListener('click', () => {
             abortAiScan = true;
             document.getElementById('cancelBulkAiBtn').style.display = 'none';
         });
 
+        // FIX: Double confirmation for clearAiDataBtn
         document.getElementById('clearAiDataBtn')?.addEventListener('click', () => {
-            if(!confirm("האם למחוק את כל נתוני הניתוח של ה-AI מכל הפריטים?")) return;
+            if(!confirm("🧹 האם למחוק את כל נתוני הניתוח של ה-AI מכל הפריטים?")) return;
+            if(!confirm("⚠️ אישור כפול נדרש!\n\nפעולה זו תמחק את כל ניתוחי ה-AI ואינה הפיכה (אלא דרך Undo).\n\nהאם אתה בטוח לחלוטין?")) return;
+            
             const backup = JSON.parse(JSON.stringify(state.items));
             
             state.items.forEach(i => { 
@@ -1486,7 +1520,6 @@ ${contentToAnalyze}`;
         async function shareItem(item) {
             const textToShare = item.type === 'link' ? item.content : `${item.description ? item.description + '\n' : ''}${item.content}`;
             
-            // מובייל: שימוש ב-Web Share API המובנה
             if (navigator.share) {
                 try {
                     await navigator.share({
@@ -1496,27 +1529,47 @@ ${contentToAnalyze}`;
                     });
                     return;
                 } catch (err) {
-                    // המשתמש ביטל – לא שגיאה אמיתית
                     if (err.name === 'AbortError') return;
-                    // אחרת נמשיך ל-fallback
                 }
             }
-            // דסקטופ: העתקה ללוח
             await copyText(textToShare);
             showToast('📋 הקישור הועתק (דסקטופ אינו תומך בשיתוף ישיר)');
         }
 
         function toggleDuplicates() { 
-            state.showDuplicates = !state.showDuplicates; 
+            state.showDuplicates = !state.showDuplicates;
+            // Turn off dead filter if activating duplicates mode
+            if (!state.showDuplicates) state.showOnlyDead = false;
             const btn = document.getElementById('toggleDuplicatesBtn');
+            const deadBtn = document.getElementById('toggleDeadBtn');
             if (!state.showDuplicates) {
                 btn.style.background = 'rgba(245, 158, 11, 0.2)';
                 btn.style.borderColor = 'var(--accent-gold)';
+                deadBtn.classList.remove('dead-active');
             } else {
                 btn.style.background = '';
                 btn.style.borderColor = '';
             }
             renderList(); 
+        }
+
+        // FIX: Dead filter toggle
+        function toggleDeadFilter() {
+            state.showOnlyDead = !state.showOnlyDead;
+            const btn = document.getElementById('toggleDeadBtn');
+            if (state.showOnlyDead) {
+                // Turn off duplicates mode
+                state.showDuplicates = true;
+                const dupBtn = document.getElementById('toggleDuplicatesBtn');
+                dupBtn.style.background = '';
+                dupBtn.style.borderColor = '';
+                btn.classList.add('dead-active');
+                showToast('🔴 מציג רק אתרים לא זמינים');
+            } else {
+                btn.classList.remove('dead-active');
+                showToast('הוסר פילטר אתרים לא זמינים');
+            }
+            renderList();
         }
 
         function importJson(e) {
@@ -1646,19 +1699,17 @@ ${contentToAnalyze}`;
 
         window.activeAiScanId = null;
 
-       window.openAiFloatingMenu = function(id, e) {
+        window.openAiFloatingMenu = function(id, e) {
             e.preventDefault(); 
             e.stopPropagation();
             window.activeAiScanId = id;
             closeAllMenus(); 
             
-            // שולף את ההגדרות שנשמרו
             const quickSet = JSON.parse(localStorage.getItem('aiQuickSettings')) || { provider: getAiSettings().provider, urlOnly: false };
             
             const checkbox = document.getElementById('aiUrlOnlyCheckbox');
             if (checkbox) checkbox.checked = quickSet.urlOnly; 
             
-            // מדגיש את המודל שנבחר בפעם הקודמת
             document.querySelectorAll('.ai-provider-btn').forEach(btn => {
                 if (btn.getAttribute('data-provider') === quickSet.provider) {
                     btn.style.fontWeight = 'bold';
@@ -1684,29 +1735,32 @@ ${contentToAnalyze}`;
                 clientY = rect.bottom;
             }
 
-            let topPos = clientY + 10;
-            let leftPos = clientX - (menu.offsetWidth / 2);
+            // FIX: use fallback dimensions in case offsetWidth/Height not yet computed
+            const menuWidth = menu.offsetWidth || 240;
+            const menuHeight = menu.offsetHeight || 220;
 
-            if (topPos + menu.offsetHeight > window.innerHeight) {
-                topPos = clientY - menu.offsetHeight - 10;
+            let topPos = clientY + 10;
+            let leftPos = clientX - (menuWidth / 2);
+
+            if (topPos + menuHeight > window.innerHeight - 10) {
+                topPos = clientY - menuHeight - 10;
             }
+            if (topPos < 10) topPos = 10;
             if (leftPos < 10) leftPos = 10;
-            if (leftPos + menu.offsetWidth > window.innerWidth) {
-                leftPos = window.innerWidth - menu.offsetWidth - 10;
+            if (leftPos + menuWidth > window.innerWidth - 10) {
+                leftPos = window.innerWidth - menuWidth - 10;
             }
 
             menu.style.top = `${topPos}px`;
             menu.style.left = `${leftPos}px`;
         };
 
-        // שומר את מצב הצ'קבוקס ברגע שלוחצים עליו
         document.getElementById('aiUrlOnlyCheckbox')?.addEventListener('change', (e) => {
             const quickSet = JSON.parse(localStorage.getItem('aiQuickSettings')) || { provider: getAiSettings().provider, urlOnly: false };
             quickSet.urlOnly = e.target.checked;
             localStorage.setItem('aiQuickSettings', JSON.stringify(quickSet));
         });
 
-        // שומר את המודל הנבחר, סוגר את התפריט, ומודיע למשתמש (ללא סריקה)
         document.querySelectorAll('.ai-provider-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -1719,6 +1773,7 @@ ${contentToAnalyze}`;
                 showToast('הגדרות AI נשמרו. לחץ כעת לחיצה רגילה על ✨ לסריקה.');
             });
         });
+
         function updateCategoryDropdowns() {
             const cats = new Set(state.items.map(i => i.category));
             const select = document.getElementById('categoryFilter');
@@ -1811,7 +1866,7 @@ ${contentToAnalyze}`;
             toastTimeout = setTimeout(() => { t.classList.remove('visible'); }, 10000);
         }
 
-        // --- פונקציות בחירה מרובה (Multi-Select) ---
+        // --- Multi-Select ---
         function enterSelectionMode(firstId) {
             state.isSelectionMode = true;
             state.selectedIds.add(firstId);
@@ -1944,7 +1999,7 @@ ${contentToAnalyze}`;
         document.getElementById('restoreAllBtn')?.addEventListener('click', window.restoreAllTrash);
         document.getElementById('emptyTrashBtn')?.addEventListener('click', window.emptyTrash);
 
-        // --- אבטחה נגד DevTools ---
+        // --- DevTools protection ---
         const ADMIN_EMAIL = "meirhadad74@gmail.com";
 
         function checkDevTools() {
