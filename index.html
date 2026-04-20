@@ -171,15 +171,60 @@
         .modal-body { padding: 20px; overflow-y: auto; }
         .trash-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: rgba(127,127,127,0.05); margin-bottom: 8px; border-radius: 8px; border: 1px solid var(--glass-border); }
 
-        #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px); background: rgba(30, 41, 59, 0.95); color: white; border-radius: 12px; box-shadow: 0 15px 40px rgba(0,0,0,0.4); z-index: 9999; transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s; opacity: 0; border: 1px solid rgba(255,255,255,0.1); overflow: hidden; display: flex; flex-direction: column; min-width: 280px; max-width: calc(100vw - 80px); }
-        #toast.visible { transform: translateX(-50%) translateY(0); opacity: 1; }
-        .toast-content { padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 15px; }
-        #undoBtn { background: rgba(255,255,255,0.1); border: 1px solid var(--accent-gold); color: var(--accent-gold); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem; transition: 0.2s; white-space: nowrap; }
-        #undoBtn:hover { background: var(--accent-gold); color: #000; }
-        .toast-progress { height: 4px; background: var(--accent-green); width: 100%; transform-origin: right; transform: scaleX(1); }
-        .toast-progress.animating { animation: countdown 10s linear forwards; }
+       /* מערכת הבועות החדשה (Toast Stack) */
+        #toast-container {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            width: calc(100vw - 40px);
+            max-width: 420px;
+            pointer-events: none; /* מאפשר לחיצות דרך השטח הריק */
+        }
 
-        /* FIX: scroll top button dynamic position */
+        .toast-item {
+            background: rgba(30, 41, 59, 0.95);
+            color: white;
+            border-radius: 12px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            pointer-events: auto; /* מחזיר לחיצות לבועה עצמה */
+            
+            /* אנימציית כניסה ויציאה */
+            opacity: 0;
+            transform: translateY(30px) scale(0.95);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        .toast-item.visible {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+        
+        .toast-item.leaving {
+            opacity: 0;
+            transform: translateY(-20px) scale(0.9);
+            transition: all 0.3s ease-in;
+        }
+
+        .toast-content { padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 15px; font-size: 14.5px; line-height: 1.4; width: 100%; box-sizing: border-box;}
+        .toast-msg { flex-grow: 1; word-break: break-word; }
+        .toast-undo-btn { background: rgba(255,255,255,0.1); border: 1px solid var(--accent-gold); color: var(--accent-gold); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem; transition: 0.2s; white-space: nowrap; flex-shrink: 0; }
+        .toast-undo-btn:hover { background: var(--accent-gold); color: #000; }
+        
+        .toast-progress { height: 4px; background: var(--accent-green); width: 100%; transform-origin: right; transform: scaleX(1); }
+        .toast-progress.animating { animation: countdown linear forwards; }
+
+        /* כפתור עלייה למעלה */
         #scrollTopBtn { 
             position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; 
             border-radius: 50%; background: var(--primary-color); color: white; 
@@ -191,9 +236,9 @@
         }
         #scrollTopBtn.show { opacity: 1; visibility: visible; }
         
-        /* דוחף את הכפתור כלפי מעלה ברגע שהבועה מופיעה במסך */
-        #toast.visible ~ #scrollTopBtn { 
-            transform: translateY(-80px); 
+        /* דוחף את הכפתור כלפי מעלה ברגע שיש בועות במסך */
+        #toast-container:not(:empty) ~ #scrollTopBtn { 
+            transform: translateY(-90px); 
         }
         .btn-reload { padding: 4px 8px; margin-right: 5px; cursor: pointer; border: 1px solid var(--glass-border); border-radius: 4px; background: transparent; font-size: 12px; color: var(--text-secondary); }
 
@@ -487,13 +532,7 @@
         </div>
     </div>
 
-    <div id="toast">
-        <div class="toast-content">
-            <span id="toastMsg">הודעה</span>
-            <button id="undoBtn">↪ בטל (Undo)</button>
-        </div>
-        <div id="toastProgress" class="toast-progress"></div>
-    </div>
+    <div id="toast-container"></div>
 
     <!-- FIX: z-index 10001 so it stays above toast (9999) -->
     <button id="scrollTopBtn" title="גלול למעלה">☝️</button>
@@ -527,9 +566,8 @@
         };
 
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
-        let app, auth, db;
-        let toastTimeout;
-        let deferredPrompt; 
+       let app, auth, db;
+        let deferredPrompt;
         
         let state = {
             items: [], trash: [], user: null, unsubscribe: null,
@@ -1490,20 +1528,16 @@ ${contentToAnalyze}`;
             abortAiScan = false;
             document.getElementById('cancelBulkAiBtn').style.display = 'block';
             
-            const t = document.getElementById('toast');
-            const msgEl = document.getElementById('toastMsg');
-            document.getElementById('undoBtn').style.display = 'none';
-            if (toastTimeout) clearTimeout(toastTimeout);
+            const bulkToastId = 'ai-bulk-scan-toast';
             
             for(let i=0; i<itemsToScan.length; i++) {
                 if (abortAiScan) { 
-                    msgEl.innerHTML = '🛑 <b>הסריקה הופסקה ידנית.</b>';
-                    setTimeout(() => t.classList.remove('visible'), 3000);
+                    showToast('🛑 <b>הסריקה הופסקה ידנית.</b>', null, 3000, bulkToastId);
+                    setTimeout(() => removeToast(bulkToastId), 3000);
                     break; 
                 }
                 
-                msgEl.innerHTML = `🤖 <b>סורק ומנתח...</b> [${i+1} מתוך ${itemsToScan.length}]<br><small style="opacity:0.8; display:block; direction:ltr; margin-top:4px;">${itemsToScan[i].content.substring(0,35)}...</small>`;
-                t.classList.add('visible');
+                showToast(`🤖 <b>סורק ומנתח...</b> [${i+1} מתוך ${itemsToScan.length}]<br><small style="opacity:0.8; display:block; direction:ltr; margin-top:4px;">${itemsToScan[i].content.substring(0,35)}...</small>`, null, 0, bulkToastId);
                 
                 await scanSingleItem(itemsToScan[i].id);
                 
@@ -1518,7 +1552,7 @@ ${contentToAnalyze}`;
                         currentItemResult.aiSummary.toLowerCase().includes('limit') || 
                         currentItemResult.aiSummary.includes('429') ||
                         currentItemResult.aiSummary.toLowerCase().includes('exceeded'))) {
-                        msgEl.innerHTML = `⚠️ <b>כל המנועים חסומים זמנית.</b><br><small>ממתין 20 שניות להתאוששות כוללת...</small>`;
+                        showToast(`⚠️ <b>כל המנועים חסומים זמנית.</b><br><small>ממתין 20 שניות להתאוששות כוללת...</small>`, null, 0, bulkToastId);
                         delay = 20000;
                         window.lastWorkingAiProvider = null; // איפוס הזיכרון כדי לנסות את כולם שוב מאפס
                     }
@@ -1529,8 +1563,8 @@ ${contentToAnalyze}`;
             
             document.getElementById('cancelBulkAiBtn').style.display = 'none';
             if(!abortAiScan) {
-                msgEl.innerHTML = "✅ <b>סריקת ה-AI הסתיימה בהצלחה!</b>";
-                setTimeout(() => t.classList.remove('visible'), 4000);
+                showToast("✅ <b>סריקת ה-AI הסתיימה בהצלחה!</b>", null, 4000, bulkToastId);
+                setTimeout(() => removeToast(bulkToastId), 4000);
             }
         });
 
@@ -1992,27 +2026,69 @@ ${contentToAnalyze}`;
             btn.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        function showToast(msg, undoCallback = null) {
-            const t = document.getElementById('toast');
-            const undoBtn = document.getElementById('undoBtn');
-            const progress = document.getElementById('toastProgress');
+        function showToast(msg, undoCallback = null, duration = 10000, id = null) {
+            const container = document.getElementById('toast-container');
             
-            if (toastTimeout) clearTimeout(toastTimeout);
-            progress.classList.remove('animating');
-            void progress.offsetWidth; 
+            // אם קיים ID (כמו בסריקה ההמונית), מעדכנים את הבועה הקיימת בלי ליצור חדשה
+            if (id) {
+                const existing = document.getElementById(id);
+                if (existing && !existing.classList.contains('leaving')) {
+                    existing.querySelector('.toast-msg').innerHTML = msg;
+                    return existing;
+                }
+            }
+
+            const toast = document.createElement('div');
+            toast.className = 'toast-item';
+            if (id) toast.id = id;
             
-            document.getElementById('toastMsg').textContent = msg;
+            let undoHtml = undoCallback ? `<button class="toast-undo-btn">↪ בטל (Undo)</button>` : '';
+            let progressHtml = undoCallback ? `<div class="toast-progress animating" style="animation-duration: ${duration}ms;"></div>` : '';
+            
+            toast.innerHTML = `
+                <div class="toast-content">
+                    <span class="toast-msg">${msg}</span>
+                    ${undoHtml}
+                </div>
+                ${progressHtml}
+            `;
+            
+            // דוחפים לסוף המיכל - כדי שהחדש יופיע למטה והישנים יעלו למעלה
+            container.appendChild(toast);
             
             if (undoCallback) {
-                undoBtn.style.display = 'block';
-                undoBtn.onclick = () => { undoCallback(); t.classList.remove('visible'); };
-                progress.classList.add('animating'); 
-            } else {
-                undoBtn.style.display = 'none';
+                toast.querySelector('.toast-undo-btn').onclick = () => {
+                    undoCallback();
+                    removeToast(toast);
+                };
             }
             
-            t.classList.add('visible');
-            toastTimeout = setTimeout(() => { t.classList.remove('visible'); }, 10000);
+            // טריגר קטן כדי שהאנימציה תעבוד
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    toast.classList.add('visible');
+                });
+            });
+            
+            // מוחק אוטומטית אחרי הזמן שהוגדר
+            if (duration > 0) {
+                setTimeout(() => removeToast(toast), duration);
+            }
+            
+            return toast;
+        }
+
+        function removeToast(toastElement) {
+            let toast = typeof toastElement === 'string' ? document.getElementById(toastElement) : toastElement;
+            if (!toast || toast.classList.contains('leaving')) return;
+            
+            toast.classList.remove('visible');
+            toast.classList.add('leaving');
+            
+            // מחכה שהאנימציה תסתיים ואז מסיר מה-DOM
+            setTimeout(() => {
+                if (toast.parentElement) toast.remove();
+            }, 300);
         }
 
         // --- Multi-Select ---
