@@ -765,8 +765,9 @@
                     state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
                         if (docSnap.exists()) {
                             const d = docSnap.data();
-                            state.items = d.items || [];
-                            state.trash = d.trash || [];
+                            // Deep Clone
+                            state.items = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
+                            state.trash = d.trash ? JSON.parse(JSON.stringify(d.trash)) : [];
                             if (d.aiSettings) {
                                 localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
                             }
@@ -830,8 +831,8 @@
             state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
                 if (docSnap.exists()) {
                     const d = docSnap.data();
-                    state.items = d.items || [];
-                    state.trash = d.trash || [];
+                    state.items = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
+                    state.trash = d.trash ? JSON.parse(JSON.stringify(d.trash)) : [];
                     if (d.aiSettings) {
                         localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
                     }
