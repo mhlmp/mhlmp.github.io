@@ -417,6 +417,34 @@
         </div>
     </div>
 
+    <div id="editAiModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
+        <div class="modal-content" style="padding: 20px; width: 90%; max-width: 400px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border);">
+            <h3 style="margin-top:0; color: var(--text-primary);">🤖✏️ עריכת פיענוח AI</h3>
+            <form id="editAiForm" style="display: flex; flex-direction: column; gap: 12px;">
+                <input type="hidden" id="editAiItemId">
+                
+                <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: -8px;">סטטוס רשת:</label>
+                <select id="editAiStatus" style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%;">
+                    <option value="active">🟢 פעיל (Active)</option>
+                    <option value="parked">🟠 חניה/דומיין (Parked)</option>
+                    <option value="dead">🔴 לא זמין (Dead)</option>
+                    <option value="text">📄 טקסט (Text)</option>
+                </select>
+
+                <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: -8px;">סיכום האתר:</label>
+                <textarea id="editAiSummary" rows="3" required style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%; box-sizing: border-box;"></textarea>
+                
+                <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: -8px;">תגיות (מופרדות ברווח):</label>
+                <input type="text" id="editAiTags" style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%; box-sizing: border-box;" placeholder="#תגית1 #תגית2">
+                
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button type="submit" style="flex: 1; background: var(--accent-green); color: white; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">שמור</button>
+                    <button type="button" onclick="document.getElementById('editAiModal').style.display='none'" style="flex: 1; background: rgba(127,127,127,0.2); color: var(--text-primary); padding: 12px; border: 1px solid var(--glass-border); border-radius: 8px; cursor: pointer; font-weight: bold;">ביטול</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div id="aiSettingsModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
         <div class="modal-content" style="padding: 20px; width: 90%; max-width: 400px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border);">
             <div class="modal-header">
@@ -661,6 +689,7 @@
                 }
             });
             document.getElementById('editItemForm')?.addEventListener('submit', handleEditSubmit);
+            document.getElementById('editAiForm')?.addEventListener('submit', handleEditAiSubmit);
             document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
             document.getElementById('exportTxtBtn')?.addEventListener('click', exportTxt);
             document.getElementById('downloadHtmlBtn')?.addEventListener('click', downloadSite);
@@ -949,8 +978,11 @@
                     </div>`;
                 }
 
-                aiHtml = `<div class="ai-box">
-                            <div class="ai-header"><span class="${statusClass}">${statusText}</span> <span style="font-size:11px; opacity:0.7">🤖 AI</span></div>
+                aiHtml = `<div class="ai-box" style="position: relative;">
+                            <div class="ai-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 5px;">
+                                <div><span class="${statusClass}">${statusText}</span> <span style="font-size:11px; opacity:0.7">🤖 AI</span></div>
+                                <button class="icon-btn ai-edit-btn" title="ערוך תוצאות AI" style="width: 24px; height: 24px; font-size: 13px; background: rgba(127,127,127,0.15); border-radius: 6px; cursor: pointer;">✏️</button>
+                            </div>
                             <div>${escapeHtml(item.aiSummary)}</div>
                             ${tagsHtml}
                           </div>`;
@@ -1028,6 +1060,11 @@
             div.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); editItem(item); };
             div.querySelector('.pin-btn').onclick = (e) => { e.stopPropagation(); togglePin(item.id); };
             div.querySelector('.trash-btn').onclick = (e) => { e.stopPropagation(); moveToTrash(item.id); };
+            
+            const aiEditBtn = div.querySelector('.ai-edit-btn');
+            if (aiEditBtn) {
+                aiEditBtn.onclick = (e) => { e.stopPropagation(); window.openEditAiModal(item); };
+            }
             
             const linkElement = div.querySelector('.card-link');
             if (linkElement) {
@@ -1212,8 +1249,8 @@
                         }
                     }
 
-                    if (!scrapedOk) {
-                        contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: Page content blocked. Analyze based on URL structure and description only.`;
+                   if (!scrapedOk) {
+                        contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: Page content is blocked by anti-bot security. Do NOT mark as "dead". Assume status is "active". Analyze based on URL text and description only.`;
                     }
                 }
 
@@ -1415,11 +1452,11 @@ ${contentToAnalyze}`;
                     currentItem.aiTags = parsed.tags && Array.isArray(parsed.tags) ? parsed.tags : [];
                 }
 
-            } catch (e) {
+           } catch (e) {
                 console.error("AI Error:", e);
                 let currentItem = state.items.find(i => i.id === id);
                 if (currentItem) {
-                    currentItem.siteStatus = currentItem.type === 'link' ? 'dead' : 'text'; 
+                    currentItem.siteStatus = currentItem.type === 'link' ? 'active' : 'text'; 
                     currentItem.aiSummary = e.message.includes('abort') ? 'זמן הבקשה עבר (Timeout). נסה שוב.' : 'שגיאה: ' + e.message;
                     currentItem.aiTags = [];
                 }
@@ -1589,6 +1626,44 @@ ${contentToAnalyze}`;
                     pushToCloud();
                 }
             });
+        }
+
+        window.openEditAiModal = function(item) {
+            document.getElementById('editAiItemId').value = item.id;
+            document.getElementById('editAiStatus').value = item.siteStatus || 'active';
+            document.getElementById('editAiSummary').value = item.aiSummary || '';
+            document.getElementById('editAiTags').value = (item.aiTags || []).join(' ');
+            document.getElementById('editAiModal').style.display = 'flex';
+            closeAllMenus();
+        };
+
+        function handleEditAiSubmit(e) {
+            e.preventDefault();
+            const idValue = document.getElementById('editAiItemId').value;
+            const item = state.items.find(i => String(i.id) === idValue);
+            if (!item) return;
+            
+            const originalItem = JSON.parse(JSON.stringify(item));
+
+            item.siteStatus = document.getElementById('editAiStatus').value;
+            item.aiSummary = document.getElementById('editAiSummary').value.trim();
+            
+            const tagsRaw = document.getElementById('editAiTags').value;
+            item.aiTags = tagsRaw.split(/[, ]+/).filter(t => t.trim() !== '').map(t => t.startsWith('#') ? t : `#${t}`);
+
+            pushToCloud();
+            document.getElementById('editAiModal').style.display = 'none';
+            renderList();
+            
+            showToast('פיענוח ה-AI עודכן בהצלחה', () => {
+                const currentItem = state.items.find(i => i.id === originalItem.id);
+                if (currentItem) {
+                    Object.assign(currentItem, originalItem);
+                    pushToCloud();
+                    renderList();
+                }
+            });
+        }
         }
 
         async function shareItem(item) {
