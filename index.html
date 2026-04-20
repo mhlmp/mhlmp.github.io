@@ -2184,12 +2184,14 @@ ${contentToAnalyze}`;
             else { updateBulkActionBar(); renderList(); }
         });
 
-        document.getElementById('bulkDeleteBtn')?.addEventListener('click', () => {
+       document.getElementById('bulkDeleteBtn')?.addEventListener('click', () => {
             if(!confirm(`האם אתה בטוח שברצונך להעביר ${state.selectedIds.size} פריטים לסל המחזור?`)) return;
             
-            const originalItems = [...state.items];
             const selectedIdsArray = Array.from(state.selectedIds);
             const itemsToTrash = state.items.filter(i => state.selectedIds.has(i.id));
+            
+            // גיבוי רק של הפריטים הספציפיים שנמחקים, כדי לא לדרוס את כל המערך בשחזור
+            const cleanItemsToRestore = JSON.parse(JSON.stringify(itemsToTrash));
             
             itemsToTrash.forEach(i => i.deletedAt = new Date().toISOString());
             
@@ -2200,9 +2202,11 @@ ${contentToAnalyze}`;
             exitSelectionMode();
             
             showToast(`הועברו ${itemsToTrash.length} פריטים לסל המחזור`, () => {
-                state.items = originalItems;
+                // דוחפים חזרה רק את הפריטים שנמחקו
+                state.items.unshift(...cleanItemsToRestore);
                 state.trash = state.trash.filter(t => !selectedIdsArray.includes(t.id));
                 pushToCloud();
+                renderList();
             });
         });
 
@@ -2211,10 +2215,15 @@ ${contentToAnalyze}`;
             if (newCat === null) return;
             
             const catName = newCat.trim() || 'כללי';
-            const originalItems = JSON.parse(JSON.stringify(state.items)); 
+            
+            // גיבוי רק של הקטגוריות הקודמות לפריטים הנבחרים
+            const previousCategories = [];
             
             state.items.forEach(i => {
-                if (state.selectedIds.has(i.id)) i.category = catName;
+                if (state.selectedIds.has(i.id)) {
+                    previousCategories.push({ id: i.id, category: i.category });
+                    i.category = catName;
+                }
             });
             
             pushToCloud();
@@ -2223,9 +2232,14 @@ ${contentToAnalyze}`;
             exitSelectionMode();
             
             showToast(`${count} פריטים הועברו לקטגוריה "${catName}"`, () => {
-                state.items = originalItems; 
+                // משחזרים רק את הקטגוריות הקודמות לאותם פריטים ספציפיים
+                previousCategories.forEach(prev => {
+                    const itemToRestore = state.items.find(i => i.id === prev.id);
+                    if (itemToRestore) itemToRestore.category = prev.category;
+                });
                 pushToCloud();
                 updateCategoryDropdowns();
+                renderList();
             });
         });
 
