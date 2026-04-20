@@ -1201,6 +1201,8 @@
                    lower.includes('429');
         }
 
+        window.activeAiRequestController = null; // Controller גלובלי לביטול מיידי של ה-Fetch
+
         window.scanSingleItem = async function(id, overrideProvider = null, forceUrlOnly = false) {
             const item = state.items.find(i => i.id === id);
             if (!item) return;
@@ -1218,15 +1220,19 @@
 
             item.isScanning = true; renderList();
 
-            const fetchWithTimeout = async (url, options = {}, time = 12000) => {
+            // הארכתי משמעותית את זמן ההמתנה ל-30 שניות כברירת מחדל כדי לא להיכשל סתם!
+            const fetchWithTimeout = async (url, options = {}, time = 30000) => {
                 const controller = new AbortController();
+                window.activeAiRequestController = controller; // מתחבר לגלובלי כדי שאפשר יהיה לבטל
                 const timerId = setTimeout(() => controller.abort(), time);
                 try {
                     const res = await fetch(url, { ...options, signal: controller.signal });
                     clearTimeout(timerId);
+                    window.activeAiRequestController = null;
                     return res;
                 } catch (err) {
                     clearTimeout(timerId);
+                    window.activeAiRequestController = null;
                     throw err;
                 }
             };
@@ -1249,7 +1255,7 @@
                     for (const proxyFn of proxies) {
                         try {
                             const proxyUrl = proxyFn(cleanContent);
-                            const res = await fetchWithTimeout(proxyUrl, {}, 8000);
+                            const res = await fetchWithTimeout(proxyUrl, {}, 15000); // 15 שניות במקום 8 כדי לתת ל-Proxies לעבוד
                             if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
                             const isAllOrigins = proxyUrl.includes('allorigins');
@@ -1314,7 +1320,6 @@ ${contentToAnalyze}`;
                 let success = false;
                 let lastError = "לא ניתן להגיע לאף ספק AI";
 
-                // FIX: Try each provider in fallback order
                 for (const currentProvider of providersWithKeys) {
                     if (success) break;
                     const activeKey = settings.keys[currentProvider];
@@ -1324,7 +1329,7 @@ ${contentToAnalyze}`;
                         let availableModels = window.dynamicGeminiModels;
                         if (!availableModels) {
                             try {
-                                const req = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models?key=${activeKey}`, {}, 8000);
+                                const req = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models?key=${activeKey}`, {}, 10000);
                                 const data = await req.json();
                                 if (data.models) {
                                     availableModels = data.models
@@ -1347,7 +1352,7 @@ ${contentToAnalyze}`;
                                         contents: [{ parts: [{ text: systemPrompt }] }],
                                         generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
                                     })
-                                }, 15000);
+                                }, 30000); // הועלה ל-30 שניות עבור תגובת AI
                                 const resData = await res.json();
                                 if (resData.error) throw new Error(resData.error.message);
                                 
@@ -1358,7 +1363,7 @@ ${contentToAnalyze}`;
                                 JSON.parse(jsonString);
                                 
                                 success = true;
-                                window.lastWorkingAiProvider = 'gemini'; // שמירת הספק התקין
+                                window.lastWorkingAiProvider = 'gemini';
                                 window.dynamicGeminiModels = [model];
                                 break;
                             } catch (err) {
@@ -1366,16 +1371,14 @@ ${contentToAnalyze}`;
                                 if (isQuotaError(err.message)) {
                                     console.warn(`Gemini [${model}] quota exceeded, trying next model...`);
                                     providerQuotaExhausted = true;
-                                    // continue trying other models
                                 } else {
                                     console.warn(`Gemini [${model}] error:`, err.message);
                                 }
                             }
                         }
-                        // If all gemini models quota-exhausted, try next provider
                         if (!success && providerQuotaExhausted) {
                             console.warn('Gemini quota exhausted on all models, trying next provider...');
-                            window.dynamicGeminiModels = null; // reset for next time
+                            window.dynamicGeminiModels = null;
                             continue;
                         }
                     } 
@@ -1383,7 +1386,7 @@ ${contentToAnalyze}`;
                         let availableModels = window.dynamicGroqModels;
                         if (!availableModels) {
                             try {
-                                const req = await fetchWithTimeout('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': `Bearer ${activeKey}` } }, 8000);
+                                const req = await fetchWithTimeout('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': `Bearer ${activeKey}` } }, 10000);
                                 const data = await req.json();
                                 if (data.data) {
                                     availableModels = data.data.map(m => m.id);
@@ -1401,7 +1404,7 @@ ${contentToAnalyze}`;
                                 const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
                                     method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ model: model, temperature: 0.1, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
-                                }, 15000);
+                                }, 30000); // הועלה ל-30 שניות
                                 const resData = await res.json();
                                 if (resData.error) throw new Error(resData.error.message);
                                 
@@ -1412,7 +1415,7 @@ ${contentToAnalyze}`;
                                 JSON.parse(jsonString);
                                 
                                 success = true;
-                                window.lastWorkingAiProvider = 'groq'; // שמירת הספק התקין
+                                window.lastWorkingAiProvider = 'groq';
                                 window.dynamicGroqModels = [model];
                                 break;
                             } catch (err) {
@@ -1443,7 +1446,7 @@ ${contentToAnalyze}`;
                                 const res = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
                                     method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': window.location.href },
                                     body: JSON.stringify({ model: model, temperature: 0.1, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
-                                }, 15000);
+                                }, 30000); // הועלה ל-30 שניות
                                 const resData = await res.json();
                                 if (resData.error) throw new Error(resData.error.message);
                                 
@@ -1454,7 +1457,7 @@ ${contentToAnalyze}`;
                                 JSON.parse(jsonString);
                                 
                                success = true; 
-                                window.lastWorkingAiProvider = 'openrouter'; // שמירת הספק התקין
+                                window.lastWorkingAiProvider = 'openrouter';
                                 break;
                             } catch (err) {
                                 lastError = err.message;
@@ -1482,7 +1485,6 @@ ${contentToAnalyze}`;
 
                 const parsed = JSON.parse(jsonString);
                 
-                // משיכת האובייקט מחדש מהמערך הנוכחי לאחר ההמתנה כדי למנוע דריסה מול ענן
                 let currentItem = state.items.find(i => i.id === id);
                 if (currentItem) {
                     currentItem.aiSummary = parsed.summary || "לא התקבל סיכום.";
@@ -1495,7 +1497,8 @@ ${contentToAnalyze}`;
                 let currentItem = state.items.find(i => i.id === id);
                 if (currentItem) {
                     currentItem.siteStatus = currentItem.type === 'link' ? 'active' : 'text'; 
-                    currentItem.aiSummary = e.message.includes('abort') ? 'זמן הבקשה עבר (Timeout). נסה שוב.' : 'שגיאה: ' + e.message;
+                    // הודעה מדויקת יותר למשתמש
+                    currentItem.aiSummary = e.name === 'AbortError' || e.message.includes('abort') ? 'הסריקה בוטלה ידנית על ידי המשתמש.' : 'שגיאה: ' + e.message;
                     currentItem.aiTags = [];
                 }
             } finally {
@@ -1533,19 +1536,28 @@ ${contentToAnalyze}`;
             for(let i=0; i<itemsToScan.length; i++) {
                 if (abortAiScan) break;
                 
-                // מציג מד התקדמות לסריקה הנוכחית (נניח מקסימום 15 שניות)
-                showToast(`🤖 <b>סורק ומנתח...</b> [${i+1} מתוך ${itemsToScan.length}]<br><small style="opacity:0.8; display:block; direction:ltr; margin-top:4px;">${itemsToScan[i].content.substring(0,35)}...</small>`, null, 15000, bulkToastId, false);
+                // יצירת פס התקדמות מדויק שלא נעלם לפני שהפריט מסיים
+                const progressPercent = Math.round((i / itemsToScan.length) * 100);
+                const toastContent = `
+                    <div style="width: 100%;">
+                        <div>🤖 <b>סורק ומנתח...</b> [${i+1} מתוך ${itemsToScan.length}]</div>
+                        <div style="font-size: 11px; opacity: 0.8; margin-top: 4px; direction: ltr;">${itemsToScan[i].content.substring(0,35)}...</div>
+                        <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.2); border-radius: 4px; margin-top: 10px; overflow: hidden;">
+                            <div style="width: ${progressPercent}%; height: 100%; background: var(--accent-green); transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+                `;
+                // שימוש ב-0 כזמן אומר שהבועה לא תיסגר אוטומטית לפני שהקוד ממשיך
+                showToast(toastContent, null, 0, bulkToastId, false);
                 
                 await scanSingleItem(itemsToScan[i].id);
                 
                 if (abortAiScan) break;
                 
-                // מנגנון השהייה חכם ומהיר (עם אפשרות לעצירה מיידית)
                 if (i < itemsToScan.length - 1) {
                     const currentItemResult = state.items.find(item => item.id === itemsToScan[i].id);
                     let delay = 300; 
                     let isWarning = false;
-                    let waitMessage = `⏳ <b>ממתין לפריט הבא...</b>`;
                     
                     if (currentItemResult && currentItemResult.aiSummary && 
                        (currentItemResult.aiSummary.toLowerCase().includes('quota') || 
@@ -1553,17 +1565,23 @@ ${contentToAnalyze}`;
                         currentItemResult.aiSummary.includes('429') ||
                         currentItemResult.aiSummary.toLowerCase().includes('exceeded'))) {
                         
-                        waitMessage = `⚠️ <b>מכסות מלאות.</b><br><small>ממתין 20 שניות להתאוששות מול שרתי ה-AI...</small>`;
                         delay = 20000;
                         isWarning = true;
                         window.lastWorkingAiProvider = null; 
+                        
+                        const waitContent = `
+                            <div style="width: 100%;">
+                                <div>⚠️ <b>מכסות מלאות. ממתין...</b> [${i+1} מתוך ${itemsToScan.length}]</div>
+                                <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">ממתין 20 שניות להתאוששות השרתים...</div>
+                                <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.2); border-radius: 4px; margin-top: 10px; overflow: hidden;">
+                                    <div style="width: ${progressPercent}%; height: 100%; background: var(--accent-gold); transition: width 0.3s;"></div>
+                                </div>
+                            </div>
+                        `;
+                        showToast(waitContent, null, 0, bulkToastId, true);
                     }
                     
-                    // מציג פס התקדמות עבור ההמתנה (מלא או אזהרה צהובה)
                     if (delay > 0) {
-                        showToast(waitMessage, null, delay, bulkToastId, isWarning);
-                        
-                        // לולאת חיתוך: מחכה 100ms כל פעם, שובר מיד אם המשתמש לחץ ביטול!
                         let waited = 0;
                         while (waited < delay && !abortAiScan) {
                             await new Promise(r => setTimeout(r, 100));
@@ -1587,6 +1605,11 @@ ${contentToAnalyze}`;
         document.getElementById('cancelBulkAiBtn')?.addEventListener('click', () => {
             abortAiScan = true;
             document.getElementById('cancelBulkAiBtn').style.display = 'none';
+            
+            // עוצר את ה-Fetch באותו רגע שהכפתור נלחץ!
+            if (window.activeAiRequestController) {
+                window.activeAiRequestController.abort();
+            }
         });
 
         // FIX: Double confirmation for clearAiDataBtn
