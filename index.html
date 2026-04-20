@@ -1531,39 +1531,55 @@ ${contentToAnalyze}`;
             const bulkToastId = 'ai-bulk-scan-toast';
             
             for(let i=0; i<itemsToScan.length; i++) {
-                if (abortAiScan) { 
-                    showToast('🛑 <b>הסריקה הופסקה ידנית.</b>', null, 3000, bulkToastId);
-                    setTimeout(() => removeToast(bulkToastId), 3000);
-                    break; 
-                }
+                if (abortAiScan) break;
                 
-                showToast(`🤖 <b>סורק ומנתח...</b> [${i+1} מתוך ${itemsToScan.length}]<br><small style="opacity:0.8; display:block; direction:ltr; margin-top:4px;">${itemsToScan[i].content.substring(0,35)}...</small>`, null, 0, bulkToastId);
+                // מציג מד התקדמות לסריקה הנוכחית (נניח מקסימום 15 שניות)
+                showToast(`🤖 <b>סורק ומנתח...</b> [${i+1} מתוך ${itemsToScan.length}]<br><small style="opacity:0.8; display:block; direction:ltr; margin-top:4px;">${itemsToScan[i].content.substring(0,35)}...</small>`, null, 15000, bulkToastId, false);
                 
                 await scanSingleItem(itemsToScan[i].id);
                 
-                // מנגנון השהייה חכם ומהיר
+                if (abortAiScan) break;
+                
+                // מנגנון השהייה חכם ומהיר (עם אפשרות לעצירה מיידית)
                 if (i < itemsToScan.length - 1) {
                     const currentItemResult = state.items.find(item => item.id === itemsToScan[i].id);
-                    let delay = 300; // השהייה מינימלית למהירות מקסימלית (שליש שניה בלבד!)
+                    let delay = 300; 
+                    let isWarning = false;
+                    let waitMessage = `⏳ <b>ממתין לפריט הבא...</b>`;
                     
-                    // אם כל הספקים נכשלו ויש שגיאת מכסה, נבצע השהייה להתאוששות
                     if (currentItemResult && currentItemResult.aiSummary && 
                        (currentItemResult.aiSummary.toLowerCase().includes('quota') || 
                         currentItemResult.aiSummary.toLowerCase().includes('limit') || 
                         currentItemResult.aiSummary.includes('429') ||
                         currentItemResult.aiSummary.toLowerCase().includes('exceeded'))) {
-                        showToast(`⚠️ <b>כל המנועים חסומים זמנית.</b><br><small>ממתין 20 שניות להתאוששות כוללת...</small>`, null, 0, bulkToastId);
+                        
+                        waitMessage = `⚠️ <b>מכסות מלאות.</b><br><small>ממתין 20 שניות להתאוששות מול שרתי ה-AI...</small>`;
                         delay = 20000;
-                        window.lastWorkingAiProvider = null; // איפוס הזיכרון כדי לנסות את כולם שוב מאפס
+                        isWarning = true;
+                        window.lastWorkingAiProvider = null; 
                     }
                     
-                    await new Promise(r => setTimeout(r, delay)); 
+                    // מציג פס התקדמות עבור ההמתנה (מלא או אזהרה צהובה)
+                    if (delay > 0) {
+                        showToast(waitMessage, null, delay, bulkToastId, isWarning);
+                        
+                        // לולאת חיתוך: מחכה 100ms כל פעם, שובר מיד אם המשתמש לחץ ביטול!
+                        let waited = 0;
+                        while (waited < delay && !abortAiScan) {
+                            await new Promise(r => setTimeout(r, 100));
+                            waited += 100;
+                        }
+                    }
                 }
             }
             
             document.getElementById('cancelBulkAiBtn').style.display = 'none';
-            if(!abortAiScan) {
-                showToast("✅ <b>סריקת ה-AI הסתיימה בהצלחה!</b>", null, 4000, bulkToastId);
+            
+            if (abortAiScan) {
+                showToast('🛑 <b>הסריקה הופסקה ידנית.</b>', null, 3000, bulkToastId, true);
+                setTimeout(() => removeToast(bulkToastId), 3000);
+            } else {
+                showToast("✅ <b>סריקת ה-AI הסתיימה בהצלחה!</b>", null, 4000, bulkToastId, false);
                 setTimeout(() => removeToast(bulkToastId), 4000);
             }
         });
@@ -2025,7 +2041,7 @@ ${contentToAnalyze}`;
             btn.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        function showToast(msg, undoCallback = null, duration = 10000, id = null) {
+       function showToast(msg, undoCallback = null, duration = 10000, id = null, isWarning = false) {
             const container = document.getElementById('toast-container');
             
             // אם קיים ID (כמו בסריקה ההמונית), מעדכנים את הבועה הקיימת בלי ליצור חדשה
@@ -2033,6 +2049,16 @@ ${contentToAnalyze}`;
                 const existing = document.getElementById(id);
                 if (existing && !existing.classList.contains('leaving')) {
                     existing.querySelector('.toast-msg').innerHTML = msg;
+                    // מאפס ומפעיל מחדש את מד ההתקדמות עבור הבועה שמתעדכנת
+                    const prog = existing.querySelector('.toast-progress');
+                    if (prog) {
+                        prog.className = 'toast-progress'; // איפוס 
+                        void prog.offsetWidth; // Force reflow
+                        prog.style.animationDuration = `${duration}ms`;
+                        prog.style.background = isWarning ? 'var(--accent-gold)' : 'var(--accent-green)';
+                        prog.style.display = duration > 0 ? 'block' : 'none';
+                        if (duration > 0) prog.classList.add('animating');
+                    }
                     return existing;
                 }
             }
@@ -2042,7 +2068,8 @@ ${contentToAnalyze}`;
             if (id) toast.id = id;
             
             let undoHtml = undoCallback ? `<button class="toast-undo-btn">↪ בטל (Undo)</button>` : '';
-            let progressHtml = undoCallback ? `<div class="toast-progress animating" style="animation-duration: ${duration}ms;"></div>` : '';
+            let progressBg = isWarning ? 'var(--accent-gold)' : 'var(--accent-green)';
+            let progressHtml = `<div class="toast-progress ${duration > 0 ? 'animating' : ''}" style="animation-duration: ${duration}ms; background: ${progressBg}; display: ${duration > 0 ? 'block' : 'none'};"></div>`;
             
             toast.innerHTML = `
                 <div class="toast-content">
@@ -2052,7 +2079,7 @@ ${contentToAnalyze}`;
                 ${progressHtml}
             `;
             
-            // דוחפים לסוף המיכל - כדי שהחדש יופיע למטה והישנים יעלו למעלה
+            // דוחפים לסוף המיכל
             container.appendChild(toast);
             
             if (undoCallback) {
