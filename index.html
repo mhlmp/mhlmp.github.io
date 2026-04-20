@@ -1823,10 +1823,28 @@ ${contentToAnalyze}`;
                 
                 const map = new Map(state.items.map(i => [i.content.toLowerCase().trim(), i]));
                 lines.forEach(l => {
+                    if (!l.trim()) return;
                     const p = l.split('|').map(s => s.trim());
                     if (!p[0]) return;
+                    
                     if (!map.has(p[0].toLowerCase())) {
-                        state.items.unshift({ id: Date.now()+added, content: p[0], description: p[1]||'', category: p[2]||'כללי', date: new Date().toISOString(), type: URL_REGEX.test(p[0])?'link':'text', isPinned: false });
+                        const newItem = { 
+                            id: Date.now() + added, 
+                            content: p[0], 
+                            description: p[1] || '', 
+                            category: p[2] || 'כללי', 
+                            note: p[3] || '',
+                            date: new Date().toISOString(), 
+                            type: URL_REGEX.test(p[0]) ? 'link' : 'text', 
+                            isPinned: false 
+                        };
+                        
+                        // קריאת נתוני AI אם קיימים בפורמט החדש
+                        if (p[4] && p[4] !== '') newItem.aiSummary = p[4];
+                        if (p[5] && p[5] !== '') newItem.siteStatus = p[5];
+                        if (p[6] && p[6] !== '') newItem.aiTags = p[6].split(',').filter(t => t.trim() !== '');
+
+                        state.items.unshift(newItem);
                         added++;
                     }
                 });
@@ -1867,8 +1885,17 @@ ${contentToAnalyze}`;
         }
 
         function exportJson() { downloadFile('backup.json', JSON.stringify({ items: state.items, trash: state.trash }, null, 2), 'application/json'); closeAllMenus(); }
-        function exportTxt() { downloadFile('links.txt', state.items.map(i=>`${i.content} | ${i.description} | ${i.category}`).join('\n'), 'text/plain'); closeAllMenus(); }
-        
+function exportTxt() { 
+            const data = state.items.map(i => {
+                const note = i.note ? i.note.replace(/\|/g, '-') : '';
+                const summary = i.aiSummary ? i.aiSummary.replace(/\|/g, '-').replace(/\n/g, ' ') : '';
+                const status = i.siteStatus || '';
+                const tags = i.aiTags && i.aiTags.length > 0 ? i.aiTags.join(',') : '';
+                return `${i.content} | ${i.description || ''} | ${i.category || 'כללי'} | ${note} | ${summary} | ${status} | ${tags}`;
+            }).join('\n');
+            downloadFile('links.txt', data, 'text/plain'); 
+            closeAllMenus(); 
+        }        
         function downloadSite() { 
             closeAllMenus();
             document.getElementById('offline-data').textContent = JSON.stringify({
