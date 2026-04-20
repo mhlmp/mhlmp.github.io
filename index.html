@@ -998,8 +998,7 @@
                 let tagsHtml = '';
                 if (item.aiTags && item.aiTags.length > 0) {
                     tagsHtml = `<div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px;">
-                        ${item.aiTags.map(tag => `<span style="background: rgba(96, 165, 250, 0.15); color: var(--primary-color); padding: 3px 10px; border-radius: 12px; font-size: 11px; border: 1px solid rgba(96, 165, 250, 0.3); font-weight: bold; cursor:pointer;" onclick="event.stopPropagation(); document.getElementById('searchInput').value='${tag}'; document.getElementById('searchInput').dispatchEvent(new Event('input'));">${escapeHtml(tag)}</span>`).join('')}
-                    </div>`;
+${item.aiTags.map(tag => `<span style="background: rgba(96, 165, 250, 0.15); color: var(--primary-color); padding: 3px 10px; border-radius: 12px; font-size: 11px; border: 1px solid rgba(96, 165, 250, 0.3); font-weight: bold; cursor:pointer;" onclick="event.stopPropagation(); document.getElementById('searchInput').value='${tag.replace(/'/g, "\\'")}'; document.getElementById('searchInput').dispatchEvent(new Event('input'));">${escapeHtml(tag)}</span>`).join('')}                    </div>`;
                 }
 
                 aiHtml = `<div class="ai-box" style="position: relative;">
@@ -1600,12 +1599,12 @@ ${contentToAnalyze}`;
             }
         });
 
-        // FIX: Double confirmation for clearAiDataBtn
-        document.getElementById('clearAiDataBtn')?.addEventListener('click', () => {
+      document.getElementById('clearAiDataBtn')?.addEventListener('click', () => {
             if(!confirm("🧹 האם למחוק את כל נתוני הניתוח של ה-AI מכל הפריטים?")) return;
             if(!confirm("⚠️ אישור כפול נדרש!\n\nפעולה זו תמחק את כל ניתוחי ה-AI ואינה הפיכה (אלא דרך Undo).\n\nהאם אתה בטוח לחלוטין?")) return;
             
-            const backup = JSON.parse(JSON.stringify(state.items));
+            // גיבוי חכם - שומרים רק את נתוני ה-AI של כל פריט
+            const previousAiStates = state.items.map(i => ({ id: i.id, aiSummary: i.aiSummary, siteStatus: i.siteStatus, aiTags: i.aiTags }));
             
             state.items.forEach(i => { 
                 delete i.aiSummary; 
@@ -1616,11 +1615,20 @@ ${contentToAnalyze}`;
             pushToCloud(); renderList(); closeAllMenus();
             
             showToast('נתוני ה-AI נוקו', () => {
-                state.items = backup; pushToCloud(); renderList();
+                // מחזירים רק את נתוני ה-AI לפריטים הקיימים, מבלי לפגוע בפריטים חדשים שנוספו במכשיר אחר
+                previousAiStates.forEach(prev => {
+                    const currentItem = state.items.find(i => i.id === prev.id);
+                    if (currentItem) {
+                        if (prev.aiSummary) currentItem.aiSummary = prev.aiSummary;
+                        if (prev.siteStatus) currentItem.siteStatus = prev.siteStatus;
+                        if (prev.aiTags) currentItem.aiTags = prev.aiTags;
+                    }
+                });
+                pushToCloud(); renderList();
             });
         });
 
-        function moveToTrash(id) {
+       function moveToTrash(id) {
             const idx = state.items.findIndex(i => i.id === id);
             if(idx === -1) return;
             
@@ -1628,13 +1636,13 @@ ${contentToAnalyze}`;
             state.items[idx].deletedAt = new Date().toISOString();
             state.trash.unshift(state.items[idx]);
             state.items.splice(idx, 1);
-            pushToCloud();
+            pushToCloud(); renderList();
             
             showToast('הועבר לסל המחזור', () => {
-                state.items.splice(idx, 0, itemToTrash); 
+                state.items.unshift(itemToTrash); // פשוט מוסיפים חזרה, המיון ידאג לשאר
                 const trashIdx = state.trash.findIndex(t => t.id === id);
                 if (trashIdx > -1) state.trash.splice(trashIdx, 1);
-                pushToCloud();
+                pushToCloud(); renderList();
             });
         }
 
@@ -1642,12 +1650,14 @@ ${contentToAnalyze}`;
             const item = state.items.find(i => i.id === id);
             if(item) { 
                 item.isPinned = !item.isPinned; 
-                pushToCloud();
+                pushToCloud(); 
+                renderList(); // רענון מיידי של המסך
                 showToast(item.isPinned ? 'ננעץ' : 'שוחרר', () => {
                     const currentItem = state.items.find(i => i.id === id);
                     if (currentItem) {
                         currentItem.isPinned = !currentItem.isPinned;
-                        pushToCloud();
+                        pushToCloud(); 
+                        renderList();
                     }
                 });
             }
