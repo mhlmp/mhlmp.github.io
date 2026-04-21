@@ -1458,19 +1458,16 @@
                     }
                 }
 
-              // ── Telegram Dead-Link Detection ─────────────────────────────────────
+             // ── Telegram Dead-Link Detection ─────────────────────────────────────
                // Client-side instant check — no AI needed, no API quota consumed.
-               // Runs BEFORE the AI call to short-circuit dead invite links immediately.
+               // Runs BEFORE the AI call to short-circuit dead links immediately.
                const isTelegramUrl = /(?:t\.me|telegram\.me)\//i.test(cleanContent);
                if (isTelegramUrl && !forceUrlOnly) {
                    const lc = contentToAnalyze.toLowerCase();
-                   // t.me/+ = invite hash link (ephemeral, often expires)
                    const isInviteLink = /t\.me\/\+/i.test(cleanContent);
 
-                   // Patterns that definitively indicate a dead/invalid Telegram link
-                   const DEAD_SIGNALS = [
-                       'you are invited to a group chat', // generic invite page (no name shown)
-                       'join group',                      // generic CTA with no group identity
+                   // 1. הודעות שמעידות בוודאות על קישור שבור
+                   const EXPLICIT_DEAD_SIGNALS = [
                        'this link is no longer valid',
                        'this link has expired',
                        'invite link is invalid',
@@ -1483,32 +1480,52 @@
                        'page not found',
                        '404'
                    ];
+                   const hasExplicitDead = EXPLICIT_DEAD_SIGNALS.some(s => lc.includes(s));
 
-                   // A real active page shows member/subscriber count
-                   const hasActiveSignal =
-                       /\d[\d\s,.]+\s*(?:member|subscriber|participant)/i.test(contentToAnalyze);
+                   // 2. זיהוי קבוצות/ערוצים גנריים (כמו בתמונות של "You are invited...")
+                   // קבוצה תקינה חייבת להכיל מספר מנויים/משתתפים. אם אין, זה לינק מת.
+                   const hasActiveSignal = /\d[\d\s,.]+\s*(?:member|subscriber|participant)/i.test(contentToAnalyze);
+                   const isGenericGroupDead = (lc.includes('you are invited to a group chat') || lc.includes('join group')) && !hasActiveSignal;
 
-                   const hasDead = DEAD_SIGNALS.some(s => lc.includes(s));
+                   // 3. זיהוי בוטים ומשתמשים מחוקים (כמו בתמונות של "@bot_Search_movies")
+                   let isGenericUserDead = false;
+                   if (lc.includes('if you have telegram, you can contact')) {
+                       // מנקים את כל הטקסט הגנרי ואת שם המשתמש מהתוכן
+                       const textWithoutBoilerplate = lc
+                           .replace(/if you have telegram,? you can contact/g, '')
+                           .replace(/right away\.?/g, '')
+                           .replace(/send message/g, '')
+                           .replace(/download/g, '')
+                           .replace(/telegram/g, '')
+                           .replace(/@[a-z0-9_]+/gi, '') // מחיקת שם המשתמש מתוך הטקסט
+                           .replace(/[^a-zא-ת0-9]/gi, '') // מחיקת רווחים וסימני פיסוק
+                           .trim();
+                       
+                       // אם לא נשאר טקסט (כלומר אין לבוט/משתמש שם תצוגה או תיאור ביו), זה לינק מת
+                       if (textWithoutBoilerplate.length < 5) {
+                           isGenericUserDead = true;
+                       }
+                   }
 
-                   if (hasDead && !hasActiveSignal) {
-                       // Short-circuit: mark dead without wasting AI quota
+                   // אם אחת הבדיקות חיובית, חותכים מיד לאדום
+                   if (hasExplicitDead || isGenericGroupDead || isGenericUserDead) {
                        const ci = state.items.find(i => i.id === id);
                        if (ci) {
-                           ci.aiSummary = isInviteLink
+                           ci.aiSummary = isInviteLink || isGenericGroupDead
                                ? 'קישור הזמנה לטלגרם לא תקין — פג תוקפו, הקבוצה נמחקה, או שהלינק בוטל.'
-                               : 'קישור טלגרם לא פעיל — הערוץ, הבוט, או הקבוצה לא נמצאו.';
+                               : 'קישור טלגרם לא פעיל — הערוץ, הבוט או המשתמש אינם קיימים.';
                            ci.siteStatus = 'dead';
                            ci.aiTags = ['#Telegram', '#dead', '#לא_זמין'];
                        }
-                       // finally block handles: ci.isScanning=false, pushToCloud, renderList
                        return;
                    }
                }
                // ─────────────────────────────────────────────────────────────────────
 
+               // עדכון הפרומפט: חגורת בטיחות נוספת ל-AI במקרה של עמודים שחמקו
                const promptType = isWebsite
-                    ? `Type: Website content.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: You MUST keep brand names, usernames, website names, software, and technical terms in their original ENGLISH within the Hebrew summary to maximize searchability.\n2. Determine status: "active", "parked", or "dead".\n   TELEGRAM RULES (STRICT — follow exactly):\n   - Mark "dead" if: page shows generic "You are invited to a group chat" without the actual group name, OR URL is a t.me/+ invite hash with no group identity visible, OR page says "not found" / "invalid" / "expired" / "no such user" / "channel not found".\n   - When in doubt on a Telegram invite link (t.me/+...) with no real content: default to "dead".\n   - Mark "active" ONLY if a real channel name, @username handle, subscriber/member count, or actual channel content is clearly visible.\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for brands/tech terms).`
-                    : `Type: Text/Command.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: Keep all specific names, usernames, code, and technical terms in their original ENGLISH within the Hebrew summary.\n2. Status MUST be "text".\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for specific names/tech terms).`;
+                   ? `Type: Website content.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: You MUST keep brand names, usernames, website names, software, and technical terms in their original ENGLISH within the Hebrew summary to maximize searchability.\n2. Determine status: "active", "parked", or "dead".\n   TELEGRAM RULES (STRICT — follow exactly):\n   - Mark "dead" if the page says "not found", "invalid", "expired", "no longer valid", "no such user", or "channel not found".\n   - Mark "dead" if the page shows a generic "You are invited to a group chat" or "Join Group" WITHOUT showing a specific group name or member count.\n   - Mark "dead" if the page shows "If you have Telegram, you can contact @username right away" WITHOUT any actual bio, description, or real display name.\n   - Mark "active" ONLY if a real channel/bot name, specific @username handle WITH a description, or subscriber/member count is clearly visible.\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for brands/tech terms).`
+                   : `Type: Text/Command.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: Keep all specific names, usernames, code, and technical terms in their original ENGLISH within the Hebrew summary.\n2. Status MUST be "text".\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for specific names/tech terms).`;
                 const systemPrompt = `You are a strict JSON-only API. Return ONLY valid JSON. No markdown formatting, no extra text.
 Required format: {"summary": "...", "status": "active|parked|dead|text", "tags": ["#tag1", "#tag2", "#tag3"]}
 ${promptType}
