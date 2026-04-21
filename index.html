@@ -631,10 +631,10 @@
         };
         let abortAiScan = false;
 
-        // ─── SYNC STATE ───────────────────────────────────────────────────────────
-        // Debounce timer — only used for AI scan batch saves (high-frequency writes).
-        // Custom local locks were removed to let Firestore's native sync run optimally.
+       // ─── SYNC STATE ───────────────────────────────────────────────────────────
         let _pushDebounceTimer = null;
+        let _isPushing = false;   // נועל את התור כששמירה מתבצעת
+        let _pendingPush = false; // מסמן שיש שמירה נוספת שממתינה בתור
         // ─────────────────────────────────────────────────────────────────────────
 
         try {
@@ -951,10 +951,18 @@
         // The function stamps a _clientWriteTime on every document write so that
         // the snapshot listener can detect and discard stale out-of-order deliveries.
         //
-       function pushToCloud(immediate = false) {
-            clearTimeout(_pushDebounceTimer);
+       // תור השמירה לענן - מבטיח שאף שמירה לא עוקפת או דורסת שמירה אחרת
+        async function executePushQueue() {
+            // אם כבר מתבצעת שמירה ברקע, סמן שיש אחת בהמתנה ועצור.
+            if (_isPushing) {
+                _pendingPush = true;
+                return;
+            }
+            
+            _isPushing = true;
+            _pendingPush = false;
 
-            const doIt = async () => {
+            try {
                 // Strip ephemeral fields before saving
                 const cleanItems = state.items.map(item => {
                     const c = { ...item };
@@ -971,36 +979,44 @@
                     updateCategoryDropdowns();
                     renderList();
                     showToast("נשמר מקומית!");
-                    return;
+                    return; 
                 }
 
                 if (!state.user) return;
 
-                try {
-                    updateSyncStatus('syncing', 'מסנכרן...');
-                    await setDoc(doc(db, "users", state.user.uid), {
-                        items: cleanItems,
-                        trash: state.trash,
-                        aiSettings: getAiSettings(),
-                        lastUpdated: new Date().toISOString()
-                    }, { merge: true });
+                updateSyncStatus('syncing', 'מסנכרן...');
+                
+                // כתיבה לענן
+                await setDoc(doc(db, "users", state.user.uid), {
+                    items: cleanItems,
+                    trash: state.trash,
+                    aiSettings: getAiSettings(),
+                    lastUpdated: new Date().toISOString()
+                }, { merge: true });
 
-                    // הוסרו המנגנונים הידניים. Firestore מנהל עכשיו את התור, הקאש והסנכרון ברקע לבד.
-
-                } catch (e) {
-                    console.error("Push error:", e);
-                    showToast('❌ שגיאה בסנכרון לענן. מנסה שוב...');
-                    updateSyncStatus('error', 'שגיאה');
-                    // Auto-retry once after 3 s
-                    setTimeout(() => pushToCloud(true), 3000);
+            } catch (e) {
+                console.error("Push error:", e);
+                showToast('❌ שגיאה בסנכרון לענן. מנסה שוב...');
+                updateSyncStatus('error', 'שגיאה');
+                _pendingPush = true; // במקרה של שגיאה נסמן שיש שמירה בתור כדי לנסות שוב
+                await new Promise(resolve => setTimeout(resolve, 3000));
+            } finally {
+                // משחררים את הנעילה
+                _isPushing = false;
+                
+                // אם במהלך השמירה הנוכחית המשתמש עשה עוד פעולה (כמו לשחרר נעיצה), נריץ את התור שוב
+                if (_pendingPush) {
+                    executePushQueue();
                 }
-            };
+            }
+        }
 
+        function pushToCloud(immediate = false) {
+            clearTimeout(_pushDebounceTimer);
             if (immediate) {
-                doIt();
+                executePushQueue();
             } else {
-                // Debounce only for bulk/AI writes
-                _pushDebounceTimer = setTimeout(doIt, 700);
+                _pushDebounceTimer = setTimeout(executePushQueue, 700);
             }
         }
 
@@ -1912,15 +1928,24 @@ ${contentToAnalyze}`;
 
                 lines.forEach(l => {
                     if (!l.trim()) return;
-                    const p = l.split('|').map(s => s.trim());
+                    
+                    // מפענחים בחזרה את ירידות השורה שנשמרו בייצוא
+                    const p = l.split('|').map(s => s.trim().replace(/\[NEWLINE\]/g, '\n'));
+                    
                     if (!p[0]) return;
                     if (map.has(p[0].toLowerCase())) return;
 
                     const newItem = {
                         id: Date.now() + added,
-                        content: p[0], description: p[1] || '', category: p[2] || 'כללי', note: p[3] || '',
-                        date: new Date().toISOString(), type: URL_REGEX.test(p[0]) ? 'link' : 'text', isPinned: false
+                        content: p[0], 
+                        description: p[1] || '', 
+                        category: p[2] || 'כללי', 
+                        note: p[3] || '',
+                        date: new Date().toISOString(), 
+                        type: URL_REGEX.test(p[0]) ? 'link' : 'text', 
+                        isPinned: false
                     };
+                    
                     if (p[4]) newItem.aiSummary = p[4];
                     if (p[5]) newItem.siteStatus = p[5];
                     if (p[6]) newItem.aiTags = p[6].split(',').filter(t => t.trim());
@@ -1934,14 +1959,14 @@ ${contentToAnalyze}`;
                     updateCategoryDropdowns();
                     renderList();
                     pushToCloud(true); // immediate
-                    showToast(`✅ נוספו ${added} פריטים`, () => {
+                    showToast(`✅ נוספו ${added} פריטים מקובץ הטקסט`, () => {
                         state.items = backupItems;
                         updateCategoryDropdowns();
                         renderList();
                         pushToCloud(true);
                     });
                 } else {
-                    alert('לא נמצאו פריטים חדשים');
+                    alert('לא נמצאו פריטים חדשים בקובץ. ייתכן שהכל כבר מעודכן.');
                 }
                 closeAllMenus();
             };
@@ -1987,13 +2012,22 @@ ${contentToAnalyze}`;
 
         function exportTxt() {
             const data = state.items.map(i => {
-                const note = (i.note || '').replace(/\|/g, '-');
-                const summary = (i.aiSummary || '').replace(/\|/g, '-').replace(/\n/g, ' ');
-                const status = i.siteStatus || '';
+                // פונקציית עזר להגנה על מבנה הנתונים
+                const safe = (str) => (str || '').replace(/\|/g, '-').replace(/\n/g, '[NEWLINE]');
+                
+                const content = safe(i.content);
+                const desc = safe(i.description);
+                const cat = safe(i.category || 'כללי');
+                const note = safe(i.note);
+                const summary = safe(i.aiSummary);
+                const status = safe(i.siteStatus || 'active');
                 const tags = (i.aiTags || []).join(',');
-                return `${i.content} | ${i.description || ''} | ${i.category || 'כללי'} | ${note} | ${summary} | ${status} | ${tags}`;
+                
+                return `${content} | ${desc} | ${cat} | ${note} | ${summary} | ${status} | ${tags}`;
             }).join('\n');
-            downloadFile('links.txt', data, 'text/plain');
+            
+            const ts = new Date().toISOString().slice(0, 10);
+            downloadFile(`MH_Links_Backup_${ts}.txt`, data, 'text/plain');
             closeAllMenus();
         }
 
@@ -2217,10 +2251,33 @@ ${contentToAnalyze}`;
         function setupScrollToTop() {
             const btn = document.getElementById('scrollTopBtn');
             if (!btn) return;
+            
             window.addEventListener('scroll', () => {
                 if (window.scrollY > 250) btn.classList.add('show'); else btn.classList.remove('show');
             }, { passive: true });
+            
             btn.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            // התאמה דינמית של מיקום הכפתור כך שיצוף מעל ההתראות (Toasts) כשהן מופיעות
+            const toastContainer = document.getElementById('toast-container');
+            if (toastContainer) {
+                const updatePosition = () => {
+                    if (toastContainer.children.length > 0) {
+                        // מרימים את הכפתור מעל גובה חלון ההתראות באופן דינמי
+                        btn.style.bottom = `${toastContainer.offsetHeight + 45}px`;
+                    } else {
+                        // מחזירים את הכפתור חזרה למיקום המקורי בתחתית
+                        btn.style.bottom = '28px';
+                    }
+                };
+
+                // מאזין לשינויי גובה (למשל כשהתראה מתרחבת או כשנוספות כמה התראות במקביל)
+                if (window.ResizeObserver) {
+                    new ResizeObserver(updatePosition).observe(toastContainer);
+                }
+                // מאזין להוספה או הסרה של התראות מהקונטיינר
+                new MutationObserver(updatePosition).observe(toastContainer, { childList: true });
+            }
         }
 
         // ══════════════════════════════════════════════════════════════════════════
