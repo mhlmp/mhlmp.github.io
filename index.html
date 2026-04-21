@@ -1185,13 +1185,16 @@
                     </div>`;
                 }
 
-               // חילוץ האימוג'י הראשון מהמחרוזת, למשל 🔹, ⚡ או 🌐. 
+             // חילוץ האימוג'י של המודל. אם זה פריט ישן שטרם נסרק, נציג רובוט כברירת מחדל
                 let modelEmoji = item.aiModel ? item.aiModel.split(' ')[0] : '🤖';
-                let modelTooltip = item.aiModel ? `title="פוענח באמצעות: ${escapeHtml(item.aiModel)}"` : '';
+                let modelTooltip = item.aiModel ? `title="פוענח באמצעות: ${escapeHtml(item.aiModel)}"` : 'title="פוענח בעבר - סרוק מחדש לעדכון המודל"';
 
                 aiHtml = `<div class="ai-box" style="position:relative;">
                     <div class="ai-header">
-                        <span style="display:flex; align-items:center;"><span class="${statusClass}">${statusText}</span> <span style="font-size:12px; margin-right:6px; cursor:help; opacity:0.85;" ${modelTooltip}>${modelEmoji}</span></span>
+                        <span style="display:flex; align-items:center;">
+                            <span style="font-size:14px; margin-left:6px; cursor:help; user-select:none;" ${modelTooltip}>${modelEmoji}</span>
+                            <span class="${statusClass}">${statusText}</span>
+                        </span>
                         <button class="icon-btn ai-edit-btn" title="ערוך תוצאות AI" style="width:22px;height:22px;font-size:12px;background:rgba(127,127,127,0.15);border-radius:4px;">✏️</button>
                     </div>
                     <div>${escapeHtml(item.aiSummary)}</div>
@@ -1678,7 +1681,8 @@ ${contentToAnalyze}`;
                 if (!jm2) throw new Error('לא נמצא JSON תקין');
                 const parsed = JSON.parse(jm2[0]);
 
-                // ── הגנת ברזל: עקיפת טעויות AI בקישורי טלגרם ──
+              // ── הגנת ברזל: עקיפת טעויות AI בקישורי טלגרם ──
+                // אם ה-AI מסמן "מת" אבל הקוד מזהה משתתפים/מנויים - הסטטוס נדרס אוטומטית ל"פעיל"
                 if (isWebsite && /(?:t\.me|telegram\.me)\//i.test(cleanContent) && parsed.status === 'dead') {
                     if (/\d[\d\s,.]+\s*(?:member|subscriber|participant|חברים|מנויים)/i.test(contentToAnalyze)) {
                         parsed.status = 'active';
