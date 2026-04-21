@@ -1129,12 +1129,12 @@
             container.appendChild(section);
         }
 
-        // createCard now receives visual metadata separately — no state mutation
         function createCard(item, meta) {
             const { visualIndex = 0, isDup = false } = meta;
 
             const div = document.createElement('div');
             div.className = `card ${item.isPinned ? 'pinned' : ''} ${state.selectedIds.has(item.id) ? 'selected' : ''}`;
+            div.setAttribute('data-id', item.id);
 
             const safeContent = escapeHtml(item.content);
             const contentHtml = item.type === 'link'
@@ -1382,10 +1382,16 @@
                 }
             };
 
-            try {
+           try {
                 let cleanContent = item.content.trim().replace(/^[\/]+/, '');
-                let contentToAnalyze = cleanContent;
                 let isWebsite = item.type === 'link';
+                
+                // וידוא פרוטוקול תקין עבור שרתי הפרוקסי
+                if (isWebsite && !/^https?:\/\//i.test(cleanContent)) {
+                    cleanContent = 'https://' + cleanContent;
+                }
+                
+                let contentToAnalyze = cleanContent;
 
                 if (isWebsite && forceUrlOnly) {
                     contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: User bypassed page scanning. Analyze based on URL and description only.`;
@@ -2044,11 +2050,15 @@ ${contentToAnalyze}`;
         // HELPERS
         // ══════════════════════════════════════════════════════════════════════════
         function escapeHtml(text) {
-            return text
-                ? String(text)
-                    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-                : '';
+            if (!text) return '';
+            const str = String(text);
+            // מניעת הרצת סקריפטים מתוך קישורים
+            if (str.toLowerCase().trim().startsWith('javascript:')) return '#blocked';
+            
+            return str
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
 
         function closeAllMenus() {
@@ -2345,10 +2355,21 @@ ${contentToAnalyze}`;
         }
 
         function toggleSelection(id) {
-            if (state.selectedIds.has(id)) state.selectedIds.delete(id);
-            else state.selectedIds.add(id);
+            const cardEl = document.querySelector(`.card[data-id="${id}"]`);
+            const checkbox = cardEl?.querySelector('.card-checkbox');
+            
+            if (state.selectedIds.has(id)) {
+                state.selectedIds.delete(id);
+                if (cardEl) cardEl.classList.remove('selected');
+                if (checkbox) checkbox.checked = false;
+            } else {
+                state.selectedIds.add(id);
+                if (cardEl) cardEl.classList.add('selected');
+                if (checkbox) checkbox.checked = true;
+            }
+            
             if (state.selectedIds.size === 0) exitSelectionMode();
-            else { updateBulkActionBar(); renderList(); }
+            else updateBulkActionBar();
         }
 
         function exitSelectionMode() {
@@ -2439,11 +2460,14 @@ ${contentToAnalyze}`;
                 overlay.style.display = 'none';
                 return;
             }
-            // Only detect when BOTH width AND height diffs are large — avoids mobile false positives
             const wDiff = window.outerWidth - window.innerWidth;
             const hDiff = window.outerHeight - window.innerHeight;
-            const threshold = 200;
-            if (wDiff > threshold && hDiff < 100 && !document.fullscreenElement) {
+            const threshold = 160;
+            
+            // תופס DevTools גם כשהם בצד (רוחב) וגם כשהם למטה (גובה), מתעלם ממצבי מסך מלא לגיטימיים
+            const isDevToolsOpen = (wDiff > threshold || hDiff > threshold) && !document.fullscreenElement;
+            
+            if (isDevToolsOpen) {
                 overlay.style.display = 'flex';
             } else {
                 overlay.style.display = 'none';
