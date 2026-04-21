@@ -1459,13 +1459,14 @@
                 }
 
                 const promptType = isWebsite
-                    ? `Website content. Tasks:\n1. Hebrew summary (2 sentences max).\n2. Status: "active", "parked", or "dead".\n3. 3-5 hashtag tags.`
-                    : `Text/command. Tasks:\n1. Hebrew summary (1-2 sentences).\n2. Status must be "text".\n3. 3-5 hashtag tags.`;
+                    ? `Type: Website content.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: You MUST keep brand names, usernames, website names, software, and technical terms in their original ENGLISH within the Hebrew summary to maximize searchability.\n2. Determine status: "active", "parked", or "dead".\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for brands/tech terms).`
+                    : `Type: Text/Command.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: Keep all specific names, usernames, code, and technical terms in their original ENGLISH within the Hebrew summary.\n2. Status MUST be "text".\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for specific names/tech terms).`;
 
-                const systemPrompt = `You are a JSON-only API. Return ONLY valid JSON, no markdown, no extra text.
+                const systemPrompt = `You are a strict JSON-only API. Return ONLY valid JSON. No markdown formatting, no extra text.
 Required format: {"summary": "...", "status": "active|parked|dead|text", "tags": ["#tag1", "#tag2", "#tag3"]}
 ${promptType}
-Content:
+
+Content to analyze:
 ${contentToAnalyze}`;
 
                 let jsonString = '';
