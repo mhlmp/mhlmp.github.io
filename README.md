@@ -1,7 +1,7 @@
 <div align="center">
   <img src="icon.png" alt="MH Link Manager Pro Logo" width="130" style="border-radius: 25%; margin-bottom: 15px; box-shadow: 0 8px 20px rgba(0,0,0,0.4);">
   
-  <h1>🔗 MH Link Manager Pro v2.0</h1>
+  <h1>🔗 MH Link Manager Pro</h1>
   
   <p><b>מערכת PWA חכמה ומתקדמת לניהול קישורים אישי בענן. משלבת סנכרון מאובטח בזמן אמת, עבודה מלאה ללא רשת (Offline), ומנוע בינה מלאכותית (AI) מרובה-ספקים לסיווג, תקצור ואוטומציה של תוכן הרשת.</b></p>
   
