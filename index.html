@@ -347,7 +347,8 @@
             <input type="checkbox" id="selectAllCheckbox" style="transform: scale(1.4); cursor: pointer;">
             <span id="selectedCount" style="font-weight: bold; color: white;">0 נבחרו</span>
         </div>
-        <div class="bulk-actions">
+       <div class="bulk-actions">
+            <button class="bulk-btn" id="bulkAiBtn" style="background: rgba(139, 92, 246, 0.2); border-color: #8b5cf6; color: #ddd6fe;">🤖 סרוק נבחרים</button>
             <button class="bulk-btn" id="bulkMoveBtn">📂 העבר</button>
             <button class="bulk-btn delete" id="bulkDeleteBtn">🗑️ מחק</button>
             <button class="bulk-btn" id="cancelBulkBtn">✖ ביטול</button>
@@ -1085,6 +1086,13 @@
                     safeTags.includes(query);
                 return matchesSearch && matchesCat;
             });
+
+           state.filteredItems = filtered; // שמירת הרשימה המסוננת הנוכחית עבור בחירה מרובה
+            
+            // עדכון סרגל הבחירה בזמן אמת אם אנחנו במצב בחירה מרובה והמשתמש מחפש/מסנן
+            if (state.isSelectionMode) {
+                updateBulkActionBar();
+            }
 
             const countEl = document.getElementById('itemCount');
             if (countEl) countEl.textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
@@ -1888,29 +1896,43 @@ ${contentToAnalyze}`;
         // ══════════════════════════════════════════════════════════════════════════
         // IMPORT / EXPORT
         // ══════════════════════════════════════════════════════════════════════════
-        function importJson(e) {
+function importJson(e) {
             const f = e.target.files[0];
             if (!f) return;
             const r = new FileReader();
             r.onload = ev => {
                 try {
                     const d = JSON.parse(ev.target.result);
-                    if (confirm('האם להחליף את כל הנתונים?')) {
-                        const backup = { items: JSON.parse(JSON.stringify(state.items)), trash: JSON.parse(JSON.stringify(state.trash)) };
-                        if (Array.isArray(d)) state.items = d;
-                        else { state.items = d.items || []; state.trash = d.trash || []; }
-                        updateCategoryDropdowns();
-                        renderList();
-                        pushToCloud(true); // immediate
-                        closeAllMenus();
-                        showToast('✅ נטען בהצלחה!', () => {
-                            state.items = backup.items;
-                            state.trash = backup.trash;
-                            updateCategoryDropdowns();
-                            renderList();
-                            pushToCloud(true);
+                    const importedItems = Array.isArray(d) ? d : (d.items || []);
+                    const importedTrash = Array.isArray(d) ? [] : (d.trash || []);
+                    
+                    const strategy = confirm('האם תרצה למזג קבצים חכם?\n\n- אישור (OK) למיזוג חכם (יעדכן פריטים קיימים ויוסיף חדשים).\n- ביטול (Cancel) להחלפה מלאה של הכל.');
+                    const backup = { items: JSON.parse(JSON.stringify(state.items)), trash: JSON.parse(JSON.stringify(state.trash)) };
+                    
+                    if (strategy) {
+                        let updated = 0, added = 0;
+                        const map = new Map(state.items.map(i => [i.id, i]));
+                        importedItems.forEach(importItem => {
+                            if (map.has(importItem.id)) {
+                                Object.assign(map.get(importItem.id), importItem);
+                                updated++;
+                            } else {
+                                state.items.unshift(importItem);
+                                added++;
+                            }
                         });
+                        showToast(`✅ מוזג בהצלחה! ${added} נוספו, ${updated} עודכנו.`);
+                    } else {
+                        state.items = importedItems;
+                        state.trash = importedTrash;
+                        showToast('✅ נטען והוחלף בהצלחה!');
                     }
+                    
+                    updateCategoryDropdowns();
+                    renderList();
+                    pushToCloud(true);
+                    closeAllMenus();
+                    
                 } catch (ex) { alert('שגיאה בקובץ: ' + ex.message); }
             };
             r.readAsText(f);
@@ -1922,51 +1944,82 @@ ${contentToAnalyze}`;
             const r = new FileReader();
             r.onload = (ev) => {
                 const lines = ev.target.result.split('\n');
-                let added = 0;
+                let added = 0, updated = 0;
                 const backupItems = JSON.parse(JSON.stringify(state.items));
-                const map = new Map(state.items.map(i => [i.content.toLowerCase().trim(), true]));
+                
+                // יצירת מפות לחיפוש מהיר כדי לאפשר עדכון של מידע קיים על בסיס מזהה (ID) או תוכן
+                const idMap = new Map(state.items.map(i => [String(i.id), i]));
+                const contentMap = new Map(state.items.map(i => [i.content.toLowerCase().trim(), i]));
 
                 lines.forEach(l => {
                     if (!l.trim()) return;
                     
-                    // מפענחים בחזרה את ירידות השורה שנשמרו בייצוא
                     const p = l.split('|').map(s => s.trim().replace(/\[NEWLINE\]/g, '\n'));
+                    if (p.length < 2) return;
                     
-                    if (!p[0]) return;
-                    if (map.has(p[0].toLowerCase())) return;
-
-                    const newItem = {
-                        id: Date.now() + added,
-                        content: p[0], 
-                        description: p[1] || '', 
-                        category: p[2] || 'כללי', 
-                        note: p[3] || '',
-                        date: new Date().toISOString(), 
-                        type: URL_REGEX.test(p[0]) ? 'link' : 'text', 
-                        isPinned: false
-                    };
+                    // בדיקה אם ה-TXT החדש מכיל מזהה (ID) בתחילתו לצורך מיזוג חכם
+                    let isNewFormat = /^\d+$/.test(p[0]) && p.length >= 7; 
                     
-                    if (p[4]) newItem.aiSummary = p[4];
-                    if (p[5]) newItem.siteStatus = p[5];
-                    if (p[6]) newItem.aiTags = p[6].split(',').filter(t => t.trim());
+                    let itemId, content, desc, cat, note, summary, status, tags;
+                    
+                    if (isNewFormat) {
+                        itemId = p[0]; content = p[1]; desc = p[2]; cat = p[3]; note = p[4]; summary = p[5]; status = p[6]; tags = p[7];
+                    } else {
+                        itemId = null; content = p[0]; desc = p[1]; cat = p[2]; note = p[3]; summary = p[4]; status = p[5]; tags = p[6];
+                    }
+                    
+                    if (!content) return;
+                    
+                    // חיפוש פריט קיים כדי לעדכן אותו במקום ליצור כפילות
+                    let existingItem = null;
+                    if (itemId && idMap.has(itemId)) {
+                        existingItem = idMap.get(itemId);
+                    } else if (contentMap.has(content.toLowerCase())) {
+                        existingItem = contentMap.get(content.toLowerCase());
+                    }
+                    
+                    if (existingItem) {
+                        existingItem.content = content;
+                        if (desc !== undefined) existingItem.description = desc;
+                        if (cat !== undefined) existingItem.category = cat;
+                        if (note !== undefined) existingItem.note = note;
+                        if (summary !== undefined) existingItem.aiSummary = summary;
+                        if (status !== undefined) existingItem.siteStatus = status;
+                        if (tags !== undefined) existingItem.aiTags = tags.split(',').filter(t => t.trim());
+                        updated++;
+                    } else {
+                        const newItem = {
+                            id: itemId ? parseInt(itemId) : Date.now() + added,
+                            content: content, 
+                            description: desc || '', 
+                            category: cat || 'כללי', 
+                            note: note || '',
+                            date: new Date().toISOString(), 
+                            type: URL_REGEX.test(content) ? 'link' : 'text', 
+                            isPinned: false
+                        };
+                        if (summary) newItem.aiSummary = summary;
+                        if (status) newItem.siteStatus = status;
+                        if (tags) newItem.aiTags = tags.split(',').filter(t => t.trim());
 
-                    state.items.unshift(newItem);
-                    map.set(p[0].toLowerCase(), true);
-                    added++;
+                        state.items.unshift(newItem);
+                        contentMap.set(content.toLowerCase(), newItem);
+                        added++;
+                    }
                 });
 
-                if (added > 0) {
+                if (added > 0 || updated > 0) {
                     updateCategoryDropdowns();
                     renderList();
-                    pushToCloud(true); // immediate
-                    showToast(`✅ נוספו ${added} פריטים מקובץ הטקסט`, () => {
+                    pushToCloud(true);
+                    showToast(`✅ ייבוא חכם בוצע! ${added} נוספו, ${updated} עודכנו.`, () => {
                         state.items = backupItems;
                         updateCategoryDropdowns();
                         renderList();
                         pushToCloud(true);
                     });
                 } else {
-                    alert('לא נמצאו פריטים חדשים בקובץ. ייתכן שהכל כבר מעודכן.');
+                    alert('לא נמצאו שינויים לעדכון בקובץ.');
                 }
                 closeAllMenus();
             };
@@ -2012,9 +2065,7 @@ ${contentToAnalyze}`;
 
         function exportTxt() {
             const data = state.items.map(i => {
-                // פונקציית עזר להגנה על מבנה הנתונים
                 const safe = (str) => (str || '').replace(/\|/g, '-').replace(/\n/g, '[NEWLINE]');
-                
                 const content = safe(i.content);
                 const desc = safe(i.description);
                 const cat = safe(i.category || 'כללי');
@@ -2023,14 +2074,14 @@ ${contentToAnalyze}`;
                 const status = safe(i.siteStatus || 'active');
                 const tags = (i.aiTags || []).join(',');
                 
-                return `${content} | ${desc} | ${cat} | ${note} | ${summary} | ${status} | ${tags}`;
+                // הוספת ה-ID בתחילת השורה כדי לאפשר עדכון מדויק בייבוא עתידי (Smart Merge)
+                return `${i.id} | ${content} | ${desc} | ${cat} | ${note} | ${summary} | ${status} | ${tags}`;
             }).join('\n');
             
             const ts = new Date().toISOString().slice(0, 10);
             downloadFile(`MH_Links_Backup_${ts}.txt`, data, 'text/plain');
             closeAllMenus();
         }
-
         function downloadSite() {
             closeAllMenus();
             const cleanItems = state.items.map(item => {
@@ -2437,20 +2488,92 @@ ${contentToAnalyze}`;
             renderList();
         }
 
-        function updateBulkActionBar() {
+       function updateBulkActionBar() {
             document.getElementById('selectedCount').textContent = `${state.selectedIds.size} פריטים נבחרו`;
+            
+            // מתאים את כפתור "בחר הכל" לכמות הפריטים שמוצגת כרגע במסך בלבד
+            const visibleCount = state.filteredItems ? state.filteredItems.length : state.items.length;
             document.getElementById('selectAllCheckbox').checked =
-                state.selectedIds.size > 0 && state.selectedIds.size === state.items.length;
+                state.selectedIds.size > 0 && state.selectedIds.size === visibleCount;
+            
             document.getElementById('bulkActionBar').classList.add('visible');
         }
 
         document.getElementById('cancelBulkBtn')?.addEventListener('click', exitSelectionMode);
 
         document.getElementById('selectAllCheckbox')?.addEventListener('change', (e) => {
-            if (e.target.checked) state.items.forEach(i => state.selectedIds.add(i.id));
-            else state.selectedIds.clear();
+            const listToSelect = state.filteredItems || state.items; // שימוש ברשימה המסוננת
+            if (e.target.checked) {
+                // בחירת כל הפריטים שמוצגים כרגע על המסך
+                listToSelect.forEach(i => state.selectedIds.add(i.id));
+            } else {
+                // הסרה חכמה: מסיר מהבחירה רק את מה שמוצג כרגע על המסך (שומר בחירות קודמות שהוסתרו בסינון)
+                listToSelect.forEach(i => state.selectedIds.delete(i.id));
+            }
+            
             if (state.selectedIds.size === 0) exitSelectionMode();
             else { updateBulkActionBar(); renderList(); }
+        });
+
+        // כפתור סריקת AI לפריטים נבחרים בלבד
+        document.getElementById('bulkAiBtn')?.addEventListener('click', async () => {
+            const settings = getAiSettings();
+            if (!settings.keys.gemini && !settings.keys.groq && !settings.keys.openrouter) {
+                return alert('אנא הזן לפחות מפתח API אחד בהגדרות ה-AI.');
+            }
+            if (!confirm(`האם לסרוק מחדש ב-AI את ${state.selectedIds.size} הפריטים שבחרת?`)) return;
+
+            const selectedArr = Array.from(state.selectedIds);
+            exitSelectionMode();
+            closeAllMenus();
+            abortAiScan = false;
+            document.getElementById('cancelBulkAiBtn').style.display = 'block';
+            const bulkToastId = 'ai-bulk-scan-toast';
+
+            for (let i = 0; i < selectedArr.length; i++) {
+                if (abortAiScan) break;
+                const itemId = selectedArr[i];
+                const itemObj = state.items.find(it => it.id === itemId);
+                if (!itemObj) continue;
+
+                const pct = Math.round((i / selectedArr.length) * 100);
+                showToast(`<div style="width:100%;">
+                    <div>🤖 <b>סורק נבחרים...</b> [${i + 1}/${selectedArr.length}]</div>
+                    <div style="font-size:11px;opacity:0.75;margin-top:3px;direction:ltr;">${escapeHtml(itemObj.content).substring(0, 35)}...</div>
+                    <div style="width:100%;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin-top:8px;overflow:hidden;">
+                        <div style="width:${pct}%;height:100%;background:var(--accent-green);transition:width 0.3s;"></div>
+                    </div>
+                </div>`, null, 0, bulkToastId, false);
+
+                // קריאת ההגדרות (כדי לכבד את בקשת המשתמש לסרוק רק לפי כתובת ה-URL במידה וסימן זאת)
+                const qs = JSON.parse(localStorage.getItem('aiQuickSettings') || '{}');
+                await scanSingleItem(itemId, qs.provider || null, qs.urlOnly || false);
+                
+                if (abortAiScan) break;
+
+                if (i < selectedArr.length - 1) {
+                    const result = state.items.find(it => it.id === itemId);
+                    let delay = 300;
+                    if (result?.aiSummary && isQuotaError(result.aiSummary)) {
+                        delay = 20000;
+                        window.lastWorkingAiProvider = null;
+                        showToast(`<div style="width:100%;"><div>⚠️ <b>מכסות מלאות — ממתין 20 שניות...</b></div>
+                            <div style="width:100%;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin-top:8px;overflow:hidden;">
+                                <div style="width:${pct}%;height:100%;background:var(--accent-gold);"></div>
+                            </div></div>`, null, 0, bulkToastId, true);
+                    }
+                    let waited = 0;
+                    while (waited < delay && !abortAiScan) {
+                        await new Promise(r => setTimeout(r, 100));
+                        waited += 100;
+                    }
+                }
+            }
+
+            document.getElementById('cancelBulkAiBtn').style.display = 'none';
+            const finalMsg = abortAiScan ? '🛑 <b>הסריקה הופסקה.</b>' : '✅ <b>סריקת ה-AI הסתיימה בהצלחה!</b>';
+            showToast(finalMsg, null, 4000, bulkToastId, false);
+            setTimeout(() => removeToast(bulkToastId), 4000);
         });
 
         document.getElementById('bulkDeleteBtn')?.addEventListener('click', () => {
@@ -2489,10 +2612,10 @@ ${contentToAnalyze}`;
                 if (state.selectedIds.has(i.id)) { prevCats.push({ id: i.id, category: i.category }); i.category = catName; }
             });
             const count = state.selectedIds.size;
-            renderList();
+            
             updateCategoryDropdowns();
             pushToCloud(true); // immediate
-            exitSelectionMode();
+            exitSelectionMode(); // פונקציית היציאה כבר קוראת בעצמה ל-renderList, לכן מחקנו את הכפילות
             showToast(`📂 ${count} פריטים → "${catName}"`, () => {
                 prevCats.forEach(p => {
                     const ci = state.items.find(i => i.id === p.id);
