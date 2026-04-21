@@ -46,8 +46,9 @@
 
         * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
 
-       html, body {
-            overflow-x: hidden; /* מונע גלילה אופקית ותזוזה של המסך */
+        html, body {
+            overflow-x: hidden;
+            max-width: 100vw;
         }
         
         body {
@@ -55,13 +56,21 @@
             background: var(--bg-gradient);
             background-attachment: fixed;
             color: var(--text-primary);
-            margin: 0; padding: 15px; padding-bottom: 100px;
-            min-height: 100vh; transition: color 0.3s;
+            margin: 0;
+            padding: 15px;
+            /* FIX: enough padding-bottom so last card is never behind fixed buttons */
+            padding-bottom: 130px;
+            min-height: 100vh;
+            transition: color 0.3s;
         }
 
         .glass-panel {
-            background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
-            border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); border-radius: var(--radius);
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+            border-radius: var(--radius);
         }
 
         header { text-align: center; margin-bottom: 25px; }
@@ -84,12 +93,16 @@
         .user-avatar { width: 42px; height: 42px; border-radius: 50%; border: 2px solid var(--glass-border); object-fit: cover; }
         .user-name { font-weight: 700; font-size: 1rem; }
         .cloud-status { font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; display: inline-block; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; display: inline-block; flex-shrink: 0; }
         .status-dot.online { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
         .status-dot.offline { background: var(--accent-gold); box-shadow: 0 0 8px var(--accent-gold); }
+        .status-dot.syncing { background: var(--primary-color); box-shadow: 0 0 8px var(--primary-color); animation: pulse 1.5s infinite; }
+        .status-dot.error { background: var(--accent-red); box-shadow: 0 0 8px var(--accent-red); }
+
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
         .btn-login { background: var(--google-btn); color: white; border: none; padding: 10px 24px; border-radius: 30px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; }
-        .btn-action-sm { background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 8px 14px; border-radius: 8px; cursor: pointer; margin-left: 5px; }
+        .btn-action-sm { background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 8px 14px; border-radius: 8px; cursor: pointer; margin-left: 5px; font-size: 0.85rem; }
 
         #welcomeScreen { display: none; flex-direction: column; align-items: center; text-align: center; padding: 40px 20px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border); margin-top: 20px; }
         #welcomeScreen.visible { display: flex; }
@@ -97,41 +110,85 @@
         .auth-required { transition: opacity 0.3s ease; }
         .auth-required.locked { display: none !important; }
 
-        #controlsArea { padding: 16px; margin-bottom: 25px; display: flex; flex-direction: column; gap: 14px; z-index: 100; position: relative; }
-        .search-container input { width: 100%; padding: 12px 16px; font-size: 16px; border: 1px solid var(--glass-border); border-radius: var(--radius); background: rgba(127,127,127,0.1); color: var(--text-primary); }
+        #controlsArea {
+            padding: 14px;
+            margin-bottom: 25px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            /* FIX: overflow visible so dropdowns can spill out */
+            overflow: visible;
+            position: relative;
+            z-index: 100;
+        }
+        .search-container input {
+            width: 100%; padding: 12px 16px; font-size: 16px;
+            border: 1px solid var(--glass-border); border-radius: var(--radius);
+            background: rgba(127,127,127,0.1); color: var(--text-primary);
+        }
         .filters-container { display: flex; gap: 10px; flex-wrap: wrap; }
-        .filters-container select { flex: 1; min-width: 140px; height: 44px; padding: 0 12px; background: rgba(127,127,127,0.1); color: var(--text-primary); border: 1px solid var(--glass-border); border-radius: var(--radius); }
+        .filters-container select {
+            flex: 1; min-width: 130px; height: 44px; padding: 0 10px;
+            background: rgba(127,127,127,0.1); color: var(--text-primary);
+            border: 1px solid var(--glass-border); border-radius: var(--radius);
+            font-size: 0.9rem;
+        }
         .filters-container select option { background: #1e293b; color: white; }
 
-        .actions-container { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-        .dropdown { position: relative; display: inline-block; flex-grow: 1; }
-        .action-btn { width: 100%; height: 44px; color: white; border: none; border-radius: var(--radius); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; }
+        .actions-container { display: flex; gap: 7px; flex-wrap: wrap; justify-content: center; }
+
+        .dropdown { position: relative; display: inline-block; flex-grow: 1; min-width: 0; }
+
+        .action-btn {
+            width: 100%; height: 42px; color: white; border: none; border-radius: var(--radius);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            gap: 6px; font-weight: 600; font-size: 0.88rem; white-space: nowrap;
+            padding: 0 10px;
+        }
         .btn-json { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
         .btn-txt { background: linear-gradient(135deg, #06b6d4, #0891b2); }
         .btn-site { background: linear-gradient(135deg, #6366f1, #4f46e5); } 
         .btn-trash-view { background: linear-gradient(135deg, #64748b, #475569); }
-        .btn-toggle { background: rgba(127,127,127,0.1); color: var(--text-primary); border: 1px solid var(--glass-border); flex-grow: 0 !important; width: 44px; font-size: 1.2rem; }
-        /* FIX: dead filter active state */
-        .btn-toggle.dead-active { background: rgba(217, 48, 37, 0.2) !important; border-color: var(--accent-red) !important; box-shadow: 0 0 8px rgba(217,48,37,0.4); }
-
-        .dropdown-content { display: none; position: absolute; background: var(--glass-bg); backdrop-filter: blur(20px); min-width: 240px; box-shadow: 0 15px 40px rgba(0,0,0,0.3); border-radius: var(--radius); border: 1px solid var(--glass-border); z-index: 2000; right: 0; top: calc(100% + 8px); padding: 8px 0; }
-        /* תיקון כיוון הפתיחה של התפריטים השמאליים כדי שלא ייחתכו */
-        #siteMenu, #aiMenu {
-            right: auto;
-            left: 0;
+        .btn-toggle {
+            background: rgba(127,127,127,0.1); color: var(--text-primary);
+            border: 1px solid var(--glass-border); flex-grow: 0 !important;
+            width: 42px; font-size: 1.1rem;
+        }
+        .btn-toggle.dead-active {
+            background: rgba(217, 48, 37, 0.2) !important;
+            border-color: var(--accent-red) !important;
+            box-shadow: 0 0 8px rgba(217,48,37,0.4);
         }
 
-        /* הגנה נוספת למסכים קטנים מאוד - מבטיח שאף תפריט לא יעבור את רוחב המסך */
-        @media (max-width: 480px) {
-            .dropdown-content {
-                min-width: 200px;
-                max-width: calc(100vw - 30px);
-                white-space: normal;
-            }
+        /* FIX: Dropdown positioning — all contained within viewport */
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            min-width: 220px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+            border-radius: var(--radius);
+            border: 1px solid var(--glass-border);
+            /* FIX: very high z-index to always appear on top */
+            z-index: 9000;
+            top: calc(100% + 8px);
+            /* Default: open to right edge */
+            right: 0;
+            left: auto;
+            padding: 8px 0;
         }
+
         .dropdown-content.show { display: block; }
-        .dropdown-content button, .dropdown-content label { color: var(--text-primary); padding: 12px 20px; display: block; background: none; border: none; width: 100%; text-align: right; cursor: pointer; font-size: 14px; }
-        .dropdown-content button:hover, .dropdown-content label:hover { background-color: rgba(127,127,127,0.1); color: var(--primary-color); }
+        .dropdown-content button,
+        .dropdown-content label {
+            color: var(--text-primary); padding: 12px 18px; display: block;
+            background: none; border: none; width: 100%; text-align: right;
+            cursor: pointer; font-size: 14px; white-space: nowrap;
+        }
+        .dropdown-content button:hover,
+        .dropdown-content label:hover { background-color: rgba(127,127,127,0.1); color: var(--primary-color); }
         input[type="file"] { display: none; }
         .dropdown-divider { border-top: 1px solid var(--glass-border); margin: 6px 0; }
 
@@ -143,128 +200,184 @@
 
         .category-block { margin-bottom: 35px; }
         .category-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 5px; margin-bottom: 15px; border-bottom: 2px solid rgba(127,127,127,0.1); }
-        .category-header h2 { margin: 0; font-size: 1.4rem; font-weight: 700; }
-        .category-badge { background: rgba(127,127,127,0.1); padding: 4px 12px; border-radius: 12px; font-weight: 600; font-size: 0.85rem; border: 1px solid var(--glass-border); }
+        .category-header h2 { margin: 0; font-size: 1.3rem; font-weight: 700; }
+        .category-badge { background: rgba(127,127,127,0.1); padding: 4px 12px; border-radius: 12px; font-weight: 600; font-size: 0.85rem; border: 1px solid var(--glass-border); white-space: nowrap; }
         
-        .items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-        .card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius); position: relative; display: flex; flex-direction: column; transition: transform 0.2s; }
-        .card:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
+        .items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px; }
+        .card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius); position: relative; display: flex; flex-direction: column; transition: transform 0.2s, box-shadow 0.2s; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
         .card.pinned { border: 2px solid var(--accent-gold); background: rgba(255, 255, 0, 0.05); }
-        .card-index { position: absolute; top: 12px; left: 12px; background: rgba(127,127,127,0.1); font-size: 11px; padding: 3px 8px; border-radius: 6px; font-family: monospace; color: var(--text-secondary); }
-        .card-body { padding: 20px; padding-top: 40px; flex-grow: 1; }
-        .card-link { display: block; color: var(--primary-color); font-weight: 700; text-decoration: none; margin-bottom: 10px; word-break: break-all; font-size: 16px; line-height: 1.4; }
-        .card-text-content { background: rgba(127,127,127,0.05); padding: 12px; border-radius: 8px; font-family: monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; border: 1px solid var(--glass-border); }
-        .card-desc { font-size: 15px; opacity: 0.9; margin-bottom: 10px; line-height: 1.5; }
-        .card-note { margin-top: 12px; padding: 10px; background-color: var(--note-bg); color: #4a3b10; font-size: 13px; border-radius: 8px; border-right: 4px solid var(--accent-gold); display: flex; gap: 8px; }
-        .card-footer { padding: 12px 20px; border-top: 1px solid var(--glass-border); background: rgba(127,127,127,0.05); display: flex; justify-content: space-between; align-items: center; border-radius: 0 0 var(--radius) var(--radius); }
-        .tag-category { font-size: 11px; background: rgba(127,127,127,0.1); padding: 4px 10px; border-radius: 12px; border: 1px solid var(--glass-border); font-weight: 600; }
-        .duplicate-badge { color: var(--accent-red); font-weight: bold; font-size: 12px; display: none; margin-left: 5px; background: rgba(239,68,68,0.1); padding: 2px 6px; border-radius: 4px; }
-        .card-actions { display: flex; gap: 4px; }
-        .icon-btn { background: transparent; border: none; cursor: pointer; font-size: 18px; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); transition: all 0.2s; }
-        .icon-btn:hover { color: var(--primary-color); background: rgba(127,127,127,0.1); }
-        .pin-btn.active { color: var(--accent-gold); transform: rotate(45deg); opacity: 1; }
+        .card-index { position: absolute; top: 10px; left: 10px; background: rgba(127,127,127,0.15); font-size: 10px; padding: 2px 7px; border-radius: 6px; font-family: monospace; color: var(--text-secondary); z-index: 1; }
+        .card-body { padding: 16px; padding-top: 36px; flex-grow: 1; }
+        .card-link { display: block; color: var(--primary-color); font-weight: 700; text-decoration: none; margin-bottom: 8px; word-break: break-all; font-size: 15px; line-height: 1.4; }
+        .card-text-content { background: rgba(127,127,127,0.05); padding: 10px; border-radius: 8px; font-family: monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; border: 1px solid var(--glass-border); }
+        .card-desc { font-size: 14px; opacity: 0.9; margin-bottom: 8px; line-height: 1.5; }
+        .card-note { margin-top: 10px; padding: 8px 10px; background-color: var(--note-bg); color: #4a3b10; font-size: 13px; border-radius: 8px; border-right: 4px solid var(--accent-gold); display: flex; gap: 8px; }
 
-        #trashModal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+        /* FIX: Card footer — no more overflow, category badge always visible */
+        .card-footer {
+            padding: 8px 12px;
+            border-top: 1px solid var(--glass-border);
+            background: rgba(127,127,127,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 0 0 var(--radius) var(--radius);
+            gap: 6px;
+            min-height: 46px;
+        }
+
+        .card-footer-left {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+            min-width: 0;
+        }
+
+        /* FIX: category tag never overflows */
+        .tag-category {
+            font-size: 10px;
+            background: rgba(127,127,127,0.12);
+            padding: 3px 8px;
+            border-radius: 10px;
+            border: 1px solid var(--glass-border);
+            font-weight: 600;
+            max-width: 90px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex-shrink: 1;
+            display: inline-block;
+        }
+
+        .duplicate-badge {
+            color: var(--accent-red); font-weight: bold; font-size: 11px;
+            display: none; margin-right: 3px; background: rgba(239,68,68,0.1);
+            padding: 2px 5px; border-radius: 4px; white-space: nowrap; flex-shrink: 0;
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 1px;
+            flex-shrink: 0;
+        }
+
+        /* FIX: smaller icon buttons so all 6 fit on any phone */
+        .icon-btn {
+            background: transparent; border: none; cursor: pointer;
+            font-size: 15px;
+            width: 30px; height: 30px;
+            border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-secondary);
+            transition: all 0.15s;
+            flex-shrink: 0;
+        }
+        .icon-btn:hover { color: var(--primary-color); background: rgba(127,127,127,0.12); }
+        .pin-btn.active { color: var(--accent-gold); }
+
+        @media (max-width: 360px) {
+            .icon-btn { width: 26px; height: 26px; font-size: 13px; }
+            .tag-category { max-width: 70px; font-size: 9px; }
+        }
+
+        /* Modals */
+        #trashModal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 8000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
         #trashModal.open { display: flex; }
         .modal-content { background: var(--glass-bg); width: 90%; max-width: 600px; max-height: 80vh; border-radius: var(--radius); border: 1px solid var(--glass-border); display: flex; flex-direction: column; overflow: hidden; }
-        .modal-header { padding: 15px 20px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center; }
-        .modal-body { padding: 20px; overflow-y: auto; }
+        .modal-header { padding: 14px 18px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .modal-body { padding: 16px; overflow-y: auto; }
         .trash-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: rgba(127,127,127,0.05); margin-bottom: 8px; border-radius: 8px; border: 1px solid var(--glass-border); }
 
-       /* מערכת הבועות החדשה (Toast Stack) */
+        /* Toast Stack */
         #toast-container {
             position: fixed;
             bottom: 30px;
             left: 50%;
             transform: translateX(-50%);
-            z-index: 9999;
+            z-index: 9500;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             width: calc(100vw - 40px);
             max-width: 420px;
-            pointer-events: none; /* מאפשר לחיצות דרך השטח הריק */
+            pointer-events: none;
         }
 
         .toast-item {
-            background: rgba(30, 41, 59, 0.95);
+            background: rgba(20, 30, 50, 0.97);
             color: white;
             border-radius: 12px;
-            box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+            box-shadow: 0 12px 35px rgba(0,0,0,0.45);
             border: 1px solid rgba(255,255,255,0.1);
             overflow: hidden;
             display: flex;
             flex-direction: column;
             width: 100%;
-            pointer-events: auto; /* מחזיר לחיצות לבועה עצמה */
-            
-            /* אנימציית כניסה ויציאה */
+            pointer-events: auto;
             opacity: 0;
-            transform: translateY(30px) scale(0.95);
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform: translateY(28px) scale(0.95);
+            transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
-        
-        .toast-item.visible {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-        }
-        
-        .toast-item.leaving {
-            opacity: 0;
-            transform: translateY(-20px) scale(0.9);
-            transition: all 0.3s ease-in;
-        }
+        .toast-item.visible { opacity: 1; transform: translateY(0) scale(1); }
+        .toast-item.leaving { opacity: 0; transform: translateY(-18px) scale(0.9); transition: all 0.28s ease-in; }
 
-        .toast-content { padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 15px; font-size: 14.5px; line-height: 1.4; width: 100%; box-sizing: border-box;}
+        .toast-content { padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; line-height: 1.4; width: 100%; box-sizing: border-box; }
         .toast-msg { flex-grow: 1; word-break: break-word; }
-        .toast-undo-btn { background: rgba(255,255,255,0.1); border: 1px solid var(--accent-gold); color: var(--accent-gold); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem; transition: 0.2s; white-space: nowrap; flex-shrink: 0; }
+        .toast-undo-btn { background: rgba(255,255,255,0.1); border: 1px solid var(--accent-gold); color: var(--accent-gold); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.82rem; transition: 0.2s; white-space: nowrap; flex-shrink: 0; }
         .toast-undo-btn:hover { background: var(--accent-gold); color: #000; }
-        
-        .toast-progress { height: 4px; background: var(--accent-green); width: 100%; transform-origin: right; transform: scaleX(1); }
+        .toast-progress { height: 3px; background: var(--accent-green); width: 100%; transform-origin: right; transform: scaleX(1); }
         .toast-progress.animating { animation: countdown linear forwards; }
 
-        /* כפתור עלייה למעלה */
+        /* Scroll-to-top button — FIX z-index above toasts */
         #scrollTopBtn { 
-            position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; 
+            position: fixed; bottom: 28px; right: 20px;
+            width: 46px; height: 46px; 
             border-radius: 50%; background: var(--primary-color); color: white; 
-            border: none; font-size: 24px; cursor: pointer; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 10001; 
+            border: none; font-size: 20px; cursor: pointer; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.35); z-index: 9600; 
             opacity: 0; visibility: hidden; 
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
             display: flex; align-items: center; justify-content: center; 
         }
         #scrollTopBtn.show { opacity: 1; visibility: visible; }
-        
-        /* דוחף את הכפתור כלפי מעלה ברגע שיש בועות במסך */
-        #toast-container:not(:empty) ~ #scrollTopBtn { 
-            transform: translateY(-90px); 
-        }
-        .btn-reload { padding: 4px 8px; margin-right: 5px; cursor: pointer; border: 1px solid var(--glass-border); border-radius: 4px; background: transparent; font-size: 12px; color: var(--text-secondary); }
 
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to   { transform: rotate(360deg); }
-        }
+        .btn-reload { padding: 3px 7px; margin-right: 4px; cursor: pointer; border: 1px solid var(--glass-border); border-radius: 4px; background: transparent; font-size: 11px; color: var(--text-secondary); }
 
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
-        .card-checkbox { display: none; position: absolute; top: 12px; right: 12px; transform: scale(1.4); accent-color: var(--primary-color); pointer-events: none; z-index: 10; }
+        /* Selection mode */
+        .card-checkbox { display: none; position: absolute; top: 10px; right: 10px; transform: scale(1.3); accent-color: var(--primary-color); pointer-events: none; z-index: 10; }
         body.selection-mode-active .card-checkbox { display: block; }
-        body.selection-mode-active .card.selected { border: 2px solid var(--primary-color); background: rgba(96, 165, 250, 0.15); }
+        body.selection-mode-active .card.selected { border: 2px solid var(--primary-color); background: rgba(96, 165, 250, 0.12); }
         body.selection-mode-active .card-actions { display: none; }
         body.selection-mode-active .card { cursor: pointer; }
         body.selection-mode-active .card-link { pointer-events: none; }
         
-        #bulkActionBar { position: fixed; top: 0; left: 0; right: 0; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--glass-border); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; z-index: 5000; transform: translateY(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        #bulkActionBar {
+            position: fixed; top: 0; left: 0; right: 0;
+            background: rgba(15, 23, 42, 0.97);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--glass-border);
+            padding: 12px 16px;
+            display: flex; justify-content: space-between; align-items: center;
+            z-index: 8500;
+            transform: translateY(-100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
         #bulkActionBar.visible { transform: translateY(0); }
-        .bulk-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;}
-        .bulk-btn { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 0.9rem; transition: 0.2s; }
+        .bulk-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+        .bulk-btn { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); padding: 7px 14px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 0.85rem; transition: 0.2s; }
         .bulk-btn:hover { background: rgba(255,255,255,0.2); }
         .bulk-btn.delete { background: rgba(239, 68, 68, 0.2); border-color: var(--accent-red); color: #fca5a5; }
         .bulk-btn.delete:hover { background: var(--accent-red); color: white; }
 
+        /* Loading screen */
         #loading-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: var(--bg-gradient);
@@ -272,22 +385,65 @@
             z-index: 99999; transition: opacity 0.4s ease;
             backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
         }
-        .spinner {
-            border: 4px solid rgba(127, 127, 127, 0.2);
-            border-top: 4px solid var(--primary-color);
-            border-radius: 50%; width: 50px; height: 50px;
-            animation: spin 1s linear infinite; margin-bottom: 20px;
-        }
+        .spinner { border: 4px solid rgba(127, 127, 127, 0.2); border-top: 4px solid var(--primary-color); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
         .loading-title { color: var(--text-primary); margin: 0 0 10px 0; font-size: 1.5rem; text-align: center; }
         .loading-text { color: var(--text-secondary); font-size: 1rem; margin: 0; text-align: center; direction: rtl; }
 
-        .ai-box { background: rgba(127,127,127,0.05); border: 1px solid var(--glass-border); padding: 12px; border-radius: 8px; margin-top: 12px; font-size: 13px; line-height: 1.5; }
-        .ai-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: bold; border-bottom: 1px solid rgba(127,127,127,0.1); padding-bottom: 5px;}
+        /* AI box */
+        .ai-box { background: rgba(127,127,127,0.05); border: 1px solid var(--glass-border); padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 13px; line-height: 1.5; }
+        .ai-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-weight: bold; border-bottom: 1px solid rgba(127,127,127,0.1); padding-bottom: 5px; }
         .ai-status-active { color: var(--accent-green); }
         .ai-status-parked { color: var(--accent-gold); }
         .ai-status-dead { color: var(--accent-red); }
         .ai-status-text { color: var(--primary-color); }
-        .spinner-small { width: 14px; height: 14px; border: 2px solid transparent; border-top-color: var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-left: 5px; } 
+        .spinner-small { width: 14px; height: 14px; border: 2px solid transparent; border-top-color: var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-left: 5px; }
+
+        /* Floating AI menu */
+        #aiFloatingMenu {
+            position: fixed;
+            display: none;
+            z-index: 9800;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.5);
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: var(--radius);
+            min-width: 220px;
+            padding: 8px 0;
+        }
+
+        #aiFloatingMenu button {
+            text-align: right; width: 100%; background: none; border: none;
+            padding: 11px 15px; color: var(--text-primary); cursor: pointer;
+            transition: 0.15s; font-size: 14px;
+        }
+        #aiFloatingMenu button:hover { background: rgba(127,127,127,0.1); color: var(--primary-color); }
+
+        /* Edit modals common style */
+        .edit-modal-wrap {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+            z-index: 8500; display: none; justify-content: center; align-items: center;
+            backdrop-filter: blur(5px); padding: 15px;
+        }
+        .edit-modal-box {
+            background: var(--glass-bg); border-radius: var(--radius);
+            border: 1px solid var(--glass-border);
+            padding: 20px; width: 100%; max-width: 420px;
+            max-height: 90vh; overflow-y: auto;
+        }
+        .edit-modal-box h3 { margin-top: 0; color: var(--text-primary); }
+        .edit-modal-form { display: flex; flex-direction: column; gap: 11px; }
+        .edit-modal-input {
+            padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border);
+            background: rgba(127,127,127,0.1); color: var(--text-primary);
+            width: 100%; box-sizing: border-box; font-size: 14px;
+        }
+        .edit-modal-label { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: -7px; }
+        .edit-modal-btns { display: flex; gap: 10px; margin-top: 8px; }
+        .edit-modal-btns button { flex: 1; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; }
+        .btn-save { background: var(--accent-green); color: white; border: none; }
+        .btn-cancel { background: rgba(127,127,127,0.2); color: var(--text-primary); border: 1px solid var(--glass-border); }
     </style>
 </head>
 <body class="dark-mode">
@@ -297,20 +453,23 @@
             <span id="selectedCount" style="font-weight: bold; color: white;">0 נבחרו</span>
         </div>
         <div class="bulk-actions">
-            <button class="bulk-btn" id="bulkMoveBtn">📂 העבר לקטגוריה</button>
-            <button class="bulk-btn delete" id="bulkDeleteBtn">🗑️ מחק נבחרים</button>
+            <button class="bulk-btn" id="bulkMoveBtn">📂 העבר</button>
+            <button class="bulk-btn delete" id="bulkDeleteBtn">🗑️ מחק</button>
             <button class="bulk-btn" id="cancelBulkBtn">✖ ביטול</button>
         </div>
     </div>
+
     <div id="devtools-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#090a0a; color:white; z-index:999999; text-align:center; padding-top:20%; font-family:monospace; flex-direction:column; align-items:center;">
-        <h1 style="font-size:2.5rem; margin-bottom:20px;">DevTools detected! Access denied.</h1>
+        <h1 style="font-size:2.5rem; margin-bottom:20px;">DevTools detected!</h1>
         <p>This area is restricted.</p>
     </div>
+
     <div id="loading-screen">
         <div class="spinner"></div>
         <h3 class="loading-title">מתחבר לענן וטוען נתונים...</h3>
         <p class="loading-text">מוודא שהכל מעודכן ומאובטח, זה ייקח רק רגע.</p>
     </div>
+
     <header>
         <h1>MH Link Manager Pro</h1>
         <button id="installAppBtn">⬇️ התקן אפליקציה</button>
@@ -330,12 +489,13 @@
                 <div>
                     <div id="userName" class="user-name">שם משתמש</div>
                     <div class="cloud-status">
-                        <span class="status-dot online"></span> מחובר 
+                        <span class="status-dot online" id="syncDot"></span>
+                        <span id="syncLabel">מחובר</span>
                         <button id="forceReloadBtn" class="btn-reload" title="רענן נתונים">🔄</button>
                     </div>
                 </div>
             </div>
-            <div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end;">
                 <button id="switchAccountBtn" class="btn-action-sm">🔄 החלף</button>
                 <button id="logoutBtn" class="btn-action-sm">יציאה</button>
             </div>
@@ -344,7 +504,7 @@
 
     <div id="welcomeScreen" class="visible">
         <div class="lock-icon">🔒</div>
-         <h2>ברוך הבא לאתר של MH</h2>
+        <h2>ברוך הבא לאתר של MH</h2>
         <h2>הנתונים מוגנים</h2>
         <p>כדי לשמור על פרטיותך, הקישורים נטענים מהענן בלבד.</p>
         <p>בעת יציאה (Logout) הכל נמחק מהמכשיר.</p>
@@ -359,16 +519,16 @@
             <div class="filters-container">
                 <select id="categoryFilter"><option value="">📂 כל הקטגוריות</option></select>
                 <select id="sortOrder">
-                    <option value="date-new" selected>📅 תאריך (חדש לישן)</option>
+                    <option value="date-new" selected>📅 חדש לישן</option>
                     <option value="name">🔤 שם (א-ת)</option>
-                    <option value="index-asc">🔢 מספר (1 עד אחרון)</option>
-                    <option value="index-desc">🔢 מספר (אחרון עד 1)</option>
+                    <option value="index-asc">🔢 מספר (עולה)</option>
+                    <option value="index-desc">🔢 מספר (יורד)</option>
                 </select>
             </div>
 
             <div class="actions-container">
                 <div class="dropdown">
-                    <button class="action-btn btn-json drop-trigger" data-target="jsonMenu"><span>📂</span> ניהול JSON <span>▼</span></button>
+                    <button class="action-btn btn-json drop-trigger" data-target="jsonMenu">📂 JSON ▼</button>
                     <div id="jsonMenu" class="dropdown-content">
                         <label for="importJsonInput">📥 ייבוא קובץ JSON</label>
                         <input type="file" id="importJsonInput" accept=".json">
@@ -378,40 +538,41 @@
                 </div>
 
                 <div class="dropdown">
-                    <button class="action-btn btn-txt drop-trigger" data-target="txtMenu"><span>📄</span> ניהול טקסט <span>▼</span></button>
+                    <button class="action-btn btn-txt drop-trigger" data-target="txtMenu">📄 טקסט ▼</button>
                     <div id="txtMenu" class="dropdown-content">
                         <button id="exportTxtBtn">📤 ייצוא רשימה ל-TXT</button>
                         <div class="dropdown-divider"></div>
                         <label for="smartImportInput">🔄 <b>ייבוא חכם (מיזוג)</b></label>
                         <input type="file" id="smartImportInput" accept=".txt">
                         <div class="dropdown-divider"></div>
-                        <label for="wipeDataInput" style="color: var(--accent-red);">⚠️ <b>מחק הכל(קובץ ריק)</b></label>
+                        <label for="wipeDataInput" style="color: var(--accent-red);">⚠️ <b>מחק הכל (קובץ ריק)</b></label>
                         <input type="file" id="wipeDataInput" accept=".txt">
                     </div>
                 </div>
 
                 <div class="dropdown">
-                    <button class="action-btn btn-site drop-trigger" data-target="siteMenu"><span>💾</span> ניהול אתר <span>▼</span></button>
+                    <button class="action-btn btn-site drop-trigger" data-target="siteMenu">💾 אתר ▼</button>
                     <div id="siteMenu" class="dropdown-content">
-                        <button id="downloadHtmlBtn"><span style="font-size:1.2em">🌐</span> שמור אתר מלא (HTML)</button>
-                        <button id="downloadSourceBtn"><span style="font-size:1.2em">💻</span> הורד קוד מקור (TXT)</button>
+                        <button id="downloadHtmlBtn">🌐 שמור אתר מלא (HTML)</button>
+                        <button id="downloadSourceBtn">💻 הורד קוד מקור (TXT)</button>
                     </div>
                 </div>
                 
                 <div class="dropdown">
-                    <button class="action-btn drop-trigger" data-target="aiMenu" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9);"><span>✨</span> כלי AI <span>▼</span></button>
+                    <button class="action-btn drop-trigger" data-target="aiMenu" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9);">✨ AI ▼</button>
                     <div id="aiMenu" class="dropdown-content">
                         <button id="openAiSettingsBtn">⚙️ הגדרות AI ומפתחות</button>
                         <div class="dropdown-divider"></div>
                         <button id="bulkAiScanBtn">🤖 סרוק את כל המאגר</button>
                         <button id="cancelBulkAiBtn" style="display:none; color: var(--accent-red);">🛑 עצור סריקה</button>
                         <div class="dropdown-divider"></div>
-                        <button id="clearAiDataBtn" style="color: var(--accent-gold);">🧹 נקה ניתוחי AI (Undo)</button>
+                        <button id="clearAiDataBtn" style="color: var(--accent-gold);">🧹 נקה ניתוחי AI</button>
                     </div>
                 </div>
-                <button id="trashBtn" class="action-btn btn-trash-view" title="סל מחזור">🗑️ סל מחזור</button>
-                <button id="toggleDeadBtn" class="action-btn btn-toggle" title="הצג רק אתרים לא זמינים (🔴)">🔴</button>
-                <button id="toggleDuplicatesBtn" class="action-btn btn-toggle" title="הצג/הסתר כפילויות">👥</button>
+
+                <button id="trashBtn" class="action-btn btn-trash-view" title="סל מחזור" style="flex-grow:0; width:42px; font-size:1.1rem;">🗑️</button>
+                <button id="toggleDeadBtn" class="action-btn btn-toggle" title="הצג רק אתרים לא זמינים">🔴</button>
+                <button id="toggleDuplicatesBtn" class="action-btn btn-toggle" title="הצג כפילויות">👥</button>
                 <button id="toggleDarkModeBtn" class="action-btn btn-toggle" title="מצב לילה">☀️</button>
             </div>
         </div>
@@ -428,126 +589,121 @@
             </form>
         </details>
 
-        <div id="listContainer" class="list-container"></div>
+        <div id="listContainer"></div>
     </div>
 
+    <!-- Trash Modal -->
     <div id="trashModal">
         <div class="modal-content">
-          <div class="modal-header">
-                <h3>🗑️ סל מחזור</h3>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <button id="restoreAllBtn" style="background: rgba(0, 166, 81, 0.1); color: #86efac; border: 1px solid var(--accent-green); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem;">♻️ שחזר הכל</button>
-                    <button id="emptyTrashBtn" style="background: rgba(239, 68, 68, 0.1); color: #fca5a5; border: 1px solid var(--accent-red); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem;">🧹 רוקן הכל</button>
-                    <button id="closeTrashModalBtn">✖</button>
+            <div class="modal-header">
+                <h3 style="margin:0;">🗑️ סל מחזור</h3>
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <button id="restoreAllBtn" style="background: rgba(0,166,81,0.1); color: #86efac; border: 1px solid var(--accent-green); padding: 5px 10px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; white-space:nowrap;">♻️ שחזר הכל</button>
+                    <button id="emptyTrashBtn" style="background: rgba(239,68,68,0.1); color: #fca5a5; border: 1px solid var(--accent-red); padding: 5px 10px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; white-space:nowrap;">🧹 רוקן הכל</button>
+                    <button id="closeTrashModalBtn" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--text-primary);">✖</button>
                 </div>
             </div>
             <div id="trashList" class="modal-body"></div>
         </div>
     </div>
 
-    <div id="editModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
-        <div class="modal-content" style="padding: 20px; width: 90%; max-width: 400px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border);">
-            <h3 style="margin-top:0; color: var(--text-primary);">✏️ עריכת פריט</h3>
-            <form id="editItemForm" style="display: flex; flex-direction: column; gap: 12px;">
+    <!-- Edit Item Modal -->
+    <div id="editModal" class="edit-modal-wrap">
+        <div class="edit-modal-box">
+            <h3>✏️ עריכת פריט</h3>
+            <form id="editItemForm" class="edit-modal-form">
                 <input type="hidden" id="editItemId">
-                <textarea id="editItemContent" rows="2" required placeholder="תוכן..." style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%; box-sizing: border-box;"></textarea>
-                <input type="text" id="editItemDescription" placeholder="תיאור הפריט" style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%; box-sizing: border-box;">
-                <input type="text" id="editItemCategory" list="categoriesDatalist" placeholder="קטגוריה (בחר או הקלד)" style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%; box-sizing: border-box;">
-                <input type="text" id="editItemNote" placeholder="הערה אישית" style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%; box-sizing: border-box;">
-                <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <button type="submit" style="flex: 1; background: var(--accent-green); color: white; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">שמור שינויים</button>
-                    <button type="button" onclick="document.getElementById('editModal').style.display='none'" style="flex: 1; background: rgba(127,127,127,0.2); color: var(--text-primary); padding: 12px; border: 1px solid var(--glass-border); border-radius: 8px; cursor: pointer; font-weight: bold;">ביטול</button>
+                <textarea id="editItemContent" rows="2" required placeholder="תוכן..." class="edit-modal-input"></textarea>
+                <input type="text" id="editItemDescription" placeholder="תיאור הפריט" class="edit-modal-input">
+                <input type="text" id="editItemCategory" list="categoriesDatalist" placeholder="קטגוריה" class="edit-modal-input">
+                <input type="text" id="editItemNote" placeholder="הערה אישית" class="edit-modal-input">
+                <div class="edit-modal-btns">
+                    <button type="submit" class="btn-save">שמור שינויים</button>
+                    <button type="button" class="btn-cancel" onclick="document.getElementById('editModal').style.display='none'">ביטול</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <div id="editAiModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
-        <div class="modal-content" style="padding: 20px; width: 90%; max-width: 400px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border);">
-            <h3 style="margin-top:0; color: var(--text-primary);">🤖✏️ עריכת פיענוח AI</h3>
-            <form id="editAiForm" style="display: flex; flex-direction: column; gap: 12px;">
+    <!-- Edit AI Modal -->
+    <div id="editAiModal" class="edit-modal-wrap">
+        <div class="edit-modal-box">
+            <h3>🤖✏️ עריכת פיענוח AI</h3>
+            <form id="editAiForm" class="edit-modal-form">
                 <input type="hidden" id="editAiItemId">
-                
-                <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: -8px;">סטטוס רשת:</label>
-                <select id="editAiStatus" style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%;">
+                <span class="edit-modal-label">סטטוס רשת:</span>
+                <select id="editAiStatus" class="edit-modal-input">
                     <option value="active">🟢 פעיל (Active)</option>
                     <option value="parked">🟠 חניה/דומיין (Parked)</option>
                     <option value="dead">🔴 לא זמין (Dead)</option>
                     <option value="text">📄 טקסט (Text)</option>
                 </select>
-
-                <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: -8px;">סיכום האתר:</label>
-                <textarea id="editAiSummary" rows="3" required style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%; box-sizing: border-box;"></textarea>
-                
-                <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: -8px;">תגיות (מופרדות ברווח):</label>
-                <input type="text" id="editAiTags" style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(127,127,127,0.1); color: var(--text-primary); width: 100%; box-sizing: border-box;" placeholder="#תגית1 #תגית2">
-                
-                <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <button type="submit" style="flex: 1; background: var(--accent-green); color: white; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">שמור</button>
-                    <button type="button" onclick="document.getElementById('editAiModal').style.display='none'" style="flex: 1; background: rgba(127,127,127,0.2); color: var(--text-primary); padding: 12px; border: 1px solid var(--glass-border); border-radius: 8px; cursor: pointer; font-weight: bold;">ביטול</button>
+                <span class="edit-modal-label">סיכום האתר:</span>
+                <textarea id="editAiSummary" rows="3" required class="edit-modal-input"></textarea>
+                <span class="edit-modal-label">תגיות (מופרדות ברווח):</span>
+                <input type="text" id="editAiTags" class="edit-modal-input" placeholder="#תגית1 #תגית2">
+                <div class="edit-modal-btns">
+                    <button type="submit" class="btn-save">שמור</button>
+                    <button type="button" class="btn-cancel" onclick="document.getElementById('editAiModal').style.display='none'">ביטול</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <div id="aiSettingsModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
-        <div class="modal-content" style="padding: 20px; width: 90%; max-width: 400px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border);">
-            <div class="modal-header">
-                <h3>⚙️ הגדרות מנוע AI</h3>
-                <button type="button" onclick="document.getElementById('aiSettingsModal').style.display='none'">✖</button>
+    <!-- AI Settings Modal -->
+    <div id="aiSettingsModal" class="edit-modal-wrap">
+        <div class="edit-modal-box" style="max-width:430px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h3 style="margin:0;">⚙️ הגדרות מנוע AI</h3>
+                <button type="button" onclick="document.getElementById('aiSettingsModal').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:1.3rem;color:var(--text-primary);">✖</button>
             </div>
-            <div class="modal-body">
-                <label style="display:block; margin-bottom:5px;">מנוע מועדף לסריקה:</label>
-                <select id="aiProviderSelect" style="width:100%; padding:10px; margin-bottom:15px; border-radius:8px; background:rgba(127,127,127,0.1); color:var(--text-primary);">
-                    <option value="gemini">Google Gemini (מומלץ - הכי יציב)</option>
+            <div class="edit-modal-form">
+                <span class="edit-modal-label">מנוע מועדף לסריקה:</span>
+                <select id="aiProviderSelect" class="edit-modal-input">
+                    <option value="gemini">Google Gemini (מומלץ)</option>
                     <option value="groq">Groq (Llama 3 - הכי מהיר)</option>
                     <option value="openrouter">OpenRouter (חינמי חלופי)</option>
                 </select>
-                
-                <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                    <label>מפתח Gemini API:</label>
-                    <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--primary-color); font-size:12px; text-decoration:none;">🔗 קבל מפתח כאן</a>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span class="edit-modal-label" style="margin:0;">מפתח Gemini API:</span>
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--primary-color); font-size:12px;">🔗 קבל מפתח</a>
                 </div>
-                <input type="password" id="keyGemini" placeholder="AIzaSy..." style="width:100%; padding:10px; margin-bottom:15px; border-radius:8px; background:rgba(127,127,127,0.1); color:var(--text-primary); border:1px solid var(--glass-border);">
-                
-                <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                    <label>מפתח Groq API:</label>
-                    <a href="https://console.groq.com/keys" target="_blank" style="color:var(--primary-color); font-size:12px; text-decoration:none;">🔗 קבל מפתח כאן</a>
+                <input type="password" id="keyGemini" placeholder="AIzaSy..." class="edit-modal-input">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span class="edit-modal-label" style="margin:0;">מפתח Groq API:</span>
+                    <a href="https://console.groq.com/keys" target="_blank" style="color:var(--primary-color); font-size:12px;">🔗 קבל מפתח</a>
                 </div>
-                <input type="password" id="keyGroq" placeholder="gsk_..." style="width:100%; padding:10px; margin-bottom:15px; border-radius:8px; background:rgba(127,127,127,0.1); color:var(--text-primary); border:1px solid var(--glass-border);">
-                
-                <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                    <label>מפתח OpenRouter:</label>
-                    <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--primary-color); font-size:12px; text-decoration:none;">🔗 קבל מפתח כאן</a>
+                <input type="password" id="keyGroq" placeholder="gsk_..." class="edit-modal-input">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span class="edit-modal-label" style="margin:0;">מפתח OpenRouter:</span>
+                    <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--primary-color); font-size:12px;">🔗 קבל מפתח</a>
                 </div>
-                <input type="password" id="keyOpenRouter" placeholder="sk-or-v1-..." style="width:100%; padding:10px; margin-bottom:15px; border-radius:8px; background:rgba(127,127,127,0.1); color:var(--text-primary); border:1px solid var(--glass-border);">
-                
-                <div style="display:flex; align-items:center; gap:10px; margin-bottom: 20px;">
+                <input type="password" id="keyOpenRouter" placeholder="sk-or-v1-..." class="edit-modal-input">
+                <div style="display:flex; align-items:center; gap:10px;">
                     <input type="checkbox" id="autoScanNew" style="transform: scale(1.2);">
-                    <label for="autoScanNew">סרוק אוטומטית פריטים חדשים שנוספו</label>
+                    <label for="autoScanNew" style="font-size:14px;">סרוק אוטומטית פריטים חדשים</label>
                 </div>
-                
-                <button onclick="saveAiSettings()" style="width:100%; padding:12px; background:var(--primary-color); color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">שמור הגדרות</button>
+                <button onclick="saveAiSettings()" style="width:100%; padding:12px; background:var(--primary-color); color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:15px;">שמור הגדרות</button>
             </div>
         </div>
     </div>
 
     <div id="toast-container"></div>
-
-    <!-- FIX: z-index 10001 so it stays above toast (9999) -->
     <button id="scrollTopBtn" title="גלול למעלה">☝️</button>
-    
-<div id="aiFloatingMenu" class="dropdown-content" style="position: fixed; display: none; z-index: 9999; box-shadow: 0 15px 40px rgba(0,0,0,0.5); border: 1px solid var(--glass-border); background: var(--glass-bg); backdrop-filter: blur(20px); border-radius: var(--radius); min-width: 220px; right: auto; top: auto; padding: 8px 0;">
+
+    <!-- Floating AI provider menu -->
+    <div id="aiFloatingMenu">
         <div style="padding: 8px 15px; font-size: 11px; opacity: 0.7; font-weight: bold; border-bottom: 1px solid var(--glass-border);">בחר מנוע פענוח:</div>
-        
         <div style="padding: 10px 15px; border-bottom: 1px solid rgba(127,127,127,0.1); display: flex; align-items: center; gap: 10px;">
             <input type="checkbox" id="aiUrlOnlyCheckbox" style="transform: scale(1.3); cursor: pointer; accent-color: var(--primary-color);">
-            <label for="aiUrlOnlyCheckbox" style="font-size: 13px; cursor: pointer; color: var(--text-primary); user-select: none;">נתח לפי כתובת בלבד<br><span style="font-size: 10px; opacity: 0.7;">(עוקף אימות אבטחה)</span></label>
+            <label for="aiUrlOnlyCheckbox" style="font-size: 13px; cursor: pointer; color: var(--text-primary); user-select: none;">
+                נתח לפי כתובת בלבד<br>
+                <span style="font-size: 10px; opacity: 0.7;">(עוקף אימות אבטחה)</span>
+            </label>
         </div>
-
-        <button class="ai-provider-btn" data-provider="gemini" style="text-align: right; width: 100%; background: none; border: none; padding: 12px 15px; color: var(--text-primary); cursor: pointer; transition: 0.2s;">🔹 Google Gemini</button>
-        <button class="ai-provider-btn" data-provider="groq" style="text-align: right; width: 100%; background: none; border: none; padding: 12px 15px; color: var(--text-primary); cursor: pointer; transition: 0.2s;">⚡ Groq (Llama)</button>
-        <button class="ai-provider-btn" data-provider="openrouter" style="text-align: right; width: 100%; background: none; border: none; padding: 12px 15px; color: var(--text-primary); cursor: pointer; transition: 0.2s;">🌐 OpenRouter</button>
+        <button class="ai-provider-btn" data-provider="gemini">🔹 Google Gemini</button>
+        <button class="ai-provider-btn" data-provider="groq">⚡ Groq (Llama)</button>
+        <button class="ai-provider-btn" data-provider="openrouter">🌐 OpenRouter</button>
     </div>
     
     <script type="module">
@@ -566,16 +722,23 @@
         };
 
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
-       let app, auth, db;
+
+        // FIX: Fields that are computed at runtime — never save to Firestore
+        const EPHEMERAL_FIELDS = ['isScanning', 'isDup', 'visualIndex'];
+
+        let app, auth, db;
         let deferredPrompt;
         
         let state = {
             items: [], trash: [], user: null, unsubscribe: null,
-            showDuplicates: true, showOnlyDead: false,  // FIX: added showOnlyDead
+            showDuplicates: true, showOnlyDead: false,
             isOffline: false,
             selectedIds: new Set(), isSelectionMode: false
         };
         let abortAiScan = false;
+
+        // FIX: Debounce timer for cloud pushes to prevent rapid successive writes
+        let _pushDebounceTimer = null;
 
         try {
             app = initializeApp(firebaseConfig);
@@ -583,18 +746,19 @@
             setPersistence(auth, browserLocalPersistence);
             db = getFirestore(app);
             enableIndexedDbPersistence(db).catch((err) => {
-                if (err.code == 'failed-precondition') {
-                    console.log('Persistence failed: Multiple tabs open');
-                } else if (err.code == 'unimplemented') {
-                    console.log('Persistence not supported by browser');
-                }
+                if (err.code === 'failed-precondition') console.log('Multi-tab: persistence disabled');
+                else if (err.code === 'unimplemented') console.log('Browser: persistence not supported');
             });
         } catch (e) { console.error("Firebase Init Error:", e); }
 
+        // ==========================================
+        // INIT
+        // ==========================================
         document.addEventListener('DOMContentLoaded', () => {
             const offlineDataEl = document.getElementById('offline-data');
             const localCache = localStorage.getItem('linkManagerLocalData');
             
+            // Offline HTML file mode
             if (localCache || (offlineDataEl && offlineDataEl.textContent.trim())) {
                 try {
                     let parsed;
@@ -613,16 +777,11 @@
                     toggleAppInterface(true);
                     document.getElementById('userName').textContent = 'מצב לא-מקוון (קובץ)';
                     document.getElementById('userAvatar').src = 'icon.png';
-                    const cloudStatus = document.querySelector('.cloud-status');
-                    cloudStatus.innerHTML = '<span class="status-dot offline"></span> עריכה מקומית (נשמר אוטומטית)';
+                    updateSyncStatus('offline', 'עריכה מקומית');
                     
                     updateCategoryDropdowns();
                     renderList();
-                    const loaderEl = document.getElementById('loading-screen');
-                    if (loaderEl) {
-                        loaderEl.style.opacity = '0';
-                        setTimeout(() => loaderEl.style.display = 'none', 400);
-                    }
+                    hideLoader();
                     showToast('נטען ממצב גיבוי מקומי (Offline Mode)');
                 } catch(e) { console.error("Offline parse error", e); }
             }
@@ -641,30 +800,33 @@
                 e.preventDefault();
                 deferredPrompt = e;
                 const installBtn = document.getElementById('installAppBtn');
-                if(installBtn) {
+                if (installBtn) {
                     installBtn.style.display = 'block';
                     installBtn.addEventListener('click', () => {
                         installBtn.style.display = 'none';
                         deferredPrompt.prompt();
-                        deferredPrompt.userChoice.then((choiceResult) => {
-                            if (choiceResult.outcome === 'accepted') { console.log('User accepted the install prompt'); }
-                            deferredPrompt = null;
-                        });
+                        deferredPrompt.userChoice.then(() => { deferredPrompt = null; });
                     });
                 }
             });
         });
 
+        function hideLoader() {
+            const loaderEl = document.getElementById('loading-screen');
+            if (loaderEl) {
+                loaderEl.style.opacity = '0';
+                setTimeout(() => { loaderEl.style.display = 'none'; }, 400);
+            }
+        }
+
         function initServiceWorker() {
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('./sw.js').then(reg => {
                     reg.addEventListener('updatefound', () => {
-                        const newWorker = reg.installing;
-                        newWorker.addEventListener('statechange', () => {
-                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                if (confirm("נמצא עדכון גרסה חדש ל-LINK MANAGER! האם לרענן כדי לעדכן עכשיו?")) {
-                                    window.location.reload();
-                                }
+                        const nw = reg.installing;
+                        nw.addEventListener('statechange', () => {
+                            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+                                if (confirm("נמצא עדכון חדש! האם לרענן עכשיו?")) window.location.reload();
                             }
                         });
                     });
@@ -672,7 +834,11 @@
             }
         }
 
+        // ==========================================
+        // EVENT LISTENERS
+        // ==========================================
         function setupEventListeners() {
+            // Dropdowns — FIX: recalculate position on open so they never overflow viewport
             document.querySelectorAll('.drop-trigger').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -680,10 +846,15 @@
                     const targetMenu = document.getElementById(targetId);
                     const isOpen = targetMenu.classList.contains('show');
                     closeAllMenus();
-                    if (!isOpen) { targetMenu.classList.add('show'); btn.classList.add('active'); }
+                    if (!isOpen) {
+                        targetMenu.classList.add('show');
+                        btn.classList.add('active');
+                        repositionDropdown(targetMenu, btn);
+                    }
                 });
             });
             window.addEventListener('click', () => closeAllMenus());
+            window.addEventListener('resize', closeAllMenus);
 
             document.getElementById('searchInput')?.addEventListener('input', () => window.requestAnimationFrame(renderList));
             document.getElementById('categoryFilter')?.addEventListener('change', renderList);
@@ -691,10 +862,7 @@
             const sortSelect = document.getElementById('sortOrder');
             if (sortSelect) {
                 const savedSort = localStorage.getItem('lastSortOrder');
-                if (savedSort) {
-                    sortSelect.value = savedSort;
-                    setTimeout(renderList, 0); 
-                }
+                if (savedSort) { sortSelect.value = savedSort; setTimeout(renderList, 0); }
                 sortSelect.addEventListener('change', (e) => {
                     localStorage.setItem('lastSortOrder', e.target.value);
                     renderList();
@@ -704,7 +872,6 @@
             document.getElementById('addItemForm')?.addEventListener('submit', handleAdd);
             document.getElementById('toggleDarkModeBtn')?.addEventListener('click', toggleTheme);
             document.getElementById('toggleDuplicatesBtn')?.addEventListener('click', toggleDuplicates);
-            // FIX: dead filter button
             document.getElementById('toggleDeadBtn')?.addEventListener('click', toggleDeadFilter);
             
             document.getElementById('googleLoginBtn')?.addEventListener('click', cloudLogin);
@@ -717,8 +884,8 @@
 
             ['importJsonInput', 'smartImportInput', 'wipeDataInput'].forEach(id => {
                 const el = document.getElementById(id);
-                if(el) {
-                    el.addEventListener('click', (e) => e.target.value = null);
+                if (el) {
+                    el.addEventListener('click', (e) => { e.target.value = null; });
                     el.addEventListener('change', (e) => {
                         if (id === 'importJsonInput') importJson(e);
                         else if (id === 'smartImportInput') smartImport(e);
@@ -726,6 +893,7 @@
                     });
                 }
             });
+
             document.getElementById('editItemForm')?.addEventListener('submit', handleEditSubmit);
             document.getElementById('editAiForm')?.addEventListener('submit', handleEditAiSubmit);
             document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
@@ -734,11 +902,42 @@
             document.getElementById('downloadSourceBtn')?.addEventListener('click', downloadSource);
         }
 
+        // FIX: Smart dropdown repositioning — keeps menus inside viewport
+        function repositionDropdown(menu, trigger) {
+            // Reset first
+            menu.style.right = '0';
+            menu.style.left = 'auto';
+
+            requestAnimationFrame(() => {
+                const rect = menu.getBoundingClientRect();
+                const vw = window.innerWidth;
+
+                if (rect.left < 8) {
+                    menu.style.right = 'auto';
+                    menu.style.left = '0';
+                }
+                if (rect.right > vw - 8) {
+                    menu.style.left = 'auto';
+                    menu.style.right = '0';
+                }
+                // If still overflows (very narrow screen), clamp
+                const rect2 = menu.getBoundingClientRect();
+                if (rect2.right > vw - 4) {
+                    menu.style.maxWidth = (vw - 16) + 'px';
+                }
+            });
+        }
+
+        // ==========================================
+        // FIREBASE / AUTH
+        // ==========================================
         function setupFirebaseListeners() {
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     state.user = user;
                     toggleAppInterface(true);
+                    document.getElementById('userName').textContent = user.displayName;
+                    document.getElementById('userAvatar').src = user.photoURL;
 
                     const userCacheKey = 'linkManager_cache_' + user.uid;
                     const warmCache = localStorage.getItem(userCacheKey);
@@ -748,45 +947,62 @@
                             const parsedCache = JSON.parse(warmCache);
                             state.items = parsedCache.items || [];
                             state.trash = parsedCache.trash || [];
-                            state.items.forEach(i => i.isScanning = false);
+                            // FIX: always clear ephemeral fields from cache
+                            state.items.forEach(i => EPHEMERAL_FIELDS.forEach(f => delete i[f]));
                             renderList(); 
                             updateCategoryDropdowns();
                         } catch(e) { console.error("Cache load error", e); }
-                    } else if (state.items.length === 0) {
+                    } else {
+                        // No cache — show loader while waiting for cloud
                         const loader = document.getElementById('loading-screen');
-                        if(loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
+                        if (loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
                     }
-
-                    document.getElementById('userName').textContent = user.displayName;
-                    document.getElementById('userAvatar').src = user.photoURL;
 
                     const userDoc = doc(db, "users", user.uid);
 
                     state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
                         if (docSnap.exists()) {
-                            const d = docSnap.data();
-                            // Deep Clone
-                            state.items = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
-                            state.trash = d.trash ? JSON.parse(JSON.stringify(d.trash)) : [];
-                            if (d.aiSettings) {
-                                localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
+                            const isFromServer = !docSnap.metadata.fromCache && !docSnap.metadata.hasPendingWrites;
+
+                            // FIX: Only update state from server data (not our own pending writes)
+                            if (!docSnap.metadata.hasPendingWrites) {
+                                const d = docSnap.data();
+                                state.items = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
+                                state.trash = d.trash ? JSON.parse(JSON.stringify(d.trash)) : [];
+
+                                // FIX: always strip ephemeral fields coming from Firestore
+                                state.items.forEach(i => EPHEMERAL_FIELDS.forEach(f => delete i[f]));
+
+                                if (d.aiSettings) {
+                                    localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
+                                }
+
+                                if (isFromServer) {
+                                    // Save fresh server data to warm cache
+                                    localStorage.setItem(userCacheKey, JSON.stringify({ items: state.items, trash: state.trash }));
+                                }
+
+                                renderList();
+                                updateCategoryDropdowns();
                             }
-                            localStorage.setItem('linkManager_cache_' + user.uid, JSON.stringify({ items: state.items, trash: state.trash }));
-                            renderList();
-                            updateCategoryDropdowns();
-                            const loaderEl = document.getElementById('loading-screen');
-                            if (loaderEl) {
-                                loaderEl.style.opacity = '0';
-                                setTimeout(() => loaderEl.style.display = 'none', 400);
-                            }
+
+                            hideLoader();
                         }
-                        updateSyncStatus('online');
+
+                        const status = docSnap.metadata.hasPendingWrites ? 'syncing' :
+                                       docSnap.metadata.fromCache ? 'offline' : 'online';
+                        const label = docSnap.metadata.hasPendingWrites ? 'מסנכרן...' :
+                                      docSnap.metadata.fromCache ? 'מקומי' : 'מחובר';
+                        updateSyncStatus(status, label);
+
                     }, (err) => {
-                        console.error(err);
-                        updateSyncStatus('error');
+                        console.error("Firestore error:", err);
+                        updateSyncStatus('error', 'שגיאת חיבור');
                     });
+
                 } else {
                     toggleAppInterface(false);
+                    hideLoader();
                 }
             });
         }
@@ -799,24 +1015,27 @@
             if (!isLoggedIn) document.getElementById('itemCount').textContent = "ממתין להתחברות...";
         }
 
-        function updateSyncStatus(status) {
-            const el = document.querySelector('.cloud-status');
-            if(el) {
-                const dot = el.querySelector('.status-dot');
-                if(dot) dot.className = `status-dot ${status}`;
-            }
+        function updateSyncStatus(status, label) {
+            const dot = document.getElementById('syncDot');
+            const lbl = document.getElementById('syncLabel');
+            if (dot) { dot.className = 'status-dot ' + status; }
+            if (lbl) lbl.textContent = label || status;
         }
 
-        async function cloudLogin() { try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (e) { alert(e.message); } }
+        async function cloudLogin() {
+            try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+            catch (e) { alert(e.message); }
+        }
+
         async function cloudLogout() { 
-            if(state.user) localStorage.removeItem('linkManager_cache_' + state.user.uid);
+            if (state.user) localStorage.removeItem('linkManager_cache_' + state.user.uid);
             await signOut(auth); 
             window.location.reload(); 
         }
         
         async function switchAccount() {
             try {
-                if(state.user) localStorage.removeItem('linkManager_cache_' + state.user.uid);
+                if (state.user) localStorage.removeItem('linkManager_cache_' + state.user.uid);
                 await signOut(auth);
                 const provider = new GoogleAuthProvider();
                 provider.setCustomParameters({ prompt: 'select_account' });
@@ -827,120 +1046,155 @@
         function forceReload() {
             if (!state.user || state.isOffline) return;
             if (state.unsubscribe) state.unsubscribe();
+            updateSyncStatus('syncing', 'מרענן...');
             const userDoc = doc(db, "users", state.user.uid);
             state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
                 if (docSnap.exists()) {
                     const d = docSnap.data();
                     state.items = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
                     state.trash = d.trash ? JSON.parse(JSON.stringify(d.trash)) : [];
-                    if (d.aiSettings) {
-                        localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
-                    }
+                    state.items.forEach(i => EPHEMERAL_FIELDS.forEach(f => delete i[f]));
+                    if (d.aiSettings) localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
                     localStorage.setItem('linkManager_cache_' + state.user.uid, JSON.stringify({ items: state.items, trash: state.trash }));
                     renderList();
                     updateCategoryDropdowns();
                 }
-                updateSyncStatus('online');
-            }, (err) => {
-                console.error(err);
-                updateSyncStatus('error');
-            });
-            showToast("רענון נתונים מהענן בוצע");
+                const status = docSnap.metadata.hasPendingWrites ? 'syncing' :
+                               docSnap.metadata.fromCache ? 'offline' : 'online';
+                updateSyncStatus(status, status === 'online' ? 'מחובר' : status === 'syncing' ? 'מסנכרן...' : 'מקומי');
+            }, (err) => { console.error(err); updateSyncStatus('error', 'שגיאה'); });
+            showToast("🔄 רענון נתונים מהענן...");
         }
 
-        async function pushToCloud() {
-            if (state.isOffline) {
-                const dataToSave = JSON.stringify({ items: state.items, trash: state.trash });
-                localStorage.setItem('linkManagerLocalData', dataToSave);
-                document.getElementById('offline-data').textContent = dataToSave;
-                updateCategoryDropdowns();
-                renderList();
-                showToast("נשמר מקומית בהצלחה!");
-                return;
+        // FIX: pushToCloud with debounce and ephemeral field stripping
+        function pushToCloud(immediate = false) {
+            clearTimeout(_pushDebounceTimer);
+            const doIt = async () => {
+                // Strip ephemeral fields before saving
+                const cleanItems = state.items.map(item => {
+                    const c = { ...item };
+                    EPHEMERAL_FIELDS.forEach(f => delete c[f]);
+                    return c;
+                });
+
+                if (state.isOffline) {
+                    const dataToSave = JSON.stringify({ items: cleanItems, trash: state.trash });
+                    localStorage.setItem('linkManagerLocalData', dataToSave);
+                    const offlineEl = document.getElementById('offline-data');
+                    if (offlineEl) offlineEl.textContent = dataToSave;
+                    updateCategoryDropdowns();
+                    renderList();
+                    showToast("נשמר מקומית!");
+                    return;
+                }
+
+                if (!state.user) return;
+                try {
+                    updateSyncStatus('syncing', 'מסנכרן...');
+                    await setDoc(doc(db, "users", state.user.uid), {
+                        items: cleanItems,
+                        trash: state.trash,
+                        aiSettings: getAiSettings(),
+                        lastUpdated: new Date().toISOString()
+                    });
+                    // Status will update via onSnapshot
+                } catch (e) {
+                    console.error("Push error:", e);
+                    showToast('❌ שגיאה בסנכרון לענן');
+                    updateSyncStatus('error', 'שגיאה');
+                }
+            };
+
+            if (immediate) {
+                doIt();
+            } else {
+                // FIX: debounce 400ms — prevents excessive writes on rapid actions
+                _pushDebounceTimer = setTimeout(doIt, 400);
             }
-            
-            if (!state.user) return;
-            try {
-                await setDoc(doc(db, "users", state.user.uid), { items: state.items, trash: state.trash, aiSettings: getAiSettings(), lastUpdated: new Date().toISOString() });
-            } catch (e) { showToast('שגיאה בסנכרון לענן'); }
         }
 
-        // === Logic ===
+        // ==========================================
+        // RENDER
+        // ==========================================
         function renderList() {
             if (!state.user) return;
             const container = document.getElementById('listContainer');
+            if (!container) return;
             container.innerHTML = '';
 
-            const query = document.getElementById('searchInput').value.toLowerCase().trim();
-            const catFilter = document.getElementById('categoryFilter').value;
-            const sort = document.getElementById('sortOrder').value;
+            const query = document.getElementById('searchInput')?.value.toLowerCase().trim() || '';
+            const catFilter = document.getElementById('categoryFilter')?.value || '';
+            const sort = document.getElementById('sortOrder')?.value || 'date-new';
 
+            // Build index map (chronological order = #1, #2, ...)
             const chronologicalList = [...state.items].sort((a, b) => a.date.localeCompare(b.date));
             const indexMap = new Map();
-            chronologicalList.forEach((item, index) => indexMap.set(item.id, index + 1));
+            chronologicalList.forEach((item, idx) => indexMap.set(item.id, idx + 1));
 
-            const isIndexSort = sort === 'index-asc' || sort === 'index-desc';
-
-            let sortedFullList = [...state.items];
-            sortedFullList.sort((a, b) => {
-                if (sort === 'name') return a.content.localeCompare(b.content);
-                if (sort === 'index-asc') return indexMap.get(a.id) - indexMap.get(b.id);
-                if (sort === 'index-desc') return indexMap.get(b.id) - indexMap.get(a.id);
-                return b.date.localeCompare(a.date); 
-            });
-
-            sortedFullList.forEach(item => item.visualIndex = indexMap.get(item.id));
-
-            const seenContents = new Map(); 
+            // Detect duplicates based on content
+            const seenContents = new Map();
             chronologicalList.forEach(i => {
                 const k = i.content.toLowerCase().trim();
-                if (!seenContents.has(k)) {
-                    seenContents.set(k, i.id); 
-                    i.isDup = false; 
-                } else {
-                    i.isDup = true; 
-                }
+                if (!seenContents.has(k)) { seenContents.set(k, i.id); i.isDup = false; }
+                else { i.isDup = true; }
             });
+
+            // Sort
+            let sortedList = [...state.items];
+            sortedList.sort((a, b) => {
+                if (sort === 'name') return a.content.localeCompare(b.content);
+                if (sort === 'index-asc') return (indexMap.get(a.id) || 0) - (indexMap.get(b.id) || 0);
+                if (sort === 'index-desc') return (indexMap.get(b.id) || 0) - (indexMap.get(a.id) || 0);
+                return b.date.localeCompare(a.date);
+            });
+
+            sortedList.forEach(item => { item.visualIndex = indexMap.get(item.id) || 0; });
 
             const isHashSearch = /^#\s*\d+$/.test(query);
             const isDupSearch = query === '#כפול' || query === '#כפולים';
             const isolateDuplicatesMode = !state.showDuplicates || isDupSearch;
 
-            let filtered = sortedFullList.filter(i => {
+            let filtered = sortedList.filter(i => {
                 const matchesCat = !catFilter || i.category === catFilter;
 
-                // FIX: dead filter takes priority
                 if (state.showOnlyDead) {
                     return i.siteStatus === 'dead' && matchesCat;
                 }
-
                 if (isolateDuplicatesMode) {
                     return i.isDup && matchesCat;
                 }
-                
                 if (isHashSearch) {
                     const searchNum = parseInt(query.replace(/\D/g, ''));
                     return i.visualIndex === searchNum;
                 }
                 
                 const safeTags = (i.aiTags || []).join(' ').toLowerCase();
-                const matchesSearch = !query || i.content.toLowerCase().includes(query) || i.description.toLowerCase().includes(query) || i.category.toLowerCase().includes(query) || (i.note && i.note.toLowerCase().includes(query)) || safeTags.includes(query);                
+                const matchesSearch = !query ||
+                    i.content.toLowerCase().includes(query) ||
+                    (i.description || '').toLowerCase().includes(query) ||
+                    (i.category || '').toLowerCase().includes(query) ||
+                    (i.note || '').toLowerCase().includes(query) ||
+                    safeTags.includes(query);
                 return matchesSearch && matchesCat;
             });
 
-            document.getElementById('itemCount').textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
+            const countEl = document.getElementById('itemCount');
+            if (countEl) countEl.textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
 
             if (filtered.length === 0) {
-                container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-secondary);">לא נמצאו תוצאות</div>';
+                container.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-secondary); font-size:1.1rem;">לא נמצאו תוצאות 🔍</div>';
                 return;
             }
+
+            const isIndexSort = sort === 'index-asc' || sort === 'index-desc';
 
             if (isIndexSort) {
                 const section = document.createElement('div');
                 section.className = 'category-block';
-                section.innerHTML = `<div class="items-grid"></div>`;
-                const grid = section.querySelector('.items-grid');
+                const grid = document.createElement('div');
+                grid.className = 'items-grid';
                 filtered.forEach(item => grid.appendChild(createCard(item)));
+                section.appendChild(grid);
                 container.appendChild(section);
             } else {
                 const pinnedItems = filtered.filter(i => i.isPinned);
@@ -950,19 +1204,16 @@
 
                 const groups = {};
                 regularItems.forEach(i => {
-                    let displayCategory = i.category;
-                    if (isolateDuplicatesMode) {
-                        displayCategory = "⚠️ כפולים";
-                    } else if (state.showOnlyDead) {
-                        displayCategory = "🔴 אתרים לא זמינים";
-                    }
-                    if(!groups[displayCategory]) groups[displayCategory] = [];
+                    let displayCategory = i.category || 'כללי';
+                    if (isolateDuplicatesMode) displayCategory = "⚠️ כפולים";
+                    else if (state.showOnlyDead) displayCategory = "🔴 אתרים לא זמינים";
+                    if (!groups[displayCategory]) groups[displayCategory] = [];
                     groups[displayCategory].push(i);
                 });
 
-                Object.keys(groups).sort((a,b) => {
-                    if (a.startsWith("⚠️")) return -1; 
-                    if (b.startsWith("⚠️")) return 1;
+                Object.keys(groups).sort((a, b) => {
+                    if (a.startsWith("⚠️") || a.startsWith("🔴")) return -1;
+                    if (b.startsWith("⚠️") || b.startsWith("🔴")) return 1;
                     return a.localeCompare(b);
                 }).forEach(cat => renderGroup(container, cat, groups[cat], false));
             }
@@ -971,19 +1222,25 @@
         function renderGroup(container, title, items, isPinned) {
             const section = document.createElement('div');
             section.className = 'category-block';
-            const headerStyle = isPinned ? 'style="border-bottom: 2px solid var(--accent-gold); color: var(--accent-gold);"' : '';
-            section.innerHTML = `<div class="category-header" ${headerStyle}><h2>${escapeHtml(title)}</h2><span class="category-badge">${items.length}</span></div><div class="items-grid"></div>`;
-            const grid = section.querySelector('.items-grid');
+            const header = document.createElement('div');
+            header.className = 'category-header';
+            if (isPinned) header.style.cssText = 'border-bottom: 2px solid var(--accent-gold); color: var(--accent-gold);';
+            header.innerHTML = `<h2>${escapeHtml(title)}</h2><span class="category-badge">${items.length}</span>`;
+            const grid = document.createElement('div');
+            grid.className = 'items-grid';
             items.forEach(i => grid.appendChild(createCard(i)));
+            section.appendChild(header);
+            section.appendChild(grid);
             container.appendChild(section);
         }
 
         function createCard(item) {
             const div = document.createElement('div');
             div.className = `card ${item.isPinned ? 'pinned' : ''} ${state.selectedIds.has(item.id) ? 'selected' : ''}`;
+
             const safeContent = escapeHtml(item.content);
             const contentHtml = item.type === 'link' 
-                ? `<a href="${safeContent}" class="card-link" target="_blank">${safeContent}</a>`
+                ? `<a href="${safeContent}" class="card-link" target="_blank" rel="noopener noreferrer">${safeContent}</a>`
                 : `<div class="card-text-content">${safeContent}</div>`;
             const noteHtml = item.note ? `<div class="card-note">📝 ${escapeHtml(item.note)}</div>` : '';
 
@@ -991,25 +1248,26 @@
             if (item.isScanning) {
                 aiHtml = `<div class="ai-box"><div class="spinner-small"></div> סורק ומנתח...</div>`;
             } else if (item.aiSummary) {
-                let statusClass = 'ai-status-text'; let statusText = '📄 ניתוח טקסט';
-                if(item.siteStatus === 'active') { statusClass = 'ai-status-active'; statusText = '🟢 רשת: פעיל'; }
-                else if(item.siteStatus === 'parked') { statusClass = 'ai-status-parked'; statusText = '🟠 רשת: דומיין/חניה'; }
-                else if(item.siteStatus === 'dead') { statusClass = 'ai-status-dead'; statusText = '🔴 רשת: לא זמין'; }
+                let statusClass = 'ai-status-text', statusText = '📄 ניתוח טקסט';
+                if (item.siteStatus === 'active') { statusClass = 'ai-status-active'; statusText = '🟢 פעיל'; }
+                else if (item.siteStatus === 'parked') { statusClass = 'ai-status-parked'; statusText = '🟠 דומיין/חניה'; }
+                else if (item.siteStatus === 'dead') { statusClass = 'ai-status-dead'; statusText = '🔴 לא זמין'; }
                 
                 let tagsHtml = '';
                 if (item.aiTags && item.aiTags.length > 0) {
-                    tagsHtml = `<div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px;">
-${item.aiTags.map(tag => `<span style="background: rgba(96, 165, 250, 0.15); color: var(--primary-color); padding: 3px 10px; border-radius: 12px; font-size: 11px; border: 1px solid rgba(96, 165, 250, 0.3); font-weight: bold; cursor:pointer;" onclick="event.stopPropagation(); document.getElementById('searchInput').value='${tag.replace(/'/g, "\\'")}'; document.getElementById('searchInput').dispatchEvent(new Event('input'));">${escapeHtml(tag)}</span>`).join('')}                    </div>`;
+                    tagsHtml = `<div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 5px;">
+                        ${item.aiTags.map(tag => `<span style="background: rgba(96,165,250,0.15); color: var(--primary-color); padding: 2px 8px; border-radius: 10px; font-size: 11px; border: 1px solid rgba(96,165,250,0.3); font-weight: bold; cursor:pointer;" onclick="event.stopPropagation(); document.getElementById('searchInput').value='${tag.replace(/'/g,"\\'")}'; document.getElementById('searchInput').dispatchEvent(new Event('input'));">${escapeHtml(tag)}</span>`).join('')}
+                    </div>`;
                 }
 
-                aiHtml = `<div class="ai-box" style="position: relative;">
-                            <div class="ai-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 5px;">
-                                <div><span class="${statusClass}">${statusText}</span> <span style="font-size:11px; opacity:0.7">🤖 AI</span></div>
-                                <button class="icon-btn ai-edit-btn" title="ערוך תוצאות AI" style="width: 24px; height: 24px; font-size: 13px; background: rgba(127,127,127,0.15); border-radius: 6px; cursor: pointer;">✏️</button>
-                            </div>
-                            <div>${escapeHtml(item.aiSummary)}</div>
-                            ${tagsHtml}
-                          </div>`;
+                aiHtml = `<div class="ai-box" style="position:relative;">
+                    <div class="ai-header">
+                        <span><span class="${statusClass}">${statusText}</span> <span style="font-size:10px;opacity:0.6;">🤖</span></span>
+                        <button class="icon-btn ai-edit-btn" title="ערוך תוצאות AI" style="width:22px;height:22px;font-size:12px;background:rgba(127,127,127,0.15);border-radius:4px;">✏️</button>
+                    </div>
+                    <div>${escapeHtml(item.aiSummary)}</div>
+                    ${tagsHtml}
+                </div>`;
             }
 
             div.innerHTML = `
@@ -1017,15 +1275,20 @@ ${item.aiTags.map(tag => `<span style="background: rgba(96, 165, 250, 0.15); col
                 <div class="card-index">#${item.visualIndex}</div>
                 <div class="card-body">
                     ${contentHtml}
-                    <div class="card-desc">${escapeHtml(item.description)}</div>
+                    ${item.description ? `<div class="card-desc">${escapeHtml(item.description)}</div>` : ''}
                     ${noteHtml}
                     ${aiHtml}
                 </div>
                 <div class="card-footer">
-                    <div><span class="tag-category">${escapeHtml(item.category)}</span><span class="duplicate-badge" style="display:${item.isDup ? 'inline' : 'none'}">כפול</span></div>
+                    <div class="card-footer-left">
+                        <span class="tag-category" title="${escapeHtml(item.category || 'כללי')}">${escapeHtml(item.category || 'כללי')}</span>
+                        <span class="duplicate-badge" style="display:${item.isDup ? 'inline' : 'none'}">כפול</span>
+                    </div>
                     <div class="card-actions">
-                        <button class="icon-btn btn-ai-scan" title="נתח פריט עם AI">✨</button>
-                        <button class="icon-btn btn-share" title="שתף"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg></button>
+                        <button class="icon-btn btn-ai-scan" title="נתח עם AI">✨</button>
+                        <button class="icon-btn btn-share" title="שתף">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                        </button>
                         <button class="icon-btn btn-copy" title="העתק">📋</button>
                         <button class="icon-btn btn-edit" title="ערוך">✏️</button>
                         <button class="icon-btn pin-btn ${item.isPinned ? 'active' : ''}" title="נעץ">📌</button>
@@ -1034,51 +1297,40 @@ ${item.aiTags.map(tag => `<span style="background: rgba(96, 165, 250, 0.15); col
                 </div>
             `;
             
+            // Selection mode
             div.onclick = (e) => {
                 if (state.isSelectionMode) { e.preventDefault(); toggleSelection(item.id); }
             };
-
             div.addEventListener('contextmenu', (e) => {
-                if (e.target.closest('.card-actions')) return; 
-                e.preventDefault(); 
+                if (e.target.closest('.card-actions')) return;
+                e.preventDefault();
                 if (!state.isSelectionMode) enterSelectionMode(item.id);
             });
 
+            // AI scan button — short press = scan, long press = choose provider
             const btnAi = div.querySelector('.btn-ai-scan');
-            let pressTimer;
-            let isLongPress = false;
-
+            let pressTimer, isLongPress = false;
             const startPress = (e) => {
-                if (e.button !== 0 && e.type === 'mousedown') return;
+                if (e.button !== undefined && e.button !== 0) return;
                 isLongPress = false;
-                pressTimer = setTimeout(() => {
-                    isLongPress = true;
-                    openAiFloatingMenu(item.id, e);
-                }, 500);
+                pressTimer = setTimeout(() => { isLongPress = true; openAiFloatingMenu(item.id, e); }, 500);
             };
-
-            const cancelPress = () => { clearTimeout(pressTimer); };
-
+            const cancelPress = () => clearTimeout(pressTimer);
             btnAi.addEventListener('mousedown', startPress);
-            btnAi.addEventListener('touchstart', startPress, {passive: true});
+            btnAi.addEventListener('touchstart', startPress, { passive: true });
             btnAi.addEventListener('mouseup', cancelPress);
             btnAi.addEventListener('mouseleave', cancelPress);
             btnAi.addEventListener('touchend', cancelPress);
-            btnAi.addEventListener('touchmove', cancelPress, {passive: true});
-            
-            btnAi.addEventListener('contextmenu', (e) => {
-                e.preventDefault(); 
-                e.stopPropagation();
-                openAiFloatingMenu(item.id, e);
-            });
-
+            btnAi.addEventListener('touchmove', cancelPress, { passive: true });
+            btnAi.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); openAiFloatingMenu(item.id, e); });
             btnAi.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (!isLongPress) {
-                    const quickSet = JSON.parse(localStorage.getItem('aiQuickSettings')) || { provider: null, urlOnly: false };
-                    scanSingleItem(item.id, quickSet.provider, quickSet.urlOnly);
+                    const qs = JSON.parse(localStorage.getItem('aiQuickSettings') || '{}');
+                    scanSingleItem(item.id, qs.provider || null, qs.urlOnly || false);
                 }
             });
+
             div.querySelector('.btn-share').onclick = (e) => { e.stopPropagation(); shareItem(item); };
             div.querySelector('.btn-copy').onclick = (e) => { e.stopPropagation(); copyText(item.content); };
             div.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); editItem(item); };
@@ -1086,21 +1338,21 @@ ${item.aiTags.map(tag => `<span style="background: rgba(96, 165, 250, 0.15); col
             div.querySelector('.trash-btn').onclick = (e) => { e.stopPropagation(); moveToTrash(item.id); };
             
             const aiEditBtn = div.querySelector('.ai-edit-btn');
-            if (aiEditBtn) {
-                aiEditBtn.onclick = (e) => { e.stopPropagation(); window.openEditAiModal(item); };
-            }
-            
-            const linkElement = div.querySelector('.card-link');
-            if (linkElement) {
-                linkElement.onclick = (e) => {
+            if (aiEditBtn) aiEditBtn.onclick = (e) => { e.stopPropagation(); window.openEditAiModal(item); };
+
+            const linkEl = div.querySelector('.card-link');
+            if (linkEl) {
+                linkEl.onclick = (e) => {
                     e.preventDefault();
-                    if (state.isSelectionMode) return;
-                    window.open(item.content, '_blank', 'noopener,noreferrer');
+                    if (!state.isSelectionMode) window.open(item.content, '_blank', 'noopener,noreferrer');
                 };
             }
             return div;
         }
 
+        // ==========================================
+        // ADD ITEM
+        // ==========================================
         function handleAdd(e) {
             e.preventDefault();
             const content = document.getElementById('itemContent').value.trim();
@@ -1108,7 +1360,7 @@ ${item.aiTags.map(tag => `<span style="background: rgba(96, 165, 250, 0.15); col
             
             const existingItem = state.items.find(i => i.content.toLowerCase() === content.toLowerCase());
             if (existingItem) {
-                const addAnyway = confirm(`⚠️ הפריט הזה כבר קיים במאגר תחת הקטגוריה "${existingItem.category}".\n\nהאם תרצה להוסיף אותו שוב ככפילות?`);
+                const addAnyway = confirm(`⚠️ הפריט הזה כבר קיים תחת "${existingItem.category}".\n\nהאם להוסיף אותו שוב ככפילות?`);
                 if (!addAnyway) { e.target.reset(); return; }
             }
             
@@ -1118,34 +1370,34 @@ ${item.aiTags.map(tag => `<span style="background: rgba(96, 165, 250, 0.15); col
                 description: document.getElementById('itemDescription').value.trim(),
                 category: document.getElementById('itemCategory').value.trim() || 'כללי',
                 note: document.getElementById('itemNote').value.trim(),
-                date: new Date().toISOString(), 
+                date: new Date().toISOString(),
                 type: URL_REGEX.test(content) ? 'link' : 'text',
                 isPinned: false
             };
             
-            state.items.unshift(newItem); 
+            state.items.unshift(newItem);
             pushToCloud();
             e.target.reset();
             
-            showToast('פריט נוסף', () => {
+            // Close the details panel after add
+            const details = document.querySelector('details');
+            if (details) details.open = false;
+            
+            showToast('✅ פריט נוסף', () => {
                 const idx = state.items.findIndex(i => i.id === newItem.id);
-                if (idx > -1) {
-                    state.items.splice(idx, 1);
-                    pushToCloud();
-                }
+                if (idx > -1) { state.items.splice(idx, 1); pushToCloud(); }
             });
 
-            // FIX: auto scan on new item - runs immediately after add
+            // Auto-scan if enabled
             const settings = getAiSettings();
             if (settings.autoScan && (settings.keys.gemini || settings.keys.groq || settings.keys.openrouter)) {
-                setTimeout(() => scanSingleItem(newItem.id, null, false), 500);
+                setTimeout(() => scanSingleItem(newItem.id, null, false), 600);
             }
         }
 
         // ==========================================
-        // מנוע הבינה המלאכותית (AI Logic)
+        // AI ENGINE
         // ==========================================
-        
         window.saveAiSettings = function() {
             const settings = {
                 provider: document.getElementById('aiProviderSelect').value,
@@ -1157,14 +1409,14 @@ ${item.aiTags.map(tag => `<span style="background: rgba(96, 165, 250, 0.15); col
                 }
             };
             localStorage.setItem('aiSettingsPro', JSON.stringify(settings));
-            pushToCloud();
+            pushToCloud(true);
             document.getElementById('aiSettingsModal').style.display = 'none';
-            showToast('הגדרות AI נשמרו וסונכרנו לענן');
+            showToast('✅ הגדרות AI נשמרו');
         };
 
         function getAiSettings() {
-            const defaultSettings = { provider: 'gemini', autoScan: true, keys: { gemini: '', groq: '', openrouter: '' } };
-            return JSON.parse(localStorage.getItem('aiSettingsPro')) || defaultSettings;
+            const def = { provider: 'gemini', autoScan: true, keys: { gemini: '', groq: '', openrouter: '' } };
+            try { return JSON.parse(localStorage.getItem('aiSettingsPro')) || def; } catch { return def; }
         }
 
         document.getElementById('openAiSettingsBtn')?.addEventListener('click', () => {
@@ -1178,24 +1430,20 @@ ${item.aiTags.map(tag => `<span style="background: rgba(96, 165, 250, 0.15); col
             closeAllMenus();
         });
 
-        // FIX: isQuotaError detection helper
         function isQuotaError(msg) {
-            const lower = msg.toLowerCase();
-            return lower.includes('quota') || lower.includes('resource_exhausted') || 
-                   lower.includes('rate_limit') || lower.includes('rate limit') ||
-                   lower.includes('exceeded') || lower.includes('too many requests') ||
-                   lower.includes('429');
+            const l = (msg || '').toLowerCase();
+            return l.includes('quota') || l.includes('resource_exhausted') || 
+                   l.includes('rate_limit') || l.includes('rate limit') ||
+                   l.includes('exceeded') || l.includes('too many requests') || l.includes('429');
         }
 
-        window.activeAiRequestController = null; // Controller גלובלי לביטול מיידי של ה-Fetch
+        window.activeAiRequestController = null;
 
         window.scanSingleItem = async function(id, overrideProvider = null, forceUrlOnly = false) {
             const item = state.items.find(i => i.id === id);
             if (!item) return;
             
-           const settings = getAiSettings();
-
-            // זיכרון חכם: תעדוף הספק האחרון שעבד כדי לדלג על מנועים חסומים במהירות
+            const settings = getAiSettings();
             const preferredProvider = overrideProvider || window.lastWorkingAiProvider || settings.provider;
             const allProviders = [preferredProvider, 'gemini', 'groq', 'openrouter'].filter((p, i, a) => a.indexOf(p) === i);
             const providersWithKeys = allProviders.filter(p => settings.keys[p]);
@@ -1204,14 +1452,12 @@ ${item.aiTags.map(tag => `<span style="background: rgba(96, 165, 250, 0.15); col
                 return alert('עליך להזין לפחות מפתח API אחד בהגדרות ה-AI.');
             }
 
-            item.isScanning = true; 
-            pushToCloud(); // סנכרון מיידי של תחילת הסריקה
+            item.isScanning = true;
             renderList();
-            
-            // הארכתי משמעותית את זמן ההמתנה ל-30 שניות כברירת מחדל כדי לא להיכשל סתם!
+
             const fetchWithTimeout = async (url, options = {}, time = 30000) => {
                 const controller = new AbortController();
-                window.activeAiRequestController = controller; // מתחבר לגלובלי כדי שאפשר יהיה לבטל
+                window.activeAiRequestController = controller;
                 const timerId = setTimeout(() => controller.abort(), time);
                 try {
                     const res = await fetch(url, { ...options, signal: controller.signal });
@@ -1231,7 +1477,7 @@ ${item.aiTags.map(tag => `<span style="background: rgba(96, 165, 250, 0.15); col
                 let isWebsite = item.type === 'link';
                 
                 if (isWebsite && forceUrlOnly) {
-                    contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: User bypassed page scanning due to security blocks. Analyze this website purely based on its URL text, domain name, and the provided description.`;
+                    contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: User bypassed page scanning. Analyze based on URL and description only.`;
                 } else if (isWebsite) {
                     const proxies = [
                         (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
@@ -1243,14 +1489,13 @@ ${item.aiTags.map(tag => `<span style="background: rgba(96, 165, 250, 0.15); col
                     for (const proxyFn of proxies) {
                         try {
                             const proxyUrl = proxyFn(cleanContent);
-                            const res = await fetchWithTimeout(proxyUrl, {}, 15000); // 15 שניות במקום 8 כדי לתת ל-Proxies לעבוד
+                            const res = await fetchWithTimeout(proxyUrl, {}, 15000);
                             if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-                            const isAllOrigins = proxyUrl.includes('allorigins');
                             let htmlText;
-                            if (isAllOrigins) {
+                            if (proxyUrl.includes('allorigins')) {
                                 const data = await res.json();
-                                if (!data.contents || (data.status && data.status.http_code >= 400)) throw new Error('allorigins empty');
+                                if (!data.contents || (data.status?.http_code >= 400)) throw new Error('allorigins empty');
                                 htmlText = data.contents;
                             } else {
                                 htmlText = await res.text();
@@ -1263,13 +1508,9 @@ ${item.aiTags.map(tag => `<span style="background: rgba(96, 165, 250, 0.15); col
                             if (bodyText.length < 30) throw new Error('empty body');
 
                             const lowerBody = bodyText.toLowerCase();
-                            const isBlocked = lowerBody.includes('just a moment') || 
-                                              lowerBody.includes('enable javascript and cookies') || 
-                                              lowerBody.includes('checking your browser') ||
-                                              lowerBody.includes('verify you are human') ||
-                                              (lowerBody.includes('cloudflare') && lowerBody.includes('ray id'));
-                            
-                            if (isBlocked) {
+                            if (lowerBody.includes('just a moment') || lowerBody.includes('enable javascript and cookies') ||
+                                lowerBody.includes('checking your browser') || lowerBody.includes('verify you are human') ||
+                                (lowerBody.includes('cloudflare') && lowerBody.includes('ray id'))) {
                                 throw new Error('cloudflare_blocked');
                             }
 
@@ -1281,27 +1522,21 @@ ${item.aiTags.map(tag => `<span style="background: rgba(96, 165, 250, 0.15); col
                         }
                     }
 
-                   if (!scrapedOk) {
-                        contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: Page content is blocked by anti-bot security. Do NOT mark as "dead". Assume status is "active". Analyze based on URL text and description only.`;
+                    if (!scrapedOk) {
+                        contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: Page blocked by anti-bot. Do NOT mark as "dead". Assume "active". Analyze based on URL and description only.`;
                     }
                 }
 
                 const promptType = isWebsite 
-                    ? `This is content from a website or URL. Tasks:
-1. Write a Hebrew summary (2 sentences max) of what this site/service does.
-2. Determine status: "active" (working site), "parked" (parked/for-sale domain), or "dead" (broken/404).
-3. Generate 3-5 relevant hashtag tags (Hebrew or English, whichever fits better).`
-                    : `This is a text/command. Tasks:
-1. Write a Hebrew summary (1-2 sentences) of what this text/command does.
-2. Status must be: "text"
-3. Generate 3-5 relevant hashtag tags.`;
+                    ? `Website content. Tasks:\n1. Hebrew summary (2 sentences max).\n2. Status: "active", "parked", or "dead".\n3. 3-5 hashtag tags.`
+                    : `Text/command. Tasks:\n1. Hebrew summary (1-2 sentences).\n2. Status must be "text".\n3. 3-5 hashtag tags.`;
 
-                const systemPrompt = `You are a JSON-only API. Return ONLY a valid JSON object, no markdown, no explanation.
+                const systemPrompt = `You are a JSON-only API. Return ONLY valid JSON, no markdown, no extra text.
 Required format: {"summary": "...", "status": "active|parked|dead|text", "tags": ["#tag1", "#tag2", "#tag3"]}
 
 ${promptType}
 
-Content to analyze:
+Content:
 ${contentToAnalyze}`;
 
                 let jsonString = "";
@@ -1326,50 +1561,35 @@ ${contentToAnalyze}`;
                                     availableModels.sort((a, b) => (a.includes('flash') ? -1 : 1));
                                     window.dynamicGeminiModels = availableModels;
                                 }
-                            } catch (e) {
-                                availableModels = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
-                            }
+                            } catch { availableModels = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b']; }
                         }
-                        if (!availableModels || availableModels.length === 0) availableModels = ['gemini-1.5-flash'];
+                        if (!availableModels?.length) availableModels = ['gemini-1.5-flash'];
 
                         for (let model of availableModels) {
                             try {
                                 const res = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`, {
                                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ 
-                                        contents: [{ parts: [{ text: systemPrompt }] }],
-                                        generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
-                                    })
-                                }, 30000); // הועלה ל-30 שניות עבור תגובת AI
+                                    body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt }] }], generationConfig: { response_mime_type: "application/json", temperature: 0.1 } })
+                                }, 30000);
                                 const resData = await res.json();
                                 if (resData.error) throw new Error(resData.error.message);
-                                
                                 let rawText = resData.candidates[0].content.parts[0].text;
                                 const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-                                if (!jsonMatch) throw new Error("לא נמצא JSON תקין בתשובה");
+                                if (!jsonMatch) throw new Error("No valid JSON in response");
                                 jsonString = jsonMatch[0];
                                 JSON.parse(jsonString);
-                                
                                 success = true;
                                 window.lastWorkingAiProvider = 'gemini';
                                 window.dynamicGeminiModels = [model];
                                 break;
                             } catch (err) {
                                 lastError = err.message;
-                                if (isQuotaError(err.message)) {
-                                    console.warn(`Gemini [${model}] quota exceeded, trying next model...`);
-                                    providerQuotaExhausted = true;
-                                } else {
-                                    console.warn(`Gemini [${model}] error:`, err.message);
-                                }
+                                if (isQuotaError(err.message)) { providerQuotaExhausted = true; window.dynamicGeminiModels = null; }
+                                console.warn(`Gemini [${model}]:`, err.message);
                             }
                         }
-                        if (!success && providerQuotaExhausted) {
-                            console.warn('Gemini quota exhausted on all models, trying next provider...');
-                            window.dynamicGeminiModels = null;
-                            continue;
-                        }
-                    } 
+                        if (!success && providerQuotaExhausted) { window.dynamicGeminiModels = null; continue; }
+                    }
                     else if (currentProvider === 'groq') {
                         let availableModels = window.dynamicGroqModels;
                         if (!availableModels) {
@@ -1377,122 +1597,99 @@ ${contentToAnalyze}`;
                                 const req = await fetchWithTimeout('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': `Bearer ${activeKey}` } }, 10000);
                                 const data = await req.json();
                                 if (data.data) {
-                                    availableModels = data.data.map(m => m.id);
-                                    availableModels.sort((a, b) => (a.includes('llama') ? -1 : 1));
+                                    availableModels = data.data.map(m => m.id).sort((a, b) => (a.includes('llama') ? -1 : 1));
                                     window.dynamicGroqModels = availableModels;
                                 }
-                            } catch (e) {
-                                availableModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
-                            }
+                            } catch { availableModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']; }
                         }
-                        if (!availableModels || availableModels.length === 0) availableModels = ['llama-3.3-70b-versatile'];
+                        if (!availableModels?.length) availableModels = ['llama-3.3-70b-versatile'];
 
                         for (let model of availableModels) {
                             try {
                                 const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
                                     method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ model: model, temperature: 0.1, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
-                                }, 30000); // הועלה ל-30 שניות
+                                    body: JSON.stringify({ model, temperature: 0.1, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
+                                }, 30000);
                                 const resData = await res.json();
                                 if (resData.error) throw new Error(resData.error.message);
-                                
                                 let rawText = resData.choices[0].message.content;
                                 const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-                                if (!jsonMatch) throw new Error("לא נמצא JSON תקין בתשובה");
+                                if (!jsonMatch) throw new Error("No valid JSON");
                                 jsonString = jsonMatch[0];
                                 JSON.parse(jsonString);
-                                
                                 success = true;
                                 window.lastWorkingAiProvider = 'groq';
                                 window.dynamicGroqModels = [model];
                                 break;
                             } catch (err) {
                                 lastError = err.message;
-                                if (isQuotaError(err.message)) {
-                                    providerQuotaExhausted = true;
-                                    console.warn(`Groq [${model}] quota exceeded, trying next...`);
-                                } else {
-                                    console.warn(`Groq [${model}] error:`, err.message);
-                                }
+                                if (isQuotaError(err.message)) { providerQuotaExhausted = true; window.dynamicGroqModels = null; }
+                                console.warn(`Groq [${model}]:`, err.message);
                             }
                         }
-                        if (!success && providerQuotaExhausted) {
-                            console.warn('Groq quota exhausted, trying next provider...');
-                            window.dynamicGroqModels = null;
-                            continue;
-                        }
+                        if (!success && providerQuotaExhausted) { window.dynamicGroqModels = null; continue; }
                     }
                     else if (currentProvider === 'openrouter') {
                         const models = [
-                            'google/gemini-2.0-flash-lite-preview-02-05:free', 
-                            'meta-llama/llama-3.3-70b-instruct:free', 
+                            'google/gemini-2.0-flash-lite-preview-02-05:free',
+                            'meta-llama/llama-3.3-70b-instruct:free',
                             'qwen/qwen-2.5-coder-32b-instruct:free',
                             'deepseek/deepseek-chat:free'
                         ];
                         for (let model of models) {
                             try {
                                 const res = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
-                                    method: 'POST', headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': window.location.href },
-                                    body: JSON.stringify({ model: model, temperature: 0.1, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
-                                }, 30000); // הועלה ל-30 שניות
+                                    method: 'POST',
+                                    headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': window.location.href },
+                                    body: JSON.stringify({ model, temperature: 0.1, messages: [{ role: "user", content: systemPrompt }], response_format: { type: "json_object" } })
+                                }, 30000);
                                 const resData = await res.json();
                                 if (resData.error) throw new Error(resData.error.message);
-                                
                                 let rawText = resData.choices[0].message.content;
                                 const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-                                if (!jsonMatch) throw new Error("לא נמצא JSON תקין בתשובה");
+                                if (!jsonMatch) throw new Error("No valid JSON");
                                 jsonString = jsonMatch[0];
                                 JSON.parse(jsonString);
-                                
-                               success = true; 
+                                success = true;
                                 window.lastWorkingAiProvider = 'openrouter';
                                 break;
                             } catch (err) {
                                 lastError = err.message;
-                                if (isQuotaError(err.message)) {
-                                    providerQuotaExhausted = true;
-                                    console.warn(`OpenRouter [${model}] quota exceeded, trying next...`);
-                                } else {
-                                    console.warn(`OpenRouter [${model}] error:`, err.message);
-                                }
+                                if (isQuotaError(err.message)) providerQuotaExhausted = true;
+                                console.warn(`OpenRouter [${model}]:`, err.message);
                             }
                         }
-                        if (!success && providerQuotaExhausted) {
-                            console.warn('OpenRouter quota exhausted.');
-                            continue;
-                        }
+                        if (!success && providerQuotaExhausted) continue;
                     }
                 }
 
-                if (!success) throw new Error("כל הספקים והמודלים נכשלו: " + lastError);
+                if (!success) throw new Error("כל הספקים נכשלו: " + lastError);
 
                 jsonString = jsonString.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
                 const jsonMatch2 = jsonString.match(/\{[\s\S]*\}/);
-                if (!jsonMatch2) throw new Error('לא נמצא JSON תקין בתשובת ה-AI');
-                jsonString = jsonMatch2[0];
-
-                const parsed = JSON.parse(jsonString);
+                if (!jsonMatch2) throw new Error('לא נמצא JSON תקין');
+                const parsed = JSON.parse(jsonMatch2[0]);
                 
-                let currentItem = state.items.find(i => i.id === id);
+                const currentItem = state.items.find(i => i.id === id);
                 if (currentItem) {
                     currentItem.aiSummary = parsed.summary || "לא התקבל סיכום.";
                     currentItem.siteStatus = isWebsite ? (parsed.status || "active") : "text";
-                    currentItem.aiTags = parsed.tags && Array.isArray(parsed.tags) ? parsed.tags : [];
+                    currentItem.aiTags = Array.isArray(parsed.tags) ? parsed.tags : [];
                 }
 
-           } catch (e) {
+            } catch (e) {
                 console.error("AI Error:", e);
-                let currentItem = state.items.find(i => i.id === id);
+                const currentItem = state.items.find(i => i.id === id);
                 if (currentItem) {
-                    currentItem.siteStatus = currentItem.type === 'link' ? 'active' : 'text'; 
-                    // הודעה מדויקת יותר למשתמש
-                    currentItem.aiSummary = e.name === 'AbortError' || e.message.includes('abort') ? 'הסריקה בוטלה ידנית על ידי המשתמש.' : 'שגיאה: ' + e.message;
+                    currentItem.siteStatus = currentItem.type === 'link' ? 'active' : 'text';
+                    currentItem.aiSummary = (e.name === 'AbortError' || (e.message || '').includes('abort'))
+                        ? 'הסריקה בוטלה.' : 'שגיאה: ' + e.message;
                     currentItem.aiTags = [];
                 }
             } finally {
-                let currentItem = state.items.find(i => i.id === id);
-                if (currentItem) currentItem.isScanning = false; 
-                pushToCloud(); 
+                const currentItem = state.items.find(i => i.id === id);
+                if (currentItem) { currentItem.isScanning = false; }
+                pushToCloud();
                 renderList();
             }
         };
@@ -1500,168 +1697,123 @@ ${contentToAnalyze}`;
         document.getElementById('bulkAiScanBtn')?.addEventListener('click', async () => {
             const settings = getAiSettings();
             if (!settings.keys.gemini && !settings.keys.groq && !settings.keys.openrouter) {
-                return alert("אנא הזן לפחות מפתח API אחד בהגדרות ה-AI תחילה.");
+                return alert("אנא הזן לפחות מפתח API אחד בהגדרות ה-AI.");
             }
             
-            const itemsToScan = state.items.filter(i => 
-                !i.aiSummary || 
-                i.aiSummary.includes('שגיאה') || 
-                i.aiSummary.includes('Error') || 
-                i.aiSummary.includes('Timeout') ||
-                i.aiSummary.includes('לא התקבל סיכום')
+            const itemsToScan = state.items.filter(i =>
+                !i.aiSummary || i.aiSummary.includes('שגיאה') || i.aiSummary.includes('Error') ||
+                i.aiSummary.includes('Timeout') || i.aiSummary.includes('לא התקבל')
             );
             
-            if(itemsToScan.length === 0) return alert("כל הפריטים שלך כבר מנותחים בהצלחה!");
-            
-            if(!confirm(`נמצאו ${itemsToScan.length} פריטים לסריקה (כולל תיקון שגיאות). הסריקה תרוץ ברקע.\nהאם להתחיל?`)) return;
+            if (itemsToScan.length === 0) return alert("כל הפריטים כבר מנותחים!");
+            if (!confirm(`נמצאו ${itemsToScan.length} פריטים לסריקה. האם להתחיל?`)) return;
             
             closeAllMenus();
             abortAiScan = false;
             document.getElementById('cancelBulkAiBtn').style.display = 'block';
-            
             const bulkToastId = 'ai-bulk-scan-toast';
             
-            for(let i=0; i<itemsToScan.length; i++) {
+            for (let i = 0; i < itemsToScan.length; i++) {
                 if (abortAiScan) break;
                 
-                // יצירת פס התקדמות מדויק שלא נעלם לפני שהפריט מסיים
                 const progressPercent = Math.round((i / itemsToScan.length) * 100);
-                const toastContent = `
-                    <div style="width: 100%;">
-                        <div>🤖 <b>סורק ומנתח...</b> [${i+1} מתוך ${itemsToScan.length}]</div>
-                        <div style="font-size: 11px; opacity: 0.8; margin-top: 4px; direction: ltr;">${itemsToScan[i].content.substring(0,35)}...</div>
-                        <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.2); border-radius: 4px; margin-top: 10px; overflow: hidden;">
-                            <div style="width: ${progressPercent}%; height: 100%; background: var(--accent-green); transition: width 0.3s;"></div>
-                        </div>
+                showToast(`<div style="width:100%;">
+                    <div>🤖 <b>סורק...</b> [${i + 1}/${itemsToScan.length}]</div>
+                    <div style="font-size:11px;opacity:0.75;margin-top:3px;direction:ltr;">${itemsToScan[i].content.substring(0, 35)}...</div>
+                    <div style="width:100%;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin-top:8px;overflow:hidden;">
+                        <div style="width:${progressPercent}%;height:100%;background:var(--accent-green);transition:width 0.3s;"></div>
                     </div>
-                `;
-                // שימוש ב-0 כזמן אומר שהבועה לא תיסגר אוטומטית לפני שהקוד ממשיך
-                showToast(toastContent, null, 0, bulkToastId, false);
+                </div>`, null, 0, bulkToastId, false);
                 
                 await scanSingleItem(itemsToScan[i].id);
-                
                 if (abortAiScan) break;
                 
                 if (i < itemsToScan.length - 1) {
-                    const currentItemResult = state.items.find(item => item.id === itemsToScan[i].id);
-                    let delay = 300; 
-                    let isWarning = false;
-                    
-                    if (currentItemResult && currentItemResult.aiSummary && 
-                       (currentItemResult.aiSummary.toLowerCase().includes('quota') || 
-                        currentItemResult.aiSummary.toLowerCase().includes('limit') || 
-                        currentItemResult.aiSummary.includes('429') ||
-                        currentItemResult.aiSummary.toLowerCase().includes('exceeded'))) {
-                        
+                    const result = state.items.find(it => it.id === itemsToScan[i].id);
+                    let delay = 300;
+                    if (result?.aiSummary && isQuotaError(result.aiSummary)) {
                         delay = 20000;
-                        isWarning = true;
-                        window.lastWorkingAiProvider = null; 
-                        
-                        const waitContent = `
-                            <div style="width: 100%;">
-                                <div>⚠️ <b>מכסות מלאות. ממתין...</b> [${i+1} מתוך ${itemsToScan.length}]</div>
-                                <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">ממתין 20 שניות להתאוששות השרתים...</div>
-                                <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.2); border-radius: 4px; margin-top: 10px; overflow: hidden;">
-                                    <div style="width: ${progressPercent}%; height: 100%; background: var(--accent-gold); transition: width 0.3s;"></div>
-                                </div>
+                        window.lastWorkingAiProvider = null;
+                        showToast(`<div style="width:100%;">
+                            <div>⚠️ <b>מכסות מלאות — ממתין 20 שניות...</b></div>
+                            <div style="width:100%;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin-top:8px;overflow:hidden;">
+                                <div style="width:${progressPercent}%;height:100%;background:var(--accent-gold);"></div>
                             </div>
-                        `;
-                        showToast(waitContent, null, 0, bulkToastId, true);
+                        </div>`, null, 0, bulkToastId, true);
                     }
-                    
-                    if (delay > 0) {
-                        let waited = 0;
-                        while (waited < delay && !abortAiScan) {
-                            await new Promise(r => setTimeout(r, 100));
-                            waited += 100;
-                        }
+                    let waited = 0;
+                    while (waited < delay && !abortAiScan) {
+                        await new Promise(r => setTimeout(r, 100));
+                        waited += 100;
                     }
                 }
             }
             
             document.getElementById('cancelBulkAiBtn').style.display = 'none';
-            
-            if (abortAiScan) {
-                showToast('🛑 <b>הסריקה הופסקה ידנית.</b>', null, 3000, bulkToastId, true);
-                setTimeout(() => removeToast(bulkToastId), 3000);
-            } else {
-                showToast("✅ <b>סריקת ה-AI הסתיימה בהצלחה!</b>", null, 4000, bulkToastId, false);
-                setTimeout(() => removeToast(bulkToastId), 4000);
-            }
+            const finalMsg = abortAiScan ? '🛑 <b>הסריקה הופסקה.</b>' : '✅ <b>סריקת ה-AI הסתיימה בהצלחה!</b>';
+            showToast(finalMsg, null, 4000, bulkToastId, false);
+            setTimeout(() => removeToast(bulkToastId), 4000);
         });
 
         document.getElementById('cancelBulkAiBtn')?.addEventListener('click', () => {
             abortAiScan = true;
             document.getElementById('cancelBulkAiBtn').style.display = 'none';
-            
-            // עוצר את ה-Fetch באותו רגע שהכפתור נלחץ!
-            if (window.activeAiRequestController) {
-                window.activeAiRequestController.abort();
-            }
+            if (window.activeAiRequestController) window.activeAiRequestController.abort();
         });
 
-      document.getElementById('clearAiDataBtn')?.addEventListener('click', () => {
-            if(!confirm("🧹 האם למחוק את כל נתוני הניתוח של ה-AI מכל הפריטים?")) return;
-            if(!confirm("⚠️ אישור כפול נדרש!\n\nפעולה זו תמחק את כל ניתוחי ה-AI ואינה הפיכה (אלא דרך Undo).\n\nהאם אתה בטוח לחלוטין?")) return;
+        document.getElementById('clearAiDataBtn')?.addEventListener('click', () => {
+            if (!confirm("🧹 האם למחוק את כל נתוני הניתוח של ה-AI?")) return;
+            if (!confirm("⚠️ אישור כפול נדרש! פעולה זו אינה הפיכה (אלא דרך Undo).\n\nהאם אתה בטוח?")) return;
             
-            // גיבוי חכם - שומרים רק את נתוני ה-AI של כל פריט
             const previousAiStates = state.items.map(i => ({ id: i.id, aiSummary: i.aiSummary, siteStatus: i.siteStatus, aiTags: i.aiTags }));
-            
-            state.items.forEach(i => { 
-                delete i.aiSummary; 
-                delete i.siteStatus; 
-                delete i.aiTags; 
-                i.isScanning = false; 
-            });
+            state.items.forEach(i => { delete i.aiSummary; delete i.siteStatus; delete i.aiTags; i.isScanning = false; });
             pushToCloud(); renderList(); closeAllMenus();
             
             showToast('נתוני ה-AI נוקו', () => {
-                // מחזירים רק את נתוני ה-AI לפריטים הקיימים, מבלי לפגוע בפריטים חדשים שנוספו במכשיר אחר
                 previousAiStates.forEach(prev => {
-                    const currentItem = state.items.find(i => i.id === prev.id);
-                    if (currentItem) {
-                        if (prev.aiSummary) currentItem.aiSummary = prev.aiSummary;
-                        if (prev.siteStatus) currentItem.siteStatus = prev.siteStatus;
-                        if (prev.aiTags) currentItem.aiTags = prev.aiTags;
+                    const ci = state.items.find(i => i.id === prev.id);
+                    if (ci) {
+                        if (prev.aiSummary) ci.aiSummary = prev.aiSummary;
+                        if (prev.siteStatus) ci.siteStatus = prev.siteStatus;
+                        if (prev.aiTags) ci.aiTags = prev.aiTags;
                     }
                 });
                 pushToCloud(); renderList();
             });
         });
 
-       function moveToTrash(id) {
+        // ==========================================
+        // ITEM ACTIONS
+        // ==========================================
+        function moveToTrash(id) {
             const idx = state.items.findIndex(i => i.id === id);
-            if(idx === -1) return;
-            
+            if (idx === -1) return;
             const itemToTrash = JSON.parse(JSON.stringify(state.items[idx]));
-            state.items[idx].deletedAt = new Date().toISOString();
-            state.trash.unshift(state.items[idx]);
+            EPHEMERAL_FIELDS.forEach(f => delete itemToTrash[f]);
+            itemToTrash.deletedAt = new Date().toISOString();
+            state.trash.unshift(itemToTrash);
             state.items.splice(idx, 1);
             pushToCloud(); renderList();
             
             showToast('הועבר לסל המחזור', () => {
-                state.items.unshift(itemToTrash); // פשוט מוסיפים חזרה, המיון ידאג לשאר
-                const trashIdx = state.trash.findIndex(t => t.id === id);
-                if (trashIdx > -1) state.trash.splice(trashIdx, 1);
+                const restored = JSON.parse(JSON.stringify(itemToTrash));
+                delete restored.deletedAt;
+                state.items.unshift(restored);
+                const ti = state.trash.findIndex(t => t.id === id);
+                if (ti > -1) state.trash.splice(ti, 1);
                 pushToCloud(); renderList();
             });
         }
 
         function togglePin(id) {
             const item = state.items.find(i => i.id === id);
-            if(item) { 
-                item.isPinned = !item.isPinned; 
-                pushToCloud(); 
-                renderList(); // רענון מיידי של המסך
-                showToast(item.isPinned ? 'ננעץ' : 'שוחרר', () => {
-                    const currentItem = state.items.find(i => i.id === id);
-                    if (currentItem) {
-                        currentItem.isPinned = !currentItem.isPinned;
-                        pushToCloud(); 
-                        renderList();
-                    }
-                });
-            }
+            if (!item) return;
+            item.isPinned = !item.isPinned;
+            pushToCloud(); renderList();
+            showToast(item.isPinned ? '📌 ננעץ' : '📌 שוחרר', () => {
+                const ci = state.items.find(i => i.id === id);
+                if (ci) { ci.isPinned = !ci.isPinned; pushToCloud(); renderList(); }
+            });
         }
 
         function editItem(item) {
@@ -1680,6 +1832,7 @@ ${contentToAnalyze}`;
             if (!item) return;
             
             const originalItem = JSON.parse(JSON.stringify(item));
+            EPHEMERAL_FIELDS.forEach(f => delete originalItem[f]);
             
             const c = document.getElementById('editItemContent').value.trim();
             item.content = c;
@@ -1690,13 +1843,10 @@ ${contentToAnalyze}`;
             
             pushToCloud();
             document.getElementById('editModal').style.display = 'none';
-            
-            showToast('עודכן בהצלחה', () => {
-                const currentItem = state.items.find(i => i.id === originalItem.id);
-                if (currentItem) {
-                    Object.assign(currentItem, originalItem);
-                    pushToCloud();
-                }
+            renderList();
+            showToast('✅ עודכן בהצלחה', () => {
+                const ci = state.items.find(i => i.id === originalItem.id);
+                if (ci) { Object.assign(ci, originalItem); pushToCloud(); renderList(); }
             });
         }
 
@@ -1716,99 +1866,88 @@ ${contentToAnalyze}`;
             if (!item) return;
             
             const originalItem = JSON.parse(JSON.stringify(item));
+            EPHEMERAL_FIELDS.forEach(f => delete originalItem[f]);
 
             item.siteStatus = document.getElementById('editAiStatus').value;
             item.aiSummary = document.getElementById('editAiSummary').value.trim();
-            
             const tagsRaw = document.getElementById('editAiTags').value;
-            item.aiTags = tagsRaw.split(/[, ]+/).filter(t => t.trim() !== '').map(t => t.startsWith('#') ? t : `#${t}`);
+            item.aiTags = tagsRaw.split(/[, ]+/).filter(t => t.trim()).map(t => t.startsWith('#') ? t : `#${t}`);
 
             pushToCloud();
             document.getElementById('editAiModal').style.display = 'none';
             renderList();
-            
-            showToast('פיענוח ה-AI עודכן בהצלחה', () => {
-                const currentItem = state.items.find(i => i.id === originalItem.id);
-                if (currentItem) {
-                    Object.assign(currentItem, originalItem);
-                    pushToCloud();
-                    renderList();
-                }
+            showToast('✅ פיענוח AI עודכן', () => {
+                const ci = state.items.find(i => i.id === originalItem.id);
+                if (ci) { Object.assign(ci, originalItem); pushToCloud(); renderList(); }
             });
         }
 
         async function shareItem(item) {
             const textToShare = item.type === 'link' ? item.content : `${item.description ? item.description + '\n' : ''}${item.content}`;
-            
             if (navigator.share) {
                 try {
-                    await navigator.share({
-                        title: item.description || 'MH Link Manager',
-                        text: item.type === 'link' ? (item.description || '') : textToShare,
-                        url: item.type === 'link' ? item.content : undefined
-                    });
+                    await navigator.share({ title: item.description || 'MH Link Manager', text: item.type === 'link' ? (item.description || '') : textToShare, url: item.type === 'link' ? item.content : undefined });
                     return;
-                } catch (err) {
-                    if (err.name === 'AbortError') return;
-                }
+                } catch (err) { if (err.name === 'AbortError') return; }
             }
             await copyText(textToShare);
-            showToast('📋 הקישור הועתק (דסקטופ אינו תומך בשיתוף ישיר)');
+            showToast('📋 הועתק ללוח');
         }
 
-        function toggleDuplicates() { 
+        // ==========================================
+        // FILTERS & TOGGLES
+        // ==========================================
+        function toggleDuplicates() {
             state.showDuplicates = !state.showDuplicates;
-            // Turn off dead filter if activating duplicates mode
             if (!state.showDuplicates) state.showOnlyDead = false;
             const btn = document.getElementById('toggleDuplicatesBtn');
             const deadBtn = document.getElementById('toggleDeadBtn');
             if (!state.showDuplicates) {
-                btn.style.background = 'rgba(245, 158, 11, 0.2)';
+                btn.style.background = 'rgba(245,158,11,0.2)';
                 btn.style.borderColor = 'var(--accent-gold)';
                 deadBtn.classList.remove('dead-active');
             } else {
                 btn.style.background = '';
                 btn.style.borderColor = '';
             }
-            renderList(); 
+            renderList();
         }
 
-        // FIX: Dead filter toggle
         function toggleDeadFilter() {
             state.showOnlyDead = !state.showOnlyDead;
             const btn = document.getElementById('toggleDeadBtn');
             if (state.showOnlyDead) {
-                // Turn off duplicates mode
                 state.showDuplicates = true;
-                const dupBtn = document.getElementById('toggleDuplicatesBtn');
-                dupBtn.style.background = '';
-                dupBtn.style.borderColor = '';
+                document.getElementById('toggleDuplicatesBtn').style.background = '';
+                document.getElementById('toggleDuplicatesBtn').style.borderColor = '';
                 btn.classList.add('dead-active');
                 showToast('🔴 מציג רק אתרים לא זמינים');
             } else {
                 btn.classList.remove('dead-active');
-                showToast('הוסר פילטר אתרים לא זמינים');
+                showToast('הוסר פילטר');
             }
             renderList();
         }
 
+        // ==========================================
+        // IMPORT / EXPORT
+        // ==========================================
         function importJson(e) {
-            const f = e.target.files[0]; if(!f) return;
+            const f = e.target.files[0]; if (!f) return;
             const r = new FileReader();
-            r.onload = ev => { 
-                try { 
+            r.onload = ev => {
+                try {
                     const d = JSON.parse(ev.target.result);
-                    if(confirm('האם להחליף את כל הנתונים?')) {
-                        const backup = JSON.parse(JSON.stringify(state)); 
-                        if(Array.isArray(d)) state.items = d; else { state.items = d.items||[]; state.trash = d.trash||[]; }
-                        pushToCloud(); closeAllMenus(); 
-                        showToast('נטען בהצלחה!', () => {
-                            state.items = backup.items;
-                            state.trash = backup.trash;
-                            pushToCloud();
+                    if (confirm('האם להחליף את כל הנתונים?')) {
+                        const backup = { items: JSON.parse(JSON.stringify(state.items)), trash: JSON.parse(JSON.stringify(state.trash)) };
+                        if (Array.isArray(d)) state.items = d;
+                        else { state.items = d.items || []; state.trash = d.trash || []; }
+                        pushToCloud(); closeAllMenus();
+                        showToast('✅ נטען בהצלחה!', () => {
+                            state.items = backup.items; state.trash = backup.trash; pushToCloud();
                         });
                     }
-                } catch(e){ alert('שגיאה בקובץ'); } 
+                } catch (ex) { alert('שגיאה בקובץ: ' + ex.message); }
             };
             r.readAsText(f);
         }
@@ -1820,42 +1959,34 @@ ${contentToAnalyze}`;
                 const lines = ev.target.result.split('\n');
                 let added = 0;
                 const backupItems = JSON.parse(JSON.stringify(state.items));
+                const map = new Map(state.items.map(i => [i.content.toLowerCase().trim(), true]));
                 
-                const map = new Map(state.items.map(i => [i.content.toLowerCase().trim(), i]));
                 lines.forEach(l => {
                     if (!l.trim()) return;
                     const p = l.split('|').map(s => s.trim());
                     if (!p[0]) return;
+                    if (map.has(p[0].toLowerCase())) return;
                     
-                    if (!map.has(p[0].toLowerCase())) {
-                        const newItem = { 
-                            id: Date.now() + added, 
-                            content: p[0], 
-                            description: p[1] || '', 
-                            category: p[2] || 'כללי', 
-                            note: p[3] || '',
-                            date: new Date().toISOString(), 
-                            type: URL_REGEX.test(p[0]) ? 'link' : 'text', 
-                            isPinned: false 
-                        };
-                        
-                        // קריאת נתוני AI אם קיימים בפורמט החדש
-                        if (p[4] && p[4] !== '') newItem.aiSummary = p[4];
-                        if (p[5] && p[5] !== '') newItem.siteStatus = p[5];
-                        if (p[6] && p[6] !== '') newItem.aiTags = p[6].split(',').filter(t => t.trim() !== '');
-
-                        state.items.unshift(newItem);
-                        added++;
-                    }
+                    const newItem = {
+                        id: Date.now() + added,
+                        content: p[0], description: p[1] || '', category: p[2] || 'כללי', note: p[3] || '',
+                        date: new Date().toISOString(), type: URL_REGEX.test(p[0]) ? 'link' : 'text', isPinned: false
+                    };
+                    if (p[4]) newItem.aiSummary = p[4];
+                    if (p[5]) newItem.siteStatus = p[5];
+                    if (p[6]) newItem.aiTags = p[6].split(',').filter(t => t.trim());
+                    
+                    state.items.unshift(newItem);
+                    map.set(p[0].toLowerCase(), true);
+                    added++;
                 });
                 
-                if(added > 0) { 
-                    pushToCloud(); 
-                    showToast(`נוספו ${added} פריטים`, () => {
-                        state.items = backupItems;
-                        pushToCloud();
-                    });
-                } else { alert('לא נמצאו פריטים חדשים'); }
+                if (added > 0) {
+                    pushToCloud();
+                    showToast(`✅ נוספו ${added} פריטים`, () => { state.items = backupItems; pushToCloud(); });
+                } else {
+                    alert('לא נמצאו פריטים חדשים');
+                }
                 closeAllMenus();
             };
             r.readAsText(f);
@@ -1865,244 +1996,213 @@ ${contentToAnalyze}`;
             const f = e.target.files[0]; if (!f) return;
             const r = new FileReader();
             r.onload = (ev) => {
-                const text = ev.target.result.trim();
-                if (text === "") {
-                    if (confirm("הקובץ ריק! האם אתה בטוח שברצונך למחוק את כל הנתונים בחשבון זה? פעולה זו אינה הפיכה!")) {
+                if (ev.target.result.trim() === "") {
+                    if (confirm("הקובץ ריק! האם אתה בטוח שברצונך למחוק את כל הנתונים? פעולה זו אינה הפיכה!")) {
                         const backupItems = JSON.parse(JSON.stringify(state.items));
                         state.items = [];
                         pushToCloud();
-                        showToast('⚠️ כל הנתונים נמחקו', () => {
-                            state.items = backupItems;
-                            pushToCloud();
-                        });
+                        showToast('⚠️ כל הנתונים נמחקו', () => { state.items = backupItems; pushToCloud(); });
                         closeAllMenus();
                     }
                 } else {
-                    alert("פעולת המחיקה בוטלה: הקובץ שהעלית אינו ריק!");
+                    alert("פעולת המחיקה בוטלה: הקובץ אינו ריק!");
                 }
             };
             r.readAsText(f);
         }
 
-        function exportJson() { downloadFile('backup.json', JSON.stringify({ items: state.items, trash: state.trash }, null, 2), 'application/json'); closeAllMenus(); }
-function exportTxt() { 
+        function exportJson() {
+            const cleanItems = state.items.map(item => { const c = {...item}; EPHEMERAL_FIELDS.forEach(f => delete c[f]); return c; });
+            downloadFile('backup.json', JSON.stringify({ items: cleanItems, trash: state.trash }, null, 2), 'application/json');
+            closeAllMenus();
+        }
+
+        function exportTxt() {
             const data = state.items.map(i => {
-                const note = i.note ? i.note.replace(/\|/g, '-') : '';
-                const summary = i.aiSummary ? i.aiSummary.replace(/\|/g, '-').replace(/\n/g, ' ') : '';
+                const note = (i.note || '').replace(/\|/g, '-');
+                const summary = (i.aiSummary || '').replace(/\|/g, '-').replace(/\n/g, ' ');
                 const status = i.siteStatus || '';
-                const tags = i.aiTags && i.aiTags.length > 0 ? i.aiTags.join(',') : '';
+                const tags = (i.aiTags || []).join(',');
                 return `${i.content} | ${i.description || ''} | ${i.category || 'כללי'} | ${note} | ${summary} | ${status} | ${tags}`;
             }).join('\n');
-            downloadFile('links.txt', data, 'text/plain'); 
-            closeAllMenus(); 
-        }        
-        function downloadSite() { 
+            downloadFile('links.txt', data, 'text/plain');
             closeAllMenus();
-            document.getElementById('offline-data').textContent = JSON.stringify({
-                items: state.items,
-                trash: state.trash
-            });
-            downloadFile(`LinkManager_Backup_${new Date().toISOString().slice(0,10)}.html`, '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/html'); 
         }
-        
-        function downloadSource() { closeAllMenus(); downloadFile('source.txt', '<!DOCTYPE html>\n'+document.documentElement.outerHTML, 'text/plain'); }
-        function downloadFile(n, c, t) { const b=new Blob([c],{type:t}), u=URL.createObjectURL(b), a=document.createElement('a'); a.href=u; a.download=n; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
+
+        function downloadSite() {
+            closeAllMenus();
+            const cleanItems = state.items.map(item => { const c = {...item}; EPHEMERAL_FIELDS.forEach(f => delete c[f]); return c; });
+            const offlineEl = document.getElementById('offline-data');
+            if (offlineEl) offlineEl.textContent = JSON.stringify({ items: cleanItems, trash: state.trash });
+            const ts = new Date().toISOString().slice(0, 10);
+            downloadFile(`LinkManager_${ts}.html`, '<!DOCTYPE html>\n' + document.documentElement.outerHTML, 'text/html');
+        }
+
+        function downloadSource() { closeAllMenus(); downloadFile('source.txt', '<!DOCTYPE html>\n' + document.documentElement.outerHTML, 'text/plain'); }
+
+        function downloadFile(n, c, t) {
+            const b = new Blob([c], { type: t }), u = URL.createObjectURL(b), a = document.createElement('a');
+            a.href = u; a.download = n; document.body.appendChild(a); a.click();
+            document.body.removeChild(a); URL.revokeObjectURL(u);
+        }
 
         async function copyText(t) {
             try {
                 await navigator.clipboard.writeText(t);
-                showToast('הועתק ללוח');
-            } catch (err) {
+                showToast('📋 הועתק ללוח');
+            } catch {
                 try {
-                    const textArea = document.createElement("textarea");
-                    textArea.value = t;
-                    textArea.style.position = "fixed";
-                    textArea.style.left = "0";
-                    textArea.style.top = "0";
-                    textArea.style.opacity = "0";
-                    textArea.setAttribute("readonly", "");
-                    document.body.appendChild(textArea);
-                    textArea.focus();
-                    textArea.setSelectionRange(0, 999999); 
-                    const successful = document.execCommand('copy');
-                    document.body.removeChild(textArea);
-                    if (successful) {
-                        showToast('הועתק (מצב מקומי)');
-                    } else {
-                        throw new Error('Fallback failed');
-                    }
-                } catch (e) {
-                    prompt("העתקה אוטומטית נחסמה. העתק מכאן:", t);
-                }
+                    const ta = document.createElement("textarea");
+                    ta.value = t; ta.style.cssText = "position:fixed;left:0;top:0;opacity:0;"; ta.setAttribute("readonly", "");
+                    document.body.appendChild(ta); ta.focus(); ta.setSelectionRange(0, 999999);
+                    const ok = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    if (ok) showToast('📋 הועתק'); else prompt("העתק מכאן:", t);
+                } catch { prompt("העתקה נחסמה. העתק מכאן:", t); }
             }
         }
 
-        function escapeHtml(text) { return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : ''; }
-        function closeAllMenus() { 
-            document.querySelectorAll('.dropdown-content, .drop-trigger').forEach(el => el.classList.remove('show', 'active')); 
+        // ==========================================
+        // HELPERS
+        // ==========================================
+        function escapeHtml(text) {
+            return text ? String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : '';
+        }
+
+        function closeAllMenus() {
+            document.querySelectorAll('.dropdown-content').forEach(el => {
+                el.classList.remove('show');
+                el.style.maxWidth = '';
+            });
+            document.querySelectorAll('.drop-trigger').forEach(el => el.classList.remove('active'));
             const aiMenu = document.getElementById('aiFloatingMenu');
             if (aiMenu) aiMenu.style.display = 'none';
         }
 
-        window.activeAiScanId = null;
-
-        window.openAiFloatingMenu = function(id, e) {
-            e.preventDefault(); 
-            e.stopPropagation();
-            window.activeAiScanId = id;
-            closeAllMenus(); 
-            
-            const quickSet = JSON.parse(localStorage.getItem('aiQuickSettings')) || { provider: getAiSettings().provider, urlOnly: false };
-            
-            const checkbox = document.getElementById('aiUrlOnlyCheckbox');
-            if (checkbox) checkbox.checked = quickSet.urlOnly; 
-            
-            document.querySelectorAll('.ai-provider-btn').forEach(btn => {
-                if (btn.getAttribute('data-provider') === quickSet.provider) {
-                    btn.style.fontWeight = 'bold';
-                    btn.style.background = 'rgba(127,127,127,0.2)';
-                } else {
-                    btn.style.fontWeight = 'normal';
-                    btn.style.background = 'none';
-                }
-            });
-            
-            const menu = document.getElementById('aiFloatingMenu');
-            menu.style.display = 'block';
-
-            let clientX = e.clientX;
-            let clientY = e.clientY;
-
-            if (e.touches && e.touches.length > 0) {
-                clientX = e.touches[0].clientX;
-                clientY = e.touches[0].clientY;
-            } else if (!clientX) { 
-                const rect = e.target.getBoundingClientRect();
-                clientX = rect.left;
-                clientY = rect.bottom;
-            }
-
-            // FIX: use fallback dimensions in case offsetWidth/Height not yet computed
-            const menuWidth = menu.offsetWidth || 240;
-            const menuHeight = menu.offsetHeight || 220;
-
-            let topPos = clientY + 10;
-            let leftPos = clientX - (menuWidth / 2);
-
-            if (topPos + menuHeight > window.innerHeight - 10) {
-                topPos = clientY - menuHeight - 10;
-            }
-            if (topPos < 10) topPos = 10;
-            if (leftPos < 10) leftPos = 10;
-            if (leftPos + menuWidth > window.innerWidth - 10) {
-                leftPos = window.innerWidth - menuWidth - 10;
-            }
-
-            menu.style.top = `${topPos}px`;
-            menu.style.left = `${leftPos}px`;
-        };
-
-        document.getElementById('aiUrlOnlyCheckbox')?.addEventListener('change', (e) => {
-            const quickSet = JSON.parse(localStorage.getItem('aiQuickSettings')) || { provider: getAiSettings().provider, urlOnly: false };
-            quickSet.urlOnly = e.target.checked;
-            localStorage.setItem('aiQuickSettings', JSON.stringify(quickSet));
-        });
-
-        document.querySelectorAll('.ai-provider-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const selectedProvider = e.target.getAttribute('data-provider');
-                const isUrlOnly = document.getElementById('aiUrlOnlyCheckbox').checked;
-                
-                localStorage.setItem('aiQuickSettings', JSON.stringify({ provider: selectedProvider, urlOnly: isUrlOnly }));
-                
-                document.getElementById('aiFloatingMenu').style.display = 'none';
-                showToast('הגדרות AI נשמרו. לחץ כעת לחיצה רגילה על ✨ לסריקה.');
-            });
-        });
-
         function updateCategoryDropdowns() {
-            const cats = new Set(state.items.map(i => i.category));
+            const cats = new Set(state.items.map(i => i.category || 'כללי').filter(Boolean));
             const select = document.getElementById('categoryFilter');
             const datalist = document.getElementById('categoriesDatalist');
+            if (!select || !datalist) return;
             const currentVal = select.value;
             let html = '<option value="">📂 כל הקטגוריות</option>';
             let listHtml = '';
             [...cats].sort().forEach(c => { const s = escapeHtml(c); html += `<option value="${s}">${s}</option>`; listHtml += `<option value="${s}">`; });
             select.innerHTML = html; datalist.innerHTML = listHtml;
-            if(currentVal && cats.has(currentVal)) select.value = currentVal;
+            if (currentVal && cats.has(currentVal)) select.value = currentVal;
         }
 
-        function initTheme() { if(localStorage.getItem('theme')==='light') { document.body.classList.remove('dark-mode'); document.getElementById('toggleDarkModeBtn').textContent='🌙'; } }
-        function toggleTheme() { document.body.classList.toggle('dark-mode'); localStorage.setItem('theme', document.body.classList.contains('dark-mode')?'dark':'light'); document.getElementById('toggleDarkModeBtn').textContent=document.body.classList.contains('dark-mode')?'☀️':'🌙'; }
+        function initTheme() {
+            const saved = localStorage.getItem('theme');
+            if (saved === 'light') { document.body.classList.remove('dark-mode'); document.getElementById('toggleDarkModeBtn').textContent = '🌙'; }
+        }
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+            localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
+            document.getElementById('toggleDarkModeBtn').textContent = document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
+        }
 
-        // Trash UI
+        // ==========================================
+        // TRASH UI
+        // ==========================================
         function openTrashModal() {
-            const list = document.getElementById('trashList'); list.innerHTML = '';
-            if(state.trash.length === 0) list.innerHTML = '<div style="text-align:center; padding:20px;">ריק</div>';
-            else state.trash.forEach(item => {
-                const el = document.createElement('div'); el.className = 'trash-item';
-                el.innerHTML = `<div style="flex-grow:1; margin-left:10px;"><strong>${escapeHtml(item.description)}</strong><br><small style="opacity:0.7">${escapeHtml(item.content)}</small></div><div><button onclick="restoreItem(${item.id})" style="cursor:pointer; background:none; border:none; font-size:1.2em;">♻️</button><button onclick="deleteForever(${item.id})" style="cursor:pointer; background:none; border:none; font-size:1.2em;">❌</button></div>`;
-                list.appendChild(el);
-            });
+            const list = document.getElementById('trashList');
+            list.innerHTML = '';
+            if (state.trash.length === 0) {
+                list.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-secondary);">סל המחזור ריק 🗑️</div>';
+            } else {
+                state.trash.forEach(item => {
+                    const el = document.createElement('div');
+                    el.className = 'trash-item';
+                    el.innerHTML = `
+                        <div style="flex-grow:1; min-width:0; margin-left:10px; overflow:hidden;">
+                            <strong style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(item.description || item.content)}</strong>
+                            <small style="opacity:0.6;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(item.content)}</small>
+                        </div>
+                        <div style="display:flex;gap:4px;flex-shrink:0;">
+                            <button onclick="restoreItem(${item.id})" style="cursor:pointer;background:none;border:none;font-size:1.2em;" title="שחזר">♻️</button>
+                            <button onclick="deleteForever(${item.id})" style="cursor:pointer;background:none;border:none;font-size:1.2em;" title="מחק לצמיתות">❌</button>
+                        </div>`;
+                    list.appendChild(el);
+                });
+            }
             document.getElementById('trashModal').classList.add('open');
         }
         function closeTrashModal() { document.getElementById('trashModal').classList.remove('open'); }
 
         window.restoreItem = function(id) {
-            const idx = state.trash.findIndex(i => i.id === id); 
-            if(idx === -1) return;
-            const item = JSON.parse(JSON.stringify(state.trash[idx])); 
+            const idx = state.trash.findIndex(i => i.id === id);
+            if (idx === -1) return;
+            const item = JSON.parse(JSON.stringify(state.trash[idx]));
             delete item.deletedAt;
             state.items.unshift(item);
             state.trash.splice(idx, 1);
-            pushToCloud(); 
-            openTrashModal(); 
-            showToast('הפריט שוחזר', () => {
-                const itemToTrash = state.items.find(i => i.id === id);
-                if (itemToTrash) {
-                    itemToTrash.deletedAt = new Date().toISOString();
-                    state.trash.splice(idx, 0, itemToTrash);
-                    state.items = state.items.filter(i => i.id !== id);
-                    pushToCloud();
-                    openTrashModal();
-                }
+            pushToCloud(); openTrashModal();
+            showToast('♻️ הפריט שוחזר', () => {
+                const ti = state.items.find(i => i.id === id);
+                if (ti) { ti.deletedAt = new Date().toISOString(); state.trash.splice(idx, 0, ti); state.items = state.items.filter(i => i.id !== id); pushToCloud(); openTrashModal(); }
             });
         };
 
         window.deleteForever = function(id) {
-            const idx = state.trash.findIndex(i => i.id === id); 
-            if(idx === -1) return;
-            const itemToDelete = JSON.parse(JSON.stringify(state.trash[idx]));
+            const idx = state.trash.findIndex(i => i.id === id);
+            if (idx === -1) return;
+            const itemCopy = JSON.parse(JSON.stringify(state.trash[idx]));
             state.trash.splice(idx, 1);
-            pushToCloud(); 
-            openTrashModal(); 
-            showToast('הפריט נמחק לצמיתות', () => {
-                state.trash.splice(idx, 0, itemToDelete);
-                pushToCloud();
-                openTrashModal();
-            });
+            pushToCloud(); openTrashModal();
+            showToast('הפריט נמחק לצמיתות', () => { state.trash.splice(idx, 0, itemCopy); pushToCloud(); openTrashModal(); });
         };
 
+        document.getElementById('restoreAllBtn')?.addEventListener('click', () => {
+            if (state.trash.length === 0) return;
+            if (!confirm(`האם לשחזר את כל ${state.trash.length} הפריטים?`)) return;
+            const origItems = [...state.items];
+            const toRestore = JSON.parse(JSON.stringify(state.trash));
+            toRestore.forEach(i => delete i.deletedAt);
+            state.items = [...toRestore, ...state.items];
+            state.trash = [];
+            pushToCloud(); openTrashModal();
+            showToast(`♻️ שוחזרו ${toRestore.length} פריטים`, () => { state.items = origItems; state.trash = toRestore; pushToCloud(); openTrashModal(); });
+        });
+
+        document.getElementById('emptyTrashBtn')?.addEventListener('click', () => {
+            if (state.trash.length === 0) return;
+            if (!confirm(`האם למחוק לצמיתות ${state.trash.length} פריטים?`)) return;
+            const origTrash = [...state.trash];
+            state.trash = [];
+            pushToCloud(); openTrashModal();
+            showToast('סל המחזור רוקן', () => { state.trash = origTrash; pushToCloud(); openTrashModal(); });
+        });
+
+        // ==========================================
+        // SCROLL TO TOP
+        // ==========================================
         function setupScrollToTop() {
             const btn = document.getElementById('scrollTopBtn');
-            window.onscroll = () => { if (document.body.scrollTop > 200 || document.documentElement.scrollTop > 200) btn.classList.add('show'); else btn.classList.remove('show'); };
+            if (!btn) return;
+            const onScroll = () => {
+                if (window.scrollY > 250) btn.classList.add('show'); else btn.classList.remove('show');
+            };
+            window.addEventListener('scroll', onScroll, { passive: true });
             btn.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-       function showToast(msg, undoCallback = null, duration = 10000, id = null, isWarning = false) {
+        // ==========================================
+        // TOAST SYSTEM
+        // ==========================================
+        function showToast(msg, undoCallback = null, duration = 8000, id = null, isWarning = false) {
             const container = document.getElementById('toast-container');
-            
-            // אם קיים ID (כמו בסריקה ההמונית), מעדכנים את הבועה הקיימת בלי ליצור חדשה
+            if (!container) return null;
+
+            // Update existing toast by ID (for bulk scan progress)
             if (id) {
                 const existing = document.getElementById(id);
                 if (existing && !existing.classList.contains('leaving')) {
                     existing.querySelector('.toast-msg').innerHTML = msg;
-                    // מאפס ומפעיל מחדש את מד ההתקדמות עבור הבועה שמתעדכנת
                     const prog = existing.querySelector('.toast-progress');
                     if (prog) {
-                        prog.className = 'toast-progress'; // איפוס 
-                        void prog.offsetWidth; // Force reflow
+                        prog.className = 'toast-progress';
+                        void prog.offsetWidth;
                         prog.style.animationDuration = `${duration}ms`;
                         prog.style.background = isWarning ? 'var(--accent-gold)' : 'var(--accent-green)';
                         prog.style.display = duration > 0 ? 'block' : 'none';
@@ -2115,58 +2215,93 @@ function exportTxt() {
             const toast = document.createElement('div');
             toast.className = 'toast-item';
             if (id) toast.id = id;
-            
-            let undoHtml = undoCallback ? `<button class="toast-undo-btn">↪ בטל (Undo)</button>` : '';
-            let progressBg = isWarning ? 'var(--accent-gold)' : 'var(--accent-green)';
-            let progressHtml = `<div class="toast-progress ${duration > 0 ? 'animating' : ''}" style="animation-duration: ${duration}ms; background: ${progressBg}; display: ${duration > 0 ? 'block' : 'none'};"></div>`;
-            
+
+            const undoHtml = undoCallback ? `<button class="toast-undo-btn">↪ בטל</button>` : '';
+            const progressBg = isWarning ? 'var(--accent-gold)' : 'var(--accent-green)';
+            const progressAnim = duration > 0 ? 'animating' : '';
             toast.innerHTML = `
                 <div class="toast-content">
                     <span class="toast-msg">${msg}</span>
                     ${undoHtml}
                 </div>
-                ${progressHtml}
+                <div class="toast-progress ${progressAnim}" style="animation-duration:${duration}ms; background:${progressBg}; display:${duration > 0 ? 'block' : 'none'};"></div>
             `;
-            
-            // דוחפים לסוף המיכל
+
             container.appendChild(toast);
-            
             if (undoCallback) {
-                toast.querySelector('.toast-undo-btn').onclick = () => {
-                    undoCallback();
-                    removeToast(toast);
-                };
+                toast.querySelector('.toast-undo-btn').onclick = () => { undoCallback(); removeToast(toast); };
             }
-            
-            // טריגר קטן כדי שהאנימציה תעבוד
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    toast.classList.add('visible');
-                });
-            });
-            
-            // מוחק אוטומטית אחרי הזמן שהוגדר
-            if (duration > 0) {
-                setTimeout(() => removeToast(toast), duration);
-            }
-            
+
+            requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('visible')));
+            if (duration > 0) setTimeout(() => removeToast(toast), duration);
             return toast;
         }
 
         function removeToast(toastElement) {
             let toast = typeof toastElement === 'string' ? document.getElementById(toastElement) : toastElement;
             if (!toast || toast.classList.contains('leaving')) return;
-            
             toast.classList.remove('visible');
             toast.classList.add('leaving');
-            
-            // מחכה שהאנימציה תסתיים ואז מסיר מה-DOM
-            setTimeout(() => {
-                if (toast.parentElement) toast.remove();
-            }, 300);
+            setTimeout(() => { if (toast.parentElement) toast.remove(); }, 300);
         }
 
-        // --- Multi-Select ---
+        // ==========================================
+        // AI FLOATING MENU
+        // ==========================================
+        window.openAiFloatingMenu = function(id, e) {
+            e.preventDefault(); e.stopPropagation();
+            window.activeAiScanId = id;
+            closeAllMenus();
+
+            const qs = JSON.parse(localStorage.getItem('aiQuickSettings') || '{}');
+            const cb = document.getElementById('aiUrlOnlyCheckbox');
+            if (cb) cb.checked = qs.urlOnly || false;
+            
+            document.querySelectorAll('.ai-provider-btn').forEach(btn => {
+                const isActive = btn.getAttribute('data-provider') === (qs.provider || getAiSettings().provider);
+                btn.style.fontWeight = isActive ? 'bold' : 'normal';
+                btn.style.background = isActive ? 'rgba(127,127,127,0.2)' : 'none';
+            });
+
+            const menu = document.getElementById('aiFloatingMenu');
+            menu.style.display = 'block';
+
+            let clientX = e.clientX || 0, clientY = e.clientY || 0;
+            if (e.touches?.length) { clientX = e.touches[0].clientX; clientY = e.touches[0].clientY; }
+            if (!clientX) { const rect = e.target?.getBoundingClientRect() || { left: 0, bottom: 0 }; clientX = rect.left; clientY = rect.bottom; }
+
+            const mw = menu.offsetWidth || 230, mh = menu.offsetHeight || 200;
+            const vw = window.innerWidth, vh = window.innerHeight;
+            let left = clientX - mw / 2, top = clientY + 12;
+            if (top + mh > vh - 10) top = clientY - mh - 12;
+            if (top < 10) top = 10;
+            if (left < 10) left = 10;
+            if (left + mw > vw - 10) left = vw - mw - 10;
+
+            menu.style.top = `${top}px`;
+            menu.style.left = `${left}px`;
+        };
+
+        document.getElementById('aiUrlOnlyCheckbox')?.addEventListener('change', (e) => {
+            const qs = JSON.parse(localStorage.getItem('aiQuickSettings') || '{}');
+            qs.urlOnly = e.target.checked;
+            localStorage.setItem('aiQuickSettings', JSON.stringify(qs));
+        });
+
+        document.querySelectorAll('.ai-provider-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const selectedProvider = btn.getAttribute('data-provider');
+                const isUrlOnly = document.getElementById('aiUrlOnlyCheckbox')?.checked || false;
+                localStorage.setItem('aiQuickSettings', JSON.stringify({ provider: selectedProvider, urlOnly: isUrlOnly }));
+                document.getElementById('aiFloatingMenu').style.display = 'none';
+                showToast(`✅ הגדרות AI עודכנו. לחץ ✨ לסריקה.`);
+            });
+        });
+
+        // ==========================================
+        // MULTI-SELECT
+        // ==========================================
         function enterSelectionMode(firstId) {
             state.isSelectionMode = true;
             state.selectedIds.add(firstId);
@@ -2177,9 +2312,7 @@ function exportTxt() {
         }
 
         function toggleSelection(id) {
-            if (state.selectedIds.has(id)) state.selectedIds.delete(id);
-            else state.selectedIds.add(id);
-            
+            if (state.selectedIds.has(id)) state.selectedIds.delete(id); else state.selectedIds.add(id);
             if (state.selectedIds.size === 0) exitSelectionMode();
             else { updateBulkActionBar(); renderList(); }
         }
@@ -2193,156 +2326,88 @@ function exportTxt() {
         }
 
         function updateBulkActionBar() {
-            const bar = document.getElementById('bulkActionBar');
             document.getElementById('selectedCount').textContent = `${state.selectedIds.size} פריטים נבחרו`;
-            document.getElementById('selectAllCheckbox').checked = (state.selectedIds.size > 0 && state.selectedIds.size === state.items.length);
-            bar.classList.add('visible');
+            document.getElementById('selectAllCheckbox').checked = state.selectedIds.size > 0 && state.selectedIds.size === state.items.length;
+            document.getElementById('bulkActionBar').classList.add('visible');
         }
 
         document.getElementById('cancelBulkBtn')?.addEventListener('click', exitSelectionMode);
         
         document.getElementById('selectAllCheckbox')?.addEventListener('change', (e) => {
-            if (e.target.checked) {
-                state.items.forEach(i => state.selectedIds.add(i.id));
-            } else {
-                state.selectedIds.clear();
-            }
+            if (e.target.checked) state.items.forEach(i => state.selectedIds.add(i.id));
+            else state.selectedIds.clear();
             if (state.selectedIds.size === 0) exitSelectionMode();
             else { updateBulkActionBar(); renderList(); }
         });
 
-       document.getElementById('bulkDeleteBtn')?.addEventListener('click', () => {
-            if(!confirm(`האם אתה בטוח שברצונך להעביר ${state.selectedIds.size} פריטים לסל המחזור?`)) return;
-            
-            const selectedIdsArray = Array.from(state.selectedIds);
-            const itemsToTrash = state.items.filter(i => state.selectedIds.has(i.id));
-            
-            // גיבוי רק של הפריטים הספציפיים שנמחקים, כדי לא לדרוס את כל המערך בשחזור
-            const cleanItemsToRestore = JSON.parse(JSON.stringify(itemsToTrash));
-            
-            itemsToTrash.forEach(i => i.deletedAt = new Date().toISOString());
-            
-            state.trash.unshift(...itemsToTrash);
+        document.getElementById('bulkDeleteBtn')?.addEventListener('click', () => {
+            if (!confirm(`האם לשלוח ${state.selectedIds.size} פריטים לסל המחזור?`)) return;
+            const selectedArr = Array.from(state.selectedIds);
+            const toTrash = state.items.filter(i => state.selectedIds.has(i.id));
+            const cleanToRestore = JSON.parse(JSON.stringify(toTrash));
+            cleanToRestore.forEach(i => EPHEMERAL_FIELDS.forEach(f => delete i[f]));
+            toTrash.forEach(i => { EPHEMERAL_FIELDS.forEach(f => delete i[f]); i.deletedAt = new Date().toISOString(); });
+            state.trash.unshift(...toTrash);
             state.items = state.items.filter(i => !state.selectedIds.has(i.id));
-            
-            pushToCloud();
-            exitSelectionMode();
-            
-            showToast(`הועברו ${itemsToTrash.length} פריטים לסל המחזור`, () => {
-                // דוחפים חזרה רק את הפריטים שנמחקו
-                state.items.unshift(...cleanItemsToRestore);
-                state.trash = state.trash.filter(t => !selectedIdsArray.includes(t.id));
-                pushToCloud();
-                renderList();
+            pushToCloud(); exitSelectionMode();
+            showToast(`🗑️ ${toTrash.length} פריטים הועברו לסל`, () => {
+                cleanToRestore.forEach(ci => delete ci.deletedAt);
+                state.items.unshift(...cleanToRestore);
+                state.trash = state.trash.filter(t => !selectedArr.includes(t.id));
+                pushToCloud(); renderList();
             });
         });
 
         document.getElementById('bulkMoveBtn')?.addEventListener('click', () => {
-            const newCat = prompt('לאיזו קטגוריה תרצה להעביר את כל הפריטים הנבחרים? (הקלד שם או השאר "כללי")');
+            const newCat = prompt('לאיזו קטגוריה להעביר? (השאר ריק = "כללי")');
             if (newCat === null) return;
-            
             const catName = newCat.trim() || 'כללי';
-            
-            // גיבוי רק של הקטגוריות הקודמות לפריטים הנבחרים
-            const previousCategories = [];
-            
+            const prevCats = [];
             state.items.forEach(i => {
-                if (state.selectedIds.has(i.id)) {
-                    previousCategories.push({ id: i.id, category: i.category });
-                    i.category = catName;
-                }
+                if (state.selectedIds.has(i.id)) { prevCats.push({ id: i.id, category: i.category }); i.category = catName; }
             });
-            
-            pushToCloud();
-            updateCategoryDropdowns();
+            pushToCloud(); updateCategoryDropdowns();
             const count = state.selectedIds.size;
             exitSelectionMode();
-            
-            showToast(`${count} פריטים הועברו לקטגוריה "${catName}"`, () => {
-                // משחזרים רק את הקטגוריות הקודמות לאותם פריטים ספציפיים
-                previousCategories.forEach(prev => {
-                    const itemToRestore = state.items.find(i => i.id === prev.id);
-                    if (itemToRestore) itemToRestore.category = prev.category;
-                });
-                pushToCloud();
-                updateCategoryDropdowns();
-                renderList();
+            showToast(`📂 ${count} פריטים → "${catName}"`, () => {
+                prevCats.forEach(p => { const ci = state.items.find(i => i.id === p.id); if (ci) ci.category = p.category; });
+                pushToCloud(); updateCategoryDropdowns(); renderList();
             });
         });
 
-        window.restoreAllTrash = function() {
-            if (state.trash.length === 0) return;
-            if (!confirm(`האם אתה בטוח שברצונך לשחזר את כל ${state.trash.length} הפריטים?`)) return;
-            
-            const originalItems = [...state.items];
-            const itemsToRestore = JSON.parse(JSON.stringify(state.trash));
-            
-            itemsToRestore.forEach(item => delete item.deletedAt);
-            
-            state.items = [...itemsToRestore, ...state.items];
-            state.trash = [];
-            
-            pushToCloud();
-            openTrashModal();
-            
-            showToast(`שוחזרו ${itemsToRestore.length} פריטים`, () => {
-                state.items = originalItems;
-                state.trash = itemsToRestore;
-                pushToCloud();
-                openTrashModal();
-            });
-        };
-
-        window.emptyTrash = function() {
-            if (state.trash.length === 0) return;
-            if (!confirm(`האם אתה בטוח שברצונך למחוק לצמיתות את כל ${state.trash.length} הפריטים?`)) return;
-            
-            const originalTrash = [...state.trash];
-            state.trash = [];
-            
-            pushToCloud();
-            openTrashModal();
-            
-            showToast('סל המחזור רוקן', () => {
-                state.trash = originalTrash;
-                pushToCloud();
-                openTrashModal();
-            });
-        };
-
-        document.getElementById('restoreAllBtn')?.addEventListener('click', window.restoreAllTrash);
-        document.getElementById('emptyTrashBtn')?.addEventListener('click', window.emptyTrash);
-
-        // --- DevTools protection ---
+        // ==========================================
+        // DEVTOOLS PROTECTION
+        // FIX: Mobile-safe threshold (many phones have large chrome bars)
+        // ==========================================
         const ADMIN_EMAIL = "meirhadad74@gmail.com";
 
         function checkDevTools() {
-            if (state.isOffline || (state.user && state.user.email === ADMIN_EMAIL)) {
+            if (state.isOffline || (state.user?.email === ADMIN_EMAIL)) {
                 document.getElementById('devtools-overlay').style.display = 'none';
                 return;
             }
-            const threshold = 160;
-            const widthThreshold = window.outerWidth - window.innerWidth > threshold;
-            const heightThreshold = window.outerHeight - window.innerHeight > threshold;
-            
-            if ((widthThreshold || heightThreshold) && !document.fullscreenElement) {
+            // FIX: Use a higher threshold (250px) to avoid false positives on mobile browsers
+            const threshold = 250;
+            const widthDiff = window.outerWidth - window.innerWidth;
+            const heightDiff = window.outerHeight - window.innerHeight;
+            // FIX: Only trigger if BOTH dimensions look suspicious AND we're in landscape
+            if (widthDiff > threshold && !document.fullscreenElement) {
                 document.getElementById('devtools-overlay').style.display = 'flex';
-                debugger; 
             } else {
                 document.getElementById('devtools-overlay').style.display = 'none';
             }
         }
 
-        setInterval(checkDevTools, 1000);
+        setInterval(checkDevTools, 2000);
 
         document.addEventListener('contextmenu', e => {
-            if (state.isOffline || (state.user && state.user.email === ADMIN_EMAIL)) return;
+            if (state.isOffline || state.user?.email === ADMIN_EMAIL) return;
             if (!state.isSelectionMode) e.preventDefault();
         });
-        
+
         document.addEventListener('keydown', e => {
-            if (state.isOffline || (state.user && state.user.email === ADMIN_EMAIL)) return;
-            if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) || (e.ctrlKey && e.key === 'u')) {
+            if (state.isOffline || state.user?.email === ADMIN_EMAIL) return;
+            if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I','J','C'].includes(e.key)) || (e.ctrlKey && e.key === 'u')) {
                 e.preventDefault();
             }
         });
