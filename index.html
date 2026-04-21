@@ -632,14 +632,8 @@
         let abortAiScan = false;
 
         // ─── SYNC STATE ───────────────────────────────────────────────────────────
-        // Tracks whether we have a locally-modified state that hasn't yet been
-        // confirmed by Firestore. While this is true, incoming Firestore snapshots
-        // must NOT overwrite local state (they'd be stale).
-        let _localChangesPending = false;
-        // The write-time we stamped on our last Firestore document write.
-        // Incoming snapshots with an older _clientWriteTime are stale and skipped.
-        let _lastWriteTimestamp = 0;
         // Debounce timer — only used for AI scan batch saves (high-frequency writes).
+        // Custom local locks were removed to let Firestore's native sync run optimally.
         let _pushDebounceTimer = null;
         // ─────────────────────────────────────────────────────────────────────────
 
@@ -849,7 +843,7 @@
             });
         }
 
-        function attachFirestoreListener(user) {
+       function attachFirestoreListener(user) {
             if (state.unsubscribe) state.unsubscribe();
             const userDoc = doc(db, "users", user.uid);
 
@@ -860,40 +854,27 @@
                 const isFromCache = snap.metadata.fromCache;
                 const isServerConfirmed = !hasPendingWrites && !isFromCache;
 
-                // ── Core sync guard ──────────────────────────────────────────────
-                // Skip ANY snapshot that arrives while we have un-pushed local changes.
-                // Also skip our own in-flight write events (hasPendingWrites=true).
-                // Only accept when Firestore confirms the round-trip AND our local
-                // changes have already been flushed.
-                if (hasPendingWrites || _localChangesPending) {
-                    // Only update the status indicator, not the data
-                    updateSyncStatus('syncing', 'מסנכרן...');
-                    hideLoader();
-                    return;
-                }
-
                 const d = snap.data();
-                const serverWriteTs = d._clientWriteTime || 0;
+                
+                // ── Apply server state & Merge Ephemeral Data ────────────────────
+                const serverItems = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
+                
+                // משמרים מצבים זמניים (כמו סריקת AI) כדי שלא יידרסו ברענון מהיר של הרשת
+                serverItems.forEach(sItem => {
+                    const localItem = state.items.find(i => i.id === sItem.id);
+                    if (localItem && localItem.isScanning) {
+                        sItem.isScanning = true;
+                    }
+                });
 
-                // If this snapshot carries an older timestamp than our last write,
-                // it arrived out-of-order (e.g. a cached delivery) — skip it.
-                if (serverWriteTs > 0 && serverWriteTs < _lastWriteTimestamp) {
-                    console.debug('[Sync] Skipping stale snapshot (server ts older than last push)');
-                    hideLoader();
-                    return;
-                }
-
-                // ── Apply server state ───────────────────────────────────────────
-                state.items = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
+                state.items = serverItems;
                 state.trash = d.trash ? JSON.parse(JSON.stringify(d.trash)) : [];
-                // Always strip ephemeral runtime fields from any Firestore data
-                state.items.forEach(item => EPHEMERAL_FIELDS.forEach(f => delete item[f]));
 
                 if (d.aiSettings) {
                     localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
                 }
 
-                // Update warm cache whenever we get a fresh server confirmation
+                // מעדכנים את הקאש החם רק כשיש אישור מהשרת שהמידע נשמר בהצלחה
                 if (isServerConfirmed) {
                     localStorage.setItem('linkManager_cache_' + user.uid,
                         JSON.stringify({ items: state.items, trash: state.trash }));
@@ -903,8 +884,9 @@
                 updateCategoryDropdowns();
                 hideLoader();
 
-                const status = isFromCache ? 'offline' : 'online';
-                const label = isFromCache ? 'מקומי' : 'מחובר';
+                // חיווי מדויק ומיידי לפי מצב הרשת
+                const status = isFromCache ? 'offline' : (hasPendingWrites ? 'syncing' : 'online');
+                const label = isFromCache ? 'מקומי' : (hasPendingWrites ? 'מסנכרן...' : 'מחובר');
                 updateSyncStatus(status, label);
 
             }, (err) => {
@@ -913,7 +895,6 @@
                 hideLoader();
             });
         }
-
         function toggleAppInterface(isLoggedIn) {
             document.getElementById('loggedInView').style.display = isLoggedIn ? 'flex' : 'none';
             document.getElementById('loggedOutView').style.display = isLoggedIn ? 'none' : 'flex';
@@ -954,9 +935,6 @@
 
         function forceReload() {
             if (!state.user || state.isOffline) return;
-            // Reset sync guards so the next snapshot is accepted unconditionally
-            _localChangesPending = false;
-            _lastWriteTimestamp = 0;
             clearTimeout(_pushDebounceTimer);
             updateSyncStatus('syncing', 'מרענן...');
             attachFirestoreListener(state.user);
@@ -973,8 +951,7 @@
         // The function stamps a _clientWriteTime on every document write so that
         // the snapshot listener can detect and discard stale out-of-order deliveries.
         //
-        function pushToCloud(immediate = false) {
-            _localChangesPending = true;
+       function pushToCloud(immediate = false) {
             clearTimeout(_pushDebounceTimer);
 
             const doIt = async () => {
@@ -991,17 +968,13 @@
                     localStorage.setItem('linkManagerLocalData', payload);
                     const offlineEl = document.getElementById('offline-data');
                     if (offlineEl) offlineEl.textContent = payload;
-                    _localChangesPending = false;
                     updateCategoryDropdowns();
                     renderList();
                     showToast("נשמר מקומית!");
                     return;
                 }
 
-                if (!state.user) { _localChangesPending = false; return; }
-
-                const writeTs = Date.now();
-                _lastWriteTimestamp = writeTs;
+                if (!state.user) return;
 
                 try {
                     updateSyncStatus('syncing', 'מסנכרן...');
@@ -1009,22 +982,13 @@
                         items: cleanItems,
                         trash: state.trash,
                         aiSettings: getAiSettings(),
-                        lastUpdated: new Date().toISOString(),
-                        _clientWriteTime: writeTs   // used by snapshot guard
-                    });
+                        lastUpdated: new Date().toISOString()
+                    }, { merge: true });
 
-                    // Update warm cache immediately after successful write
-                    localStorage.setItem('linkManager_cache_' + state.user.uid,
-                        JSON.stringify({ items: cleanItems, trash: state.trash }));
-
-                    // _localChangesPending cleared once the server confirms
-                    // (snapshot arrives with hasPendingWrites=false, which is safe now)
-                    // We clear it a bit early here too so the NEXT snapshot is accepted
-                    _localChangesPending = false;
+                    // הוסרו המנגנונים הידניים. Firestore מנהל עכשיו את התור, הקאש והסנכרון ברקע לבד.
 
                 } catch (e) {
                     console.error("Push error:", e);
-                    _localChangesPending = false;
                     showToast('❌ שגיאה בסנכרון לענן. מנסה שוב...');
                     updateSyncStatus('error', 'שגיאה');
                     // Auto-retry once after 3 s
