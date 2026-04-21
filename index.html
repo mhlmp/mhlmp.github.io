@@ -1185,9 +1185,13 @@
                     </div>`;
                 }
 
+               // חילוץ האימוג'י הראשון מהמחרוזת, למשל 🔹, ⚡ או 🌐. 
+                let modelEmoji = item.aiModel ? item.aiModel.split(' ')[0] : '🤖';
+                let modelTooltip = item.aiModel ? `title="פוענח באמצעות: ${escapeHtml(item.aiModel)}"` : '';
+
                 aiHtml = `<div class="ai-box" style="position:relative;">
                     <div class="ai-header">
-                        <span><span class="${statusClass}">${statusText}</span> <span style="font-size:10px;opacity:0.6;">🤖</span></span>
+                        <span style="display:flex; align-items:center;"><span class="${statusClass}">${statusText}</span> <span style="font-size:12px; margin-right:6px; cursor:help; opacity:0.85;" ${modelTooltip}>${modelEmoji}</span></span>
                         <button class="icon-btn ai-edit-btn" title="ערוך תוצאות AI" style="width:22px;height:22px;font-size:12px;background:rgba(127,127,127,0.15);border-radius:4px;">✏️</button>
                     </div>
                     <div>${escapeHtml(item.aiSummary)}</div>
@@ -1522,10 +1526,11 @@
                }
                // ─────────────────────────────────────────────────────────────────────
 
-               // עדכון הפרומפט: חגורת בטיחות נוספת ל-AI במקרה של עמודים שחמקו
+               // עדכון הפרומפט: הוראות ברורות יותר שלא יבלבלו את ה-AI בקבוצות חיות
                const promptType = isWebsite
-                   ? `Type: Website content.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: You MUST keep brand names, usernames, website names, software, and technical terms in their original ENGLISH within the Hebrew summary to maximize searchability.\n2. Determine status: "active", "parked", or "dead".\n   TELEGRAM RULES (STRICT — follow exactly):\n   - Mark "dead" if the page says "not found", "invalid", "expired", "no longer valid", "no such user", or "channel not found".\n   - Mark "dead" if the page shows a generic "You are invited to a group chat" or "Join Group" WITHOUT showing a specific group name or member count.\n   - Mark "dead" if the page shows "If you have Telegram, you can contact @username right away" WITHOUT any actual bio, description, or real display name.\n   - Mark "active" ONLY if a real channel/bot name, specific @username handle WITH a description, or subscriber/member count is clearly visible.\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for brands/tech terms).`
+                   ? `Type: Website content.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: You MUST keep brand names, usernames, website names, software, and technical terms in their original ENGLISH within the Hebrew summary to maximize searchability.\n2. Determine status: "active", "parked", or "dead".\n   TELEGRAM RULES:\n   - If the page contains a specific group/bot name, a description, OR a member/subscriber count (e.g., "3 members"), you MUST set status to "active".\n   - Set "dead" ONLY if the page explicitly says "not found", "expired", "invalid", or if it is a completely empty "Join Group" page with NO details at all.\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for brands/tech terms).`
                    : `Type: Text/Command.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: Keep all specific names, usernames, code, and technical terms in their original ENGLISH within the Hebrew summary.\n2. Status MUST be "text".\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for specific names/tech terms).`;
+               
                 const systemPrompt = `You are a strict JSON-only API. Return ONLY valid JSON. No markdown formatting, no extra text.
 Required format: {"summary": "...", "status": "active|parked|dead|text", "tags": ["#tag1", "#tag2", "#tag3"]}
 ${promptType}
@@ -1536,6 +1541,7 @@ ${contentToAnalyze}`;
                 let jsonString = '';
                 let success = false;
                 let lastError = 'לא ניתן להגיע לאף ספק AI';
+                let usedModelName = ''; // משתנה לשמירת שם המודל והאימוג'י
 
                 for (const currentProvider of providersWithKeys) {
                     if (success) break;
@@ -1572,9 +1578,10 @@ ${contentToAnalyze}`;
                                 const rawText = rd.candidates[0].content.parts[0].text;
                                 const jm = rawText.match(/\{[\s\S]*\}/);
                                 if (!jm) throw new Error('No valid JSON in response');
-                                jsonString = jm[0];
+                               jsonString = jm[0];
                                 JSON.parse(jsonString);
                                 success = true;
+                                usedModelName = `🔹 Gemini (${model})`;
                                 window.lastWorkingAiProvider = 'gemini';
                                 window.dynamicGeminiModels = [model];
                                 break;
@@ -1613,9 +1620,10 @@ ${contentToAnalyze}`;
                                 const rawText = rd.choices[0].message.content;
                                 const jm = rawText.match(/\{[\s\S]*\}/);
                                 if (!jm) throw new Error('No valid JSON');
-                                jsonString = jm[0];
+                               jsonString = jm[0];
                                 JSON.parse(jsonString);
                                 success = true;
+                                usedModelName = `⚡ Groq (${model})`;
                                 window.lastWorkingAiProvider = 'groq';
                                 window.dynamicGroqModels = [model];
                                 break;
@@ -1650,6 +1658,7 @@ ${contentToAnalyze}`;
                                 jsonString = jm[0];
                                 JSON.parse(jsonString);
                                 success = true;
+                                usedModelName = `🌐 OpenRouter (${model.split('/').pop()})`;
                                 window.lastWorkingAiProvider = 'openrouter';
                                 break;
                             } catch (err) {
@@ -1669,11 +1678,20 @@ ${contentToAnalyze}`;
                 if (!jm2) throw new Error('לא נמצא JSON תקין');
                 const parsed = JSON.parse(jm2[0]);
 
+                // ── הגנת ברזל: עקיפת טעויות AI בקישורי טלגרם ──
+                if (isWebsite && /(?:t\.me|telegram\.me)\//i.test(cleanContent) && parsed.status === 'dead') {
+                    if (/\d[\d\s,.]+\s*(?:member|subscriber|participant|חברים|מנויים)/i.test(contentToAnalyze)) {
+                        parsed.status = 'active';
+                    }
+                }
+                // ──────────────────────────────────────────────
+
                 const ci = state.items.find(i => i.id === id);
                 if (ci) {
                     ci.aiSummary = parsed.summary || 'לא התקבל סיכום.';
                     ci.siteStatus = isWebsite ? (parsed.status || 'active') : 'text';
                     ci.aiTags = Array.isArray(parsed.tags) ? parsed.tags : [];
+                    ci.aiModel = usedModelName; // שמירת המודל לאובייקט
                 }
 
             } catch (e) {
@@ -1761,9 +1779,9 @@ ${contentToAnalyze}`;
             if (!confirm('⚠️ אישור כפול נדרש! פעולה זו אינה הפיכה (אלא דרך Undo).\n\nהאם אתה בטוח?')) return;
 
             const previousAiStates = state.items.map(i => ({
-                id: i.id, aiSummary: i.aiSummary, siteStatus: i.siteStatus, aiTags: i.aiTags
+                id: i.id, aiSummary: i.aiSummary, siteStatus: i.siteStatus, aiTags: i.aiTags, aiModel: i.aiModel
             }));
-            state.items.forEach(i => { delete i.aiSummary; delete i.siteStatus; delete i.aiTags; delete i.isScanning; });
+            state.items.forEach(i => { delete i.aiSummary; delete i.siteStatus; delete i.aiTags; delete i.isScanning; delete i.aiModel; });
             renderList();
             closeAllMenus();
             pushToCloud(true);
@@ -1775,6 +1793,7 @@ ${contentToAnalyze}`;
                         if (prev.aiSummary !== undefined) ci.aiSummary = prev.aiSummary;
                         if (prev.siteStatus !== undefined) ci.siteStatus = prev.siteStatus;
                         if (prev.aiTags !== undefined) ci.aiTags = prev.aiTags;
+                        if (prev.aiModel !== undefined) ci.aiModel = prev.aiModel;
                     }
                 });
                 renderList();
