@@ -1432,12 +1432,17 @@
                         u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
                         u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`
                     ];
+                    
                     let scrapedOk = false;
-                    for (const proxyFn of proxies) {
-                        try {
+                    
+                    // --- הפתרון המהיר: ריצת פרוקסים מקבילית ---
+                    try {
+                        const proxyPromises = proxies.map(async (proxyFn) => {
                             const proxyUrl = proxyFn(cleanContent);
-                            const res = await fetchWithTimeout(proxyUrl, {}, 15000);
+                            // נותנים לכל שרת 5 שניות, אבל כולם רצים במקביל!
+                            const res = await fetchWithTimeout(proxyUrl, {}, 5000); 
                             if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                            
                             let htmlText;
                             if (proxyUrl.includes('allorigins')) {
                                 const data = await res.json();
@@ -1446,20 +1451,30 @@
                             } else {
                                 htmlText = await res.text();
                             }
+                            
                             const parser = new DOMParser();
                             const doc2 = parser.parseFromString(htmlText, 'text/html');
                             doc2.querySelectorAll('script,style,nav,footer,noscript,iframe,header').forEach(el => el.remove());
                             const bodyText = (doc2.body?.innerText || '').replace(/\s+/g, ' ').trim();
+                            
                             if (bodyText.length < 30) throw new Error('empty body');
                             const lb = bodyText.toLowerCase();
                             if (lb.includes('just a moment') || lb.includes('enable javascript and cookies') ||
                                 lb.includes('checking your browser') || lb.includes('verify you are human') ||
                                 (lb.includes('cloudflare') && lb.includes('ray id'))) throw new Error('cloudflare_blocked');
-                            contentToAnalyze = bodyText.substring(0, 3500);
-                            scrapedOk = true;
-                            break;
-                        } catch (pe) { console.warn(`Proxy failed:`, pe.message); }
+                                
+                            return bodyText.substring(0, 3500);
+                        });
+
+                        // Promise.any תופס את התשובה מהשרת *הראשון* שמצליח ומבטל את ההמתנה לשאר
+                        contentToAnalyze = await Promise.any(proxyPromises);
+                        scrapedOk = true;
+                        
+                    } catch (aggregateError) {
+                        // אם הגענו לכאן - כל השרתים נכשלו או שהזמן של כולם עבר
+                        scrapedOk = false;
                     }
+                    
                     if (!scrapedOk) {
                         contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: Page blocked by anti-bot. Do NOT mark as "dead". Assume "active". Analyze based on URL and description only.`;
                     }
