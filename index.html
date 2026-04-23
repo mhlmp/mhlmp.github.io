@@ -373,8 +373,7 @@
     </header>
 
     <div id="userSection" class="glass-panel">
-<div id="loggedOutView" style="display:none; width:100%; justify-content:center;">
-    <button id="googleLoginBtn" class="btn-login">
+<div id="loggedOutView" style="display:flex; width:100%; justify-content:center;">    <button id="googleLoginBtn" class="btn-login">
                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" alt="G">
                 התחבר עם Google
             </button>
@@ -398,8 +397,8 @@
         </div>
     </div>
 
-<div id="welcomeScreen">
-    <div style="font-size:4rem; margin-bottom:20px; opacity:0.8;">🔒</div>
+<div id="welcomeScreen" class="visible">
+    <div style="font-size:4rem; margin-bottom:20px; opacity:0.8;">🔒</div>
         <h2>ברוכים הבאים לאתר שלי,<br>MH Link Manager Pro</h2>
         <p>כדי לשמור על פרטיותך, הקישורים נטענים מהענן בלבד.</p>
         <p>בעת יציאה (Logout) הכל נמחק מהמכשיר.</p>
@@ -810,21 +809,23 @@
                 if (state.user) setTimeout(forceReload, 1500);
             });
 
-            // הדרך המקצועית (Enterprise) לניהול חיבור במובייל: אתחול שקע הרשת (WebSocket)
+            // סנכרון מהיר במובייל ללא תקיעות
             document.addEventListener('visibilitychange', async () => {
                 if (document.visibilityState === 'visible' && state.user && navigator.onLine) {
                     try {
-                        // שחזור ה-Wake Lock אם היה פעיל
                         if (typeof wakeLock !== 'undefined' && wakeLock !== null && 'wakeLock' in navigator) {
                             wakeLock = await navigator.wakeLock.request('screen').catch(console.error);
                         }
-                        
-                        // ניתוק וחיבור מחדש של מנוע ה-Firestore כדי להרוג חיבורי "זומבי" 
-                        await disableNetwork(db);
-                        await enableNetwork(db);
-                        // ברגע שהרשת מופעלת מחדש, onSnapshot המקורי ימשוך את המידע העדכני מיד ובאופן טבעי!
-                        
-                    } catch (e) { console.error("Firebase network reset error:", e); }
+                        // משיכת נתונים ישירה מהשרת ברקע כדי לעקוף את בעיית ה"זומבי" של פיירבייס בלי להקפיא את האפליקציה
+                        const snap = await getDoc(doc(db, "users", state.user.uid), { source: 'server' });
+                        if (snap.exists()) {
+                            const d = snap.data();
+                            state.items = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
+                            state.trash = d.trash ? JSON.parse(JSON.stringify(d.trash)) : [];
+                            renderList();
+                            updateCategoryDropdowns();
+                        }
+                    } catch (e) { console.error("Sync on return error:", e); }
                 }
             });
 
@@ -986,9 +987,10 @@
                 updateCategoryDropdowns();
                 hideLoader();
 
-                // חיווי מדויק ומיידי לפי מצב הרשת
-                const status = isFromCache ? (navigator.onLine ? 'syncing' : 'offline') : (hasPendingWrites ? 'syncing' : 'online');
-                const label = isFromCache ? (navigator.onLine ? 'מתחבר...' : 'מקומי (אין רשת)') : (hasPendingWrites ? 'מסנכרן...' : 'מחובר');
+               // חיווי יציב ומיידי - מבטל את ההיתקעות על "מתחבר..." במובייל
+                const isOffline = !navigator.onLine;
+                const status = isOffline ? 'offline' : (hasPendingWrites ? 'syncing' : 'online');
+                const label = isOffline ? 'מקומי (אין רשת)' : (hasPendingWrites ? 'מסנכרן...' : 'מחובר');
                 updateSyncStatus(status, label);
                 
             }, (err) => {
