@@ -834,6 +834,54 @@
             document.getElementById('exportTxtBtn')?.addEventListener('click', exportTxt);
             document.getElementById('downloadHtmlBtn')?.addEventListener('click', downloadSite);
             document.getElementById('downloadSourceBtn')?.addEventListener('click', downloadSource);
+            
+            // קישור כפתור השארת מסך דולק
+            document.getElementById('wakeLockBtn')?.addEventListener('click', toggleWakeLock);
+        }
+
+        // ══════════════════════════════════════════════════════════════════════════
+        // WAKE LOCK & NOTIFICATIONS (מסך דולק והתראות)
+        // ══════════════════════════════════════════════════════════════════════════
+        async function toggleWakeLock() {
+            closeAllMenus();
+            
+            // בקשת הרשאה להתראות מערכת
+            if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+                await Notification.requestPermission();
+            }
+
+            if (!('wakeLock' in navigator)) {
+                return showToast('❌ הדפדפן שלך לא תומך בפונקציית מסך דולק.', null, 4000, null, true);
+            }
+
+            try {
+                if (wakeLock !== null) {
+                    await wakeLock.release();
+                    wakeLock = null;
+                    document.getElementById('wakeLockBtn').innerHTML = '💡 מצב מסך דולק (לסריקה ארוכה)';
+                    showToast('המסך יחזור להתכבות כרגיל בהתאם להגדרות המכשיר.');
+                } else {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    document.getElementById('wakeLockBtn').innerHTML = '🛑 בטל מצב מסך דולק';
+                    showToast('✅ המסך יישאר דולק כעת ולא יכבה עד שתבטל זאת.');
+                }
+            } catch (err) {
+                showToast(`שגיאה בהפעלת מצב מסך דולק: ${err.message}`, null, 4000, null, true);
+            }
+        }
+
+        function sendSystemNotification(title, body) {
+            if (!('Notification' in window) || Notification.permission !== 'granted') return;
+            try {
+                new Notification(title, { body: body, icon: 'icon.png', requireInteraction: true });
+            } catch (e) {
+                // Fallback למובייל - שימוש ב-Service Worker במידה ויש שגיאה בהקפצה רגילה
+                if (navigator.serviceWorker) {
+                    navigator.serviceWorker.ready.then(reg => {
+                        reg.showNotification(title, { body: body, icon: 'icon.png', requireInteraction: true });
+                    }).catch(console.error);
+                }
+            }
         }
 
         function repositionDropdown(menu) {
