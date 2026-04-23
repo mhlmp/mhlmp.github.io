@@ -373,8 +373,8 @@
     </header>
 
     <div id="userSection" class="glass-panel">
-        <div id="loggedOutView" style="display:flex; width:100%; justify-content:center;">
-            <button id="googleLoginBtn" class="btn-login">
+<div id="loggedOutView" style="display:none; width:100%; justify-content:center;">
+    <button id="googleLoginBtn" class="btn-login">
                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" alt="G">
                 התחבר עם Google
             </button>
@@ -398,8 +398,8 @@
         </div>
     </div>
 
-    <div id="welcomeScreen" class="visible">
-        <div style="font-size:4rem; margin-bottom:20px; opacity:0.8;">🔒</div>
+<div id="welcomeScreen" style="display:none;">
+    <div style="font-size:4rem; margin-bottom:20px; opacity:0.8;">🔒</div>
         <h2>ברוך הבא לאתר של MH</h2>
         <h2>הנתונים מוגנים</h2>
         <p>כדי לשמור על פרטיותך, הקישורים נטענים מהענן בלבד.</p>
@@ -554,21 +554,29 @@
                     <option value="groq">Groq (Llama 3 - הכי מהיר)</option>
                     <option value="openrouter">OpenRouter (חינמי חלופי)</option>
                 </select>
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span class="edit-modal-label" style="margin:0;">מפתח Gemini API:</span>
+               <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span class="edit-modal-label" style="margin:0;">מפתחות Gemini:</span>
                     <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--primary-color); font-size:12px;">🔗 קבל מפתח</a>
                 </div>
-                <input type="password" id="keyGemini" placeholder="AIzaSy..." class="edit-modal-input">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span class="edit-modal-label" style="margin:0;">מפתח Groq API:</span>
+                <input type="password" id="keyGemini1" placeholder="מפתח ראשי..." class="edit-modal-input" style="margin-bottom:4px;">
+                <input type="password" id="keyGemini2" placeholder="מפתח גיבוי 2..." class="edit-modal-input" style="margin-bottom:4px;">
+                <input type="password" id="keyGemini3" placeholder="מפתח גיבוי 3..." class="edit-modal-input">
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                    <span class="edit-modal-label" style="margin:0;">מפתחות Groq:</span>
                     <a href="https://console.groq.com/keys" target="_blank" style="color:var(--primary-color); font-size:12px;">🔗 קבל מפתח</a>
                 </div>
-                <input type="password" id="keyGroq" placeholder="gsk_..." class="edit-modal-input">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span class="edit-modal-label" style="margin:0;">מפתח OpenRouter:</span>
+                <input type="password" id="keyGroq1" placeholder="מפתח ראשי..." class="edit-modal-input" style="margin-bottom:4px;">
+                <input type="password" id="keyGroq2" placeholder="מפתח גיבוי 2..." class="edit-modal-input" style="margin-bottom:4px;">
+                <input type="password" id="keyGroq3" placeholder="מפתח גיבוי 3..." class="edit-modal-input">
+
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                    <span class="edit-modal-label" style="margin:0;">מפתחות OpenRouter:</span>
                     <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--primary-color); font-size:12px;">🔗 קבל מפתח</a>
                 </div>
-                <input type="password" id="keyOpenRouter" placeholder="sk-or-v1-..." class="edit-modal-input">
+                <input type="password" id="keyOpenRouter1" placeholder="מפתח ראשי..." class="edit-modal-input" style="margin-bottom:4px;">
+                <input type="password" id="keyOpenRouter2" placeholder="מפתח גיבוי 2..." class="edit-modal-input" style="margin-bottom:4px;">
+                <input type="password" id="keyOpenRouter3" placeholder="מפתח גיבוי 3..." class="edit-modal-input">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <input type="checkbox" id="autoScanNew" style="transform: scale(1.2);">
                     <label for="autoScanNew" style="font-size:14px;">סרוק אוטומטית פריטים חדשים</label>
@@ -603,7 +611,7 @@
             onAuthStateChanged, setPersistence, browserLocalPersistence
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import {
-            getFirestore, doc, setDoc, onSnapshot, enableIndexedDbPersistence
+            getFirestore, doc, setDoc, getDoc, onSnapshot, enableIndexedDbPersistence
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -849,7 +857,13 @@
             const userDoc = doc(db, "users", user.uid);
 
             state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (snap) => {
-                if (!snap.exists()) { hideLoader(); return; }
+                if (!snap.exists()) { 
+                    state.items = []; 
+                    state.trash = []; 
+                    renderList(); 
+                    hideLoader(); 
+                    return; 
+                }
 
                 const hasPendingWrites = snap.metadata.hasPendingWrites;
                 const isFromCache = snap.metadata.fromCache;
@@ -934,12 +948,32 @@
             } catch (e) { alert(e.message); }
         }
 
-        function forceReload() {
+        async function forceReload() {
             if (!state.user || state.isOffline) return;
             clearTimeout(_pushDebounceTimer);
-            updateSyncStatus('syncing', 'מרענן...');
-            attachFirestoreListener(state.user);
-            showToast("🔄 רענון נתונים מהענן...");
+            updateSyncStatus('syncing', 'מושך מהענן...');
+            showToast("🔄 מושך נתונים עדכניים מהענן...");
+            try {
+                const snap = await getDoc(doc(db, "users", state.user.uid), { source: 'server' });
+                if (snap.exists()) {
+                    const d = snap.data();
+                    state.items = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
+                    state.trash = d.trash ? JSON.parse(JSON.stringify(d.trash)) : [];
+                    renderList();
+                    updateCategoryDropdowns();
+                    localStorage.setItem('linkManager_cache_' + state.user.uid, JSON.stringify({ items: state.items, trash: state.trash }));
+                    updateSyncStatus('online', 'מחובר');
+                    showToast("✅ רענון הושלם בהצלחה!");
+                } else {
+                    showToast("ℹ️ אין נתונים לחשבון זה.");
+                }
+                attachFirestoreListener(state.user);
+            } catch (e) {
+                console.error("Force reload err:", e);
+                updateSyncStatus('error', 'שגיאת חיבור');
+                showToast("❌ שגיאה במשיכת נתונים, בדוק חיבור אינטרנט.");
+                attachFirestoreListener(state.user);
+            }
         }
 
         // ══════════════════════════════════════════════════════════════════════════
@@ -1330,9 +1364,9 @@
                 }
             });
 
-            // Auto-scan if enabled
+           // Auto-scan if enabled
             const settings = getAiSettings();
-            if (settings.autoScan && (settings.keys.gemini || settings.keys.groq || settings.keys.openrouter)) {
+            if (settings.autoScan && (settings.keys.gemini.length > 0 || settings.keys.groq.length > 0 || settings.keys.openrouter.length > 0)) {
                 setTimeout(() => scanSingleItem(newItem.id, null, false), 800);
             }
         }
@@ -1340,14 +1374,14 @@
         // ══════════════════════════════════════════════════════════════════════════
         // AI ENGINE
         // ══════════════════════════════════════════════════════════════════════════
-        window.saveAiSettings = function () {
+       window.saveAiSettings = function () {
             const settings = {
                 provider: document.getElementById('aiProviderSelect').value,
                 autoScan: document.getElementById('autoScanNew').checked,
                 keys: {
-                    gemini: document.getElementById('keyGemini').value.trim(),
-                    groq: document.getElementById('keyGroq').value.trim(),
-                    openrouter: document.getElementById('keyOpenRouter').value.trim()
+                    gemini: [document.getElementById('keyGemini1').value.trim(), document.getElementById('keyGemini2').value.trim(), document.getElementById('keyGemini3').value.trim()].filter(Boolean),
+                    groq: [document.getElementById('keyGroq1').value.trim(), document.getElementById('keyGroq2').value.trim(), document.getElementById('keyGroq3').value.trim()].filter(Boolean),
+                    openrouter: [document.getElementById('keyOpenRouter1').value.trim(), document.getElementById('keyOpenRouter2').value.trim(), document.getElementById('keyOpenRouter3').value.trim()].filter(Boolean)
                 }
             };
             localStorage.setItem('aiSettingsPro', JSON.stringify(settings));
@@ -1357,17 +1391,31 @@
         };
 
         function getAiSettings() {
-            const def = { provider: 'gemini', autoScan: true, keys: { gemini: '', groq: '', openrouter: '' } };
-            try { return JSON.parse(localStorage.getItem('aiSettingsPro')) || def; } catch { return def; }
+            const def = { provider: 'gemini', autoScan: true, keys: { gemini: [], groq: [], openrouter: [] } };
+            try { 
+                const saved = JSON.parse(localStorage.getItem('aiSettingsPro'));
+                if (!saved) return def;
+                ['gemini', 'groq', 'openrouter'].forEach(p => {
+                    if (typeof saved.keys[p] === 'string') saved.keys[p] = saved.keys[p] ? [saved.keys[p]] : [];
+                    else if (!Array.isArray(saved.keys[p])) saved.keys[p] = [];
+                });
+                return saved;
+            } catch { return def; }
         }
 
         document.getElementById('openAiSettingsBtn')?.addEventListener('click', () => {
             const s = getAiSettings();
             document.getElementById('aiProviderSelect').value = s.provider;
             document.getElementById('autoScanNew').checked = s.autoScan;
-            document.getElementById('keyGemini').value = s.keys.gemini;
-            document.getElementById('keyGroq').value = s.keys.groq;
-            document.getElementById('keyOpenRouter').value = s.keys.openrouter;
+            document.getElementById('keyGemini1').value = s.keys.gemini[0] || '';
+            document.getElementById('keyGemini2').value = s.keys.gemini[1] || '';
+            document.getElementById('keyGemini3').value = s.keys.gemini[2] || '';
+            document.getElementById('keyGroq1').value = s.keys.groq[0] || '';
+            document.getElementById('keyGroq2').value = s.keys.groq[1] || '';
+            document.getElementById('keyGroq3').value = s.keys.groq[2] || '';
+            document.getElementById('keyOpenRouter1').value = s.keys.openrouter[0] || '';
+            document.getElementById('keyOpenRouter2').value = s.keys.openrouter[1] || '';
+            document.getElementById('keyOpenRouter3').value = s.keys.openrouter[2] || '';
             document.getElementById('aiSettingsModal').style.display = 'flex';
             closeAllMenus();
         });
@@ -1388,12 +1436,18 @@
             const settings = getAiSettings();
             const preferred = overrideProvider || window.lastWorkingAiProvider || settings.provider;
             const allProviders = [preferred, 'gemini', 'groq', 'openrouter'].filter((p, i, a) => a.indexOf(p) === i);
-            const providersWithKeys = allProviders.filter(p => settings.keys[p]);
+            
+            const fallbackChain = [];
+            allProviders.forEach(p => {
+                const pKeys = Array.isArray(settings.keys[p]) ? settings.keys[p] : (settings.keys[p] ? [settings.keys[p]] : []);
+                pKeys.filter(k => k && k.trim()).forEach((k, idx) => {
+                    fallbackChain.push({ provider: p, key: k, keyIndex: idx + 1 });
+                });
+            });
 
-            if (providersWithKeys.length === 0) {
+            if (fallbackChain.length === 0) {
                 return alert('עליך להזין לפחות מפתח API אחד בהגדרות ה-AI.');
             }
-
             item.isScanning = true;
             renderList();
 
@@ -1561,9 +1615,9 @@ ${contentToAnalyze}`;
                 let lastError = 'לא ניתן להגיע לאף ספק AI';
                 let usedModelName = ''; // משתנה לשמירת שם המודל והאימוג'י
 
-                for (const currentProvider of providersWithKeys) {
+                for (let i = 0; i < fallbackChain.length; i++) {
                     if (success) break;
-                    const activeKey = settings.keys[currentProvider];
+                    const { provider: currentProvider, key: activeKey, keyIndex } = fallbackChain[i];
                     let quotaExhausted = false;
 
                     if (currentProvider === 'gemini') {
@@ -1609,7 +1663,12 @@ ${contentToAnalyze}`;
                                 console.warn(`Gemini [${model}]:`, err.message);
                             }
                         }
-                        if (!success && quotaExhausted) { window.dynamicGeminiModels = null; continue; }
+                        if (!success && quotaExhausted) { 
+                            window.dynamicGeminiModels = null; 
+                            const nextModel = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider} (מפתח ${fallbackChain[i+1].keyIndex})...` : 'לא נותרו מפתחות לנסות.';
+                            alert(`⚠️ נגמרו התוקנים ב-Gemini (מפתח ${keyIndex}).\n${nextModel}`);
+                            continue; 
+                        }
                     }
 
                     else if (currentProvider === 'groq') {
@@ -1651,7 +1710,12 @@ ${contentToAnalyze}`;
                                 console.warn(`Groq [${model}]:`, err.message);
                             }
                         }
-                        if (!success && quotaExhausted) { window.dynamicGroqModels = null; continue; }
+                        if (!success && quotaExhausted) { 
+                            window.dynamicGroqModels = null; 
+                            const nextModel = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider} (מפתח ${fallbackChain[i+1].keyIndex})...` : 'לא נותרו מפתחות לנסות.';
+                            alert(`⚠️ נגמרו התוקנים ב-Groq (מפתח ${keyIndex}).\n${nextModel}`);
+                            continue; 
+                        }
                     }
 
                     else if (currentProvider === 'openrouter') {
@@ -1679,13 +1743,17 @@ ${contentToAnalyze}`;
                                 usedModelName = `🌐 OpenRouter (${model.split('/').pop()})`;
                                 window.lastWorkingAiProvider = 'openrouter';
                                 break;
-                            } catch (err) {
+                           } catch (err) {
                                 lastError = err.message;
                                 if (isQuotaError(err.message)) quotaExhausted = true;
                                 console.warn(`OpenRouter [${model}]:`, err.message);
                             }
                         }
-                        if (!success && quotaExhausted) continue;
+                        if (!success && quotaExhausted) {
+                            const nextModel = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider} (מפתח ${fallbackChain[i+1].keyIndex})...` : 'לא נותרו מפתחות לנסות.';
+                            alert(`⚠️ נגמרו התוקנים ב-OpenRouter (מפתח ${keyIndex}).\n${nextModel}`);
+                            continue;
+                        }
                     }
                 }
 
