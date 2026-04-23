@@ -794,6 +794,17 @@
                 });
             });
 
+            window.addEventListener('offline', () => {
+                updateSyncStatus('offline', 'מקומי (אין רשת)');
+                showToast('⚠️ החיבור לאינטרנט אבד. הנתונים יישמרו מקומית ויסונכרנו כשהרשת תחזור.', null, 5000, null, true);
+            });
+            
+            window.addEventListener('online', () => {
+                updateSyncStatus('syncing', 'מחדש חיבור...');
+                showToast('🌐 החיבור לאינטרנט חזר! מסנכרן נתונים עם הענן...', null, 4000);
+                if (state.user) setTimeout(forceReload, 1500);
+            });
+
             document.getElementById('editItemForm')?.addEventListener('submit', handleEditSubmit);
             document.getElementById('editAiForm')?.addEventListener('submit', handleEditAiSubmit);
             document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
@@ -819,7 +830,7 @@
         // ══════════════════════════════════════════════════════════════════════════
         // FIREBASE / AUTH
         // ══════════════════════════════════════════════════════════════════════════
-        function setupFirebaseListeners() {
+       function setupFirebaseListeners() {
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     state.isOffline = false;
@@ -827,6 +838,11 @@
                     toggleAppInterface(true);
                     document.getElementById('userName').textContent = user.displayName;
                     document.getElementById('userAvatar').src = user.photoURL;
+                    
+                    if (!navigator.onLine) {
+                        updateSyncStatus('offline', 'מקומי (אין רשת)');
+                        showToast('ℹ️ אין חיבור לאינטרנט. טוען נתונים מקומיים...', null, 5000, null, true);
+                    }
 
                     const cacheKey = 'linkManager_cache_' + user.uid;
                     const warmCache = localStorage.getItem(cacheKey);
@@ -924,7 +940,8 @@
             if (lbl) lbl.textContent = label || status;
         }
 
-        async function cloudLogin() {
+       async function cloudLogin() {
+            if (!navigator.onLine) return showToast('❌ לא ניתן להתחבר לחשבון ללא חיבור לאינטרנט.', null, 4000, null, true);
             try { await signInWithPopup(auth, new GoogleAuthProvider()); }
             catch (e) { alert(e.message); }
         }
@@ -949,6 +966,7 @@
 
         async function forceReload() {
             if (!state.user) return;
+            if (!navigator.onLine) return showToast("❌ לא ניתן למשוך נתונים מהענן ללא אינטרנט.", null, 4000, null, true);
             if (state.isOffline && navigator.onLine) state.isOffline = false;
             clearTimeout(_pushDebounceTimer);
             updateSyncStatus('syncing', 'מושך מהענן...');
@@ -1430,6 +1448,14 @@
         window.activeAiRequestController = null;
 
         window.scanSingleItem = async function (id, overrideProvider = null, forceUrlOnly = false) {
+            if (!navigator.onLine) {
+                showToast('❌ לא ניתן לבצע סריקת AI ללא אינטרנט.', null, 4000, null, true);
+                const ci = state.items.find(i => i.id === id);
+                if (ci) ci.isScanning = false;
+                renderList();
+                return;
+            }
+
             const item = state.items.find(i => i.id === id);
             if (!item) return;
 
@@ -1800,6 +1826,7 @@ ${contentToAnalyze}`;
         };
 
         document.getElementById('bulkAiScanBtn')?.addEventListener('click', async () => {
+            if (!navigator.onLine) return showToast('❌ לא ניתן לבצע סריקת AI מרובה ללא רשת.', null, 4000, null, true);
             const settings = getAiSettings();
             if (!settings.keys.gemini && !settings.keys.groq && !settings.keys.openrouter) {
                 return alert('אנא הזן לפחות מפתח API אחד בהגדרות ה-AI.');
@@ -2686,8 +2713,9 @@ function importJson(e) {
             else { updateBulkActionBar(); renderList(); }
         });
 
-        // כפתור סריקת AI לפריטים נבחרים בלבד
+       // כפתור סריקת AI לפריטים נבחרים בלבד
         document.getElementById('bulkAiBtn')?.addEventListener('click', async () => {
+            if (!navigator.onLine) return showToast('❌ לא ניתן לבצע סריקת AI מרובה ללא רשת.', null, 4000, null, true);
             const settings = getAiSettings();
             if (!settings.keys.gemini && !settings.keys.groq && !settings.keys.openrouter) {
                 return alert('אנא הזן לפחות מפתח API אחד בהגדרות ה-AI.');
