@@ -810,6 +810,24 @@
                 if (state.user) setTimeout(forceReload, 1500);
             });
 
+            // הדרך המקצועית (Enterprise) לניהול חיבור במובייל: אתחול שקע הרשת (WebSocket)
+            document.addEventListener('visibilitychange', async () => {
+                if (document.visibilityState === 'visible' && state.user && navigator.onLine) {
+                    try {
+                        // שחזור ה-Wake Lock אם היה פעיל
+                        if (typeof wakeLock !== 'undefined' && wakeLock !== null && 'wakeLock' in navigator) {
+                            wakeLock = await navigator.wakeLock.request('screen').catch(console.error);
+                        }
+                        
+                        // ניתוק וחיבור מחדש של מנוע ה-Firestore כדי להרוג חיבורי "זומבי" 
+                        await disableNetwork(db);
+                        await enableNetwork(db);
+                        // ברגע שהרשת מופעלת מחדש, onSnapshot המקורי ימשוך את המידע העדכני מיד ובאופן טבעי!
+                        
+                    } catch (e) { console.error("Firebase network reset error:", e); }
+                }
+            });
+
             document.getElementById('editItemForm')?.addEventListener('submit', handleEditSubmit);
             document.getElementById('editAiForm')?.addEventListener('submit', handleEditAiSubmit);
             document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
