@@ -831,6 +831,7 @@
         // FIREBASE / AUTH
         // ══════════════════════════════════════════════════════════════════════════
        function setupFirebaseListeners() {
+            if (!auth || !db) return;
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     state.isOffline = false;
@@ -1408,11 +1409,13 @@
             showToast('✅ הגדרות AI נשמרו');
         };
 
-        function getAiSettings() {
+       function getAiSettings() {
             const def = { provider: 'gemini', autoScan: true, keys: { gemini: [], groq: [], openrouter: [] } };
             try { 
                 const saved = JSON.parse(localStorage.getItem('aiSettingsPro'));
                 if (!saved) return def;
+                if (!saved.keys) saved.keys = { gemini: [], groq: [], openrouter: [] };
+                
                 ['gemini', 'groq', 'openrouter'].forEach(p => {
                     if (typeof saved.keys[p] === 'string') saved.keys[p] = saved.keys[p] ? [saved.keys[p]] : [];
                     else if (!Array.isArray(saved.keys[p])) saved.keys[p] = [];
