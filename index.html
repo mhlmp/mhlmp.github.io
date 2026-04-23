@@ -1009,15 +1009,20 @@
                     progressCircle.style.strokeDashoffset = '283';
                 }
                 
-                const tick = setInterval(() => {
+               const tick = setInterval(() => {
                     secondsLeft--;
                     if (progressCircle)
                         progressCircle.style.strokeDashoffset = (283 - (283 * (3 - secondsLeft) / 3));
+                    
                     if (secondsLeft <= 0) {
                         clearInterval(tick);
-                        welcomeScreen.style.display = 'none';
-                        welcomeScreen.classList.remove('visible');
-                        protectedContent.classList.remove('locked');
+                        
+                        // ממתינים שנייה אחת (1000 מילישניות) כדי שהמעגל ישלים את הסיבוב
+                        setTimeout(() => {
+                            welcomeScreen.style.display = 'none';
+                            welcomeScreen.classList.remove('visible');
+                            protectedContent.classList.remove('locked');
+                        }, 1000);
                     }
                 }, 1000);
             }
