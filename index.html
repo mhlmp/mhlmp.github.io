@@ -693,9 +693,7 @@
             initTheme();
             setupEventListeners();
             
-            if (!state.isOffline) {
-                setupFirebaseListeners();
-            }
+            setupFirebaseListeners();
             
             setupScrollToTop();
             
@@ -824,6 +822,7 @@
         function setupFirebaseListeners() {
             onAuthStateChanged(auth, (user) => {
                 if (user) {
+                    state.isOffline = false;
                     state.user = user;
                     toggleAppInterface(true);
                     document.getElementById('userName').textContent = user.displayName;
@@ -900,10 +899,10 @@
                 hideLoader();
 
                 // חיווי מדויק ומיידי לפי מצב הרשת
-                const status = isFromCache ? 'offline' : (hasPendingWrites ? 'syncing' : 'online');
-                const label = isFromCache ? 'מקומי' : (hasPendingWrites ? 'מסנכרן...' : 'מחובר');
+                const status = isFromCache ? (navigator.onLine ? 'syncing' : 'offline') : (hasPendingWrites ? 'syncing' : 'online');
+                const label = isFromCache ? (navigator.onLine ? 'מתחבר...' : 'מקומי (אין רשת)') : (hasPendingWrites ? 'מסנכרן...' : 'מחובר');
                 updateSyncStatus(status, label);
-
+                
             }, (err) => {
                 console.error("Firestore listener error:", err);
                 updateSyncStatus('error', 'שגיאת חיבור');
@@ -949,7 +948,8 @@
         }
 
         async function forceReload() {
-            if (!state.user || state.isOffline) return;
+            if (!state.user) return;
+            if (state.isOffline && navigator.onLine) state.isOffline = false;
             clearTimeout(_pushDebounceTimer);
             updateSyncStatus('syncing', 'מושך מהענן...');
             showToast("🔄 מושך נתונים עדכניים מהענן...");
@@ -1666,7 +1666,7 @@ ${contentToAnalyze}`;
                         if (!success && quotaExhausted) { 
                             window.dynamicGeminiModels = null; 
                             const nextModel = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider} (מפתח ${fallbackChain[i+1].keyIndex})...` : 'לא נותרו מפתחות לנסות.';
-                            alert(`⚠️ נגמרו התוקנים ב-Gemini (מפתח ${keyIndex}).\n${nextModel}`);
+                            showToast(`⚠️ נגמרו התוקנים ב-Gemini (מפתח ${keyIndex}). ${nextModel}`, null, 5000, null, true);
                             continue; 
                         }
                     }
@@ -1713,7 +1713,7 @@ ${contentToAnalyze}`;
                         if (!success && quotaExhausted) { 
                             window.dynamicGroqModels = null; 
                             const nextModel = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider} (מפתח ${fallbackChain[i+1].keyIndex})...` : 'לא נותרו מפתחות לנסות.';
-                            alert(`⚠️ נגמרו התוקנים ב-Groq (מפתח ${keyIndex}).\n${nextModel}`);
+                            showToast(`⚠️ נגמרו התוקנים ב-Groq (מפתח ${keyIndex}). ${nextModel}`, null, 5000, null, true);
                             continue; 
                         }
                     }
@@ -1751,7 +1751,7 @@ ${contentToAnalyze}`;
                         }
                         if (!success && quotaExhausted) {
                             const nextModel = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider} (מפתח ${fallbackChain[i+1].keyIndex})...` : 'לא נותרו מפתחות לנסות.';
-                            alert(`⚠️ נגמרו התוקנים ב-OpenRouter (מפתח ${keyIndex}).\n${nextModel}`);
+                            showToast(`⚠️ נגמרו התוקנים ב-OpenRouter (מפתח ${keyIndex}). ${nextModel}`, null, 5000, null, true);
                             continue;
                         }
                     }
