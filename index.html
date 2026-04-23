@@ -398,13 +398,14 @@
     </div>
 
 <div id="welcomeScreen" class="visible">
-    <div style="font-size:4rem; margin-bottom:20px; opacity:0.8;">🔒</div>
-        <h2>ברוכים הבאים לאתר שלי,<br>MH Link Manager Pro</h2>
-        <p>כדי לשמור על פרטיותך, הקישורים נטענים מהענן בלבד.</p>
-        <p>בעת יציאה (Logout) הכל נמחק מהמכשיר.</p>
-        <div style="margin-top: 25px; padding: 12px; background: rgba(217, 48, 37, 0.1); border: 1px solid var(--accent-red); border-radius: 8px; font-size: 0.85rem; color: #fca5a5; max-width: 90%; line-height: 1.4;">
-            ⚠️ <b>הבהרה משפטית:</b> כל שימוש במערכת ובכלים המוצעים בה הוא על אחריות המשתמש בלבד. איני נושא בשום אחריות לכל נזק, אובדן מידע, או תוצאה כזו או אחרת שתנבע מהשימוש באתר.
+    <div style="font-size:4.5rem; margin-bottom:10px; text-shadow: 0 0 20px rgba(255,255,255,0.2);">🔒</div>
+        <div style="margin-bottom: 25px; padding: 14px; background: linear-gradient(135deg, rgba(217, 48, 37, 0.15), rgba(217, 48, 37, 0.05)); border: 1px solid rgba(217, 48, 37, 0.4); border-radius: 12px; font-size: 0.85rem; color: #fca5a5; max-width: 90%; line-height: 1.5; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: right; backdrop-filter: blur(5px);">
+            <span style="display:flex; align-items:center; gap:8px; font-size:1rem; margin-bottom:6px; color: #f87171;">⚠️ <b>הבהרה משפטית</b></span>
+            כל שימוש במערכת ובכלים המוצעים בה הוא על אחריות המשתמש בלבד. האתר אינו נושא בשום אחריות לכל נזק, אובדן מידע, או כל תוצאה אחרת שתנבע מהשימוש בו.
         </div>
+        <h2 style="margin-bottom: 10px;">ברוכים הבאים לאתר שלי,<br><span style="color: var(--primary-color);">MH Link Manager Pro</span></h2>
+        <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 5px;">כדי לשמור על פרטיותך, הקישורים נטענים מהענן בלבד.</p>
+        <p style="color: var(--text-secondary); font-size: 0.95rem;">בעת יציאה (Logout) הכל נמחק מהמכשיר לחלוטין.</p>
     </div>
 
     <div id="protectedContent" class="auth-required locked">
@@ -803,31 +804,42 @@
                 showToast('⚠️ החיבור לאינטרנט אבד. הנתונים יישמרו מקומית ויסונכרנו כשהרשת תחזור.', null, 5000, null, true);
             });
             
-            window.addEventListener('online', () => {
-                updateSyncStatus('syncing', 'מחדש חיבור...');
-                showToast('🌐 החיבור לאינטרנט חזר! מסנכרן נתונים עם הענן...', null, 4000);
-                if (state.user) setTimeout(forceReload, 1500);
-            });
+           window.addEventListener('online', () => {
+                updateSyncStatus('syncing', 'מחדש חיבור...');
+                showToast('🌐 החיבור לאינטרנט חזר! מסנכרן נתונים עם הענן...', null, 4000);
+                if (state.user) setTimeout(forceReload, 1500);
+            });
 
-            // סנכרון מהיר במובייל ללא תקיעות
-            document.addEventListener('visibilitychange', async () => {
-                if (document.visibilityState === 'visible' && state.user && navigator.onLine) {
-                    try {
-                        if (typeof wakeLock !== 'undefined' && wakeLock !== null && 'wakeLock' in navigator) {
-                            wakeLock = await navigator.wakeLock.request('screen').catch(console.error);
-                        }
-                        // משיכת נתונים ישירה מהשרת ברקע כדי לעקוף את בעיית ה"זומבי" של פיירבייס בלי להקפיא את האפליקציה
-                        const snap = await getDoc(doc(db, "users", state.user.uid), { source: 'server' });
-                        if (snap.exists()) {
-                            const d = snap.data();
-                            state.items = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
-                            state.trash = d.trash ? JSON.parse(JSON.stringify(d.trash)) : [];
-                            renderList();
-                            updateCategoryDropdowns();
-                        }
-                    } catch (e) { console.error("Sync on return error:", e); }
-                }
-            });
+            // גיבוי התאוששות למובייל בחזרה לטאב
+            window.addEventListener('focus', async () => {
+                if (state.user && navigator.onLine) {
+                    try {
+                        updateSyncStatus('syncing', 'מחדש חיבור ענן...');
+                        await disableNetwork(db);
+                        await enableNetwork(db);
+                    } catch (e) { }
+                }
+            });
+
+            // ניהול סנכרון חי ורציף (Real-time Enterprise Sync)
+            document.addEventListener('visibilitychange', async () => {
+                if (document.visibilityState === 'visible' && state.user && navigator.onLine) {
+                    try {
+                        if (typeof wakeLock !== 'undefined' && wakeLock !== null && 'wakeLock' in navigator) {
+                            wakeLock = await navigator.wakeLock.request('screen').catch(console.error);
+                        }
+                        
+                        updateSyncStatus('syncing', 'מחדש חיבור ענן...');
+                        // מכת חשמל לפיירבייס: סוגר ופותח את שקע הרשת כדי לכפות סנכרון onSnapshot מיידי
+                        await disableNetwork(db);
+                        await enableNetwork(db);
+                        
+                    } catch (e) { 
+                        console.error("Network reset err:", e); 
+                        forceReload(); // גיבוי קלאסי למקרה שהרשת ממש תקועה
+                    }
+                }
+            });
 
             document.getElementById('editItemForm')?.addEventListener('submit', handleEditSubmit);
             document.getElementById('editAiForm')?.addEventListener('submit', handleEditAiSubmit);
