@@ -668,101 +668,29 @@
         };
         let abortAiScan = false;
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // SYNC ENGINE — Enterprise-grade, Promise-chain based
-        // ═══════════════════════════════════════════════════════════════════════
-        //
-        // Design principles:
-        //  1. pushToCloud() snapshots state IMMEDIATELY, queues the write.
-        //  2. Writes are chained — no write can overwrite a newer one.
-        //  3. Every write retries up to 3× with exponential back-off.
-        //  4. forceReload() uses getDocFromServer() — guaranteed fresh data.
-        //  5. onSnapshot listens for remote changes; no manual network cycling.
-        //  6. visibilitychange / focus run a silent forceReload (no UI noise).
-        //
-        let _syncChain = Promise.resolve();   // serialised write queue
-        let _nextPayload = null;               // most-recent data to persist
-        let _debounceTimer = null;             // for non-immediate (AI) writes
-        let _listenerRetries = 0;             // exponential back-off counter
-
-        /**
-         * Schedule a write to Firestore.
-         * @param {boolean} immediate - true = user action (no debounce),
-         *                              false = AI scan batch (600 ms debounce)
-         */
-        function pushToCloud(immediate = false) {
-            // Capture the current state right now, before any async work.
-            _nextPayload = {
-                items: state.items.map(item => {
+       async function pushToCloud() {
+            if (state.isOffline) {
+                const dataToSave = JSON.stringify({ items: state.items, trash: state.trash });
+                localStorage.setItem('linkManagerLocalData', dataToSave);
+                const el = document.getElementById('offline-data');
+                if (el) el.textContent = dataToSave;
+                updateCategoryDropdowns();
+                renderList();
+                showToast("נשמר מקומית בהצלחה!");
+                return;
+            }
+            
+            if (!state.user) return;
+            try {
+                updateSyncStatus('syncing', 'מסנכרן...');
+                const cleanItems = state.items.map(item => {
                     const c = { ...item };
                     EPHEMERAL_FIELDS.forEach(f => delete c[f]);
                     return c;
-                }),
-                trash: state.trash.map(t => ({ ...t }))
-            };
-
-            clearTimeout(_debounceTimer);
-
-            const enqueue = () => {
-                _syncChain = _syncChain
-                    .then(executeWrite)
-                    .catch(err => console.error('[Sync] chain error:', err));
-            };
-
-            if (immediate) {
-                enqueue();
-            } else {
-                _debounceTimer = setTimeout(enqueue, 600);
-            }
+                });
+                await setDoc(doc(db, "users", state.user.uid), { items: cleanItems, trash: state.trash, aiSettings: getAiSettings(), lastUpdated: new Date().toISOString() });
+            } catch (e) { showToast('שגיאה בסנכרון לענן'); updateSyncStatus('error', 'שגיאה בשמירה'); }
         }
-
-        /** Performs the actual Firestore write, with 3-attempt retry. */
-        async function executeWrite() {
-            if (!_nextPayload) return;
-
-            // Offline / local-file mode
-            if (state.isOffline) {
-                const raw = JSON.stringify({ items: _nextPayload.items, trash: _nextPayload.trash });
-                localStorage.setItem('linkManagerLocalData', raw);
-                const el = document.getElementById('offline-data');
-                if (el) el.textContent = raw;
-                _nextPayload = null;
-                return;
-            }
-
-            if (!state.user) return;
-
-            // Grab snapshot (a later pushToCloud may have already updated _nextPayload)
-            const payload = _nextPayload;
-            _nextPayload = null;
-
-            updateSyncStatus('syncing', 'מסנכרן...');
-
-            for (let attempt = 1; attempt <= 3; attempt++) {
-                try {
-                    await setDoc(doc(db, 'users', state.user.uid), {
-                        items: payload.items,
-                        trash: payload.trash,
-                        aiSettings: getAiSettings(),
-                        lastUpdated: new Date().toISOString()
-                    }, { merge: true });
-
-                    // onSnapshot will confirm the write and set status to 'online'
-                    return;
-                } catch (err) {
-                    console.error(`[Sync] write attempt ${attempt}/3:`, err);
-                    if (attempt < 3) {
-                        await new Promise(r => setTimeout(r, 800 * attempt));
-                    } else {
-                        updateSyncStatus('error', 'שגיאה בשמירה');
-                        showToast('❌ שגיאה בסנכרון לענן. מנסה שוב בקרוב...', null, 5000, null, true);
-                        // Re-queue so the next user action will retry
-                        if (!_nextPayload) _nextPayload = payload;
-                    }
-                }
-            }
-        }
-
         // ═══════════════════════════════════════════════════════════════════════
         // FIREBASE INIT
         // ═══════════════════════════════════════════════════════════════════════
@@ -922,25 +850,7 @@
                 if (state.user) setTimeout(() => forceReload(true), 1200);
             });
 
-            // ── Background → Foreground Sync ────────────────────────────────────
-            // Simple, robust: just pull latest from server. No network cycling.
-            let _lastSyncTimestamp = 0;
-            const SYNC_DEBOUNCE_MS = 10000; // לא יותר מפעם ב-10 שניות
-
-            const backgroundSync = () => {
-                if (!state.user || state.isOffline || !navigator.onLine) return;
-                const now = Date.now();
-                if (now - _lastSyncTimestamp < SYNC_DEBOUNCE_MS) return;
-                _lastSyncTimestamp = now;
-                forceReload(true); // silent — no toast, no spinner
-            };
-
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') backgroundSync();
-            });
-
-            window.addEventListener('focus', backgroundSync);
-
+          
             document.getElementById('editItemForm')?.addEventListener('submit', handleEditSubmit);
             document.getElementById('editAiForm')?.addEventListener('submit', handleEditAiSubmit);
             document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
@@ -1004,111 +914,71 @@
             });
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // FIREBASE AUTH & FIRESTORE
-        // ═══════════════════════════════════════════════════════════════════════
-        function setupFirebaseListeners() {
+       function setupFirebaseListeners() {
             if (!auth || !db) return;
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     state.isOffline = false;
                     state.user = user;
                     toggleAppInterface(true);
-                    document.getElementById('userName').textContent = user.displayName;
-                    document.getElementById('userAvatar').src = user.photoURL;
 
                     if (!navigator.onLine) {
                         updateSyncStatus('offline', 'מקומי (אין רשת)');
                         showToast('ℹ️ אין חיבור לאינטרנט. טוען נתונים מקומיים...', null, 5000, null, true);
                     }
 
-                    // Warm cache — show data instantly while listener connects
-                    const cacheKey = 'linkManager_cache_' + user.uid;
-                    const warmCache = localStorage.getItem(cacheKey);
+                    const userCacheKey = 'linkManager_cache_' + user.uid;
+                    const warmCache = localStorage.getItem(userCacheKey);
+                    
                     if (warmCache) {
                         try {
-                            const p = JSON.parse(warmCache);
-                            state.items = p.items || [];
-                            state.trash = p.trash || [];
-                            renderList();
+                            const parsedCache = JSON.parse(warmCache);
+                            state.items = parsedCache.items || [];
+                            state.trash = parsedCache.trash || [];
+                            state.items.forEach(i => i.isScanning = false);
+                            renderList(); 
                             updateCategoryDropdowns();
-                        } catch (e) { console.error('[Cache] parse error', e); }
-                    } else {
+                        } catch(e) { console.error("Cache load error", e); }
+                    } else if (state.items.length === 0) {
                         const loader = document.getElementById('loading-screen');
-                        if (loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
+                        if(loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
                     }
 
-                    attachFirestoreListener(user);
+                    document.getElementById('userName').textContent = user.displayName;
+                    document.getElementById('userAvatar').src = user.photoURL;
+
+                    const userDoc = doc(db, "users", user.uid);
+
+                    state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
+                        if (docSnap.exists()) {
+                            const d = docSnap.data();
+                            
+                            const serverItems = d.items || [];
+                            serverItems.forEach(sItem => {
+                                const local = state.items.find(i => i.id === sItem.id);
+                                if (local?.isScanning) sItem.isScanning = true;
+                            });
+
+                            state.items = serverItems;
+                            state.trash = d.trash || [];
+                            
+                            if (d.aiSettings) {
+                                localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
+                            }
+                            localStorage.setItem('linkManager_cache_' + user.uid, JSON.stringify({ items: state.items, trash: state.trash }));
+                            renderList();
+                            updateCategoryDropdowns();
+                            hideLoader();
+                        }
+                        updateSyncStatus(navigator.onLine ? 'online' : 'offline', navigator.onLine ? 'מחובר' : 'מקומי (אין רשת)');
+                    }, (err) => {
+                        console.error(err);
+                        updateSyncStatus('error', 'שגיאת חיבור');
+                    });
                 } else {
                     toggleAppInterface(false);
                     hideLoader();
                 }
-            });
-        }
-
-        /**
-         * Attach a real-time Firestore listener.
-         * Automatically retries on error with exponential back-off (max 30s).
-         */
-        function attachFirestoreListener(user) {
-            if (state.unsubscribe) {
-                state.unsubscribe();
-                state.unsubscribe = null;
-            }
-
-            const userDocRef = doc(db, 'users', user.uid);
-
-            state.unsubscribe = onSnapshot(userDocRef, (snap) => {
-                _listenerRetries = 0; // reset back-off on success
-
-                if (!snap.exists()) {
-                    state.items = [];
-                    state.trash = [];
-                    renderList();
-                    hideLoader();
-                    updateSyncStatus('online', 'מחובר');
-                    return;
-                }
-
-                const d = snap.data();
-
-                // Preserve ephemeral scanning states from memory
-                const serverItems = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
-                serverItems.forEach(sItem => {
-                    const local = state.items.find(i => i.id === sItem.id);
-                    if (local?.isScanning) sItem.isScanning = true;
-                });
-
-                state.items = serverItems;
-                state.trash = d.trash ? JSON.parse(JSON.stringify(d.trash)) : [];
-
-                if (d.aiSettings) {
-                    localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
-                }
-
-                // Update warm cache with confirmed server data
-                localStorage.setItem('linkManager_cache_' + user.uid,
-                    JSON.stringify({ items: state.items, trash: state.trash }));
-
-                renderList();
-                updateCategoryDropdowns();
-                hideLoader();
-                updateSyncStatus(navigator.onLine ? 'online' : 'offline',
-                                 navigator.onLine ? 'מחובר' : 'מקומי (אין רשת)');
-
-            }, (err) => {
-                console.error('[Firestore] snapshot error:', err);
-                hideLoader();
-                updateSyncStatus('error', 'שגיאת חיבור');
-
-                // Exponential back-off: 2s, 4s, 8s, 16s, 30s…
-                const delay = Math.min(2000 * Math.pow(2, _listenerRetries), 30000);
-                _listenerRetries++;
-                console.log(`[Firestore] Retrying listener in ${delay}ms (attempt ${_listenerRetries})`);
-
-                setTimeout(() => {
-                    if (state.user) attachFirestoreListener(state.user);
-                }, delay);
             });
         }
 
@@ -1185,66 +1055,53 @@
             } catch (e) { alert(e.message); }
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // FORCE RELOAD — guaranteed fresh data from Firestore server
-        // ═══════════════════════════════════════════════════════════════════════
-        async function forceReload(silent = false) {
+        function forceReload(silent = false) {
             if (!state.user || state.isOffline) return;
             if (!navigator.onLine) {
-                if (!silent)
-                    showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
+                if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
                 return;
             }
 
-            // Animate the reload button
             const btn = document.getElementById('forceReloadBtn');
             if (btn) btn.classList.add('spinning');
-
+            
             if (!silent) {
                 updateSyncStatus('syncing', 'מושך מהענן...');
-                showToast('🔄 מושך נתונים עדכניים מהענן...');
+                showToast("🔄 מושך נתונים עדכניים מהענן...");
             }
 
-            try {
-                // getDocFromServer bypasses all caches — always hits Firestore servers
-                const snap = await getDocFromServer(doc(db, 'users', state.user.uid));
-
-                if (snap.exists()) {
-                    const d = snap.data();
-
-                    const serverItems = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
-                    serverItems.forEach(si => {
-                        const local = state.items.find(i => i.id === si.id);
-                        if (local?.isScanning) si.isScanning = true;
+            if (state.unsubscribe) state.unsubscribe();
+            const userDoc = doc(db, "users", state.user.uid);
+            
+            state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
+                if (docSnap.exists()) {
+                    const d = docSnap.data();
+                    
+                    const serverItems = d.items || [];
+                    serverItems.forEach(sItem => {
+                        const local = state.items.find(i => i.id === sItem.id);
+                        if (local?.isScanning) sItem.isScanning = true;
                     });
 
                     state.items = serverItems;
-                    state.trash = d.trash ? JSON.parse(JSON.stringify(d.trash)) : [];
-
-                    if (d.aiSettings)
+                    state.trash = d.trash || [];
+                    
+                    if (d.aiSettings) {
                         localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
-
-                    localStorage.setItem('linkManager_cache_' + state.user.uid,
-                        JSON.stringify({ items: state.items, trash: state.trash }));
-
+                    }
+                    localStorage.setItem('linkManager_cache_' + state.user.uid, JSON.stringify({ items: state.items, trash: state.trash }));
                     renderList();
                     updateCategoryDropdowns();
-                    updateSyncStatus('online', 'מחובר');
-                    if (!silent) showToast('✅ רוענן בהצלחה מהשרת!');
-                } else {
-                    if (!silent) showToast('ℹ️ אין נתונים לחשבון זה.');
-                    updateSyncStatus('online', 'מחובר');
                 }
-            } catch (err) {
-                console.error('[forceReload] error:', err);
+                updateSyncStatus('online', 'מחובר');
+                if (btn) setTimeout(() => btn.classList.remove('spinning'), 600);
+                if (!silent) showToast("✅ רענון נתונים מהענן בוצע");
+            }, (err) => {
+                console.error(err);
                 updateSyncStatus('error', 'שגיאת חיבור');
-                if (!silent)
-                    showToast('❌ שגיאה ברענון. בדוק חיבור אינטרנט.', null, 4000, null, true);
-            } finally {
-                if (btn) {
-                    setTimeout(() => btn.classList.remove('spinning'), 600);
-                }
-            }
+                if (btn) setTimeout(() => btn.classList.remove('spinning'), 600);
+                if (!silent) showToast('❌ שגיאה ברענון. בדוק חיבור אינטרנט.', null, 4000, null, true);
+            });
         }
 
         // ═══════════════════════════════════════════════════════════════════════
