@@ -100,8 +100,15 @@
         .btn-login { background: var(--google-btn); color: white; border: none; padding: 10px 24px; border-radius: 30px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; }
         .btn-action-sm { background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 8px 14px; border-radius: 8px; cursor: pointer; margin-left: 5px; font-size: 0.85rem; }
 
-        #welcomeScreen { display: none; flex-direction: column; align-items: center; text-align: center; padding: 40px 20px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border); margin-top: 20px; }
-        #welcomeScreen.visible { display: flex; }
+       #welcomeScreen { display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border); min-height: 80vh; margin-bottom: 20px; }
+        #welcomeScreen.visible { display: flex !important; }
+        
+        .timer-ring { position: relative; width: 100px; height: 100px; margin-bottom: 20px; }
+        .timer-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+        .timer-ring circle { fill: none; stroke-width: 6; stroke: rgba(127,127,127,0.2); }
+        .timer-ring .progress { stroke: var(--primary-color); stroke-dasharray: 283; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear; }
+        .timer-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 3rem; text-shadow: 0 0 20px rgba(255,255,255,0.2); }
+        
         .auth-required { transition: opacity 0.3s ease; }
         .auth-required.locked { display: none !important; }
 
@@ -397,16 +404,22 @@
         </div>
     </div>
 
-<div id="welcomeScreen" class="visible">
-    <div style="font-size:4.5rem; margin-bottom:10px; text-shadow: 0 0 20px rgba(255,255,255,0.2);">🔒</div>
-        <div style="margin-bottom: 25px; padding: 14px; background: linear-gradient(135deg, rgba(217, 48, 37, 0.15), rgba(217, 48, 37, 0.05)); border: 1px solid rgba(217, 48, 37, 0.4); border-radius: 12px; font-size: 0.85rem; color: #fca5a5; max-width: 90%; line-height: 1.5; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: right; backdrop-filter: blur(5px);">
-            <span style="display:flex; align-items:center; gap:8px; font-size:1rem; margin-bottom:6px; color: #f87171;">⚠️ <b>הבהרה משפטית</b></span>
-            כל שימוש במערכת ובכלים המוצעים בה הוא על אחריות המשתמש בלבד. האתר אינו נושא בשום אחריות לכל נזק, אובדן מידע, או כל תוצאה אחרת שתנבע מהשימוש בו.
-        </div>
-        <h2 style="margin-bottom: 10px;">ברוכים הבאים לאתר שלי,<br><span style="color: var(--primary-color);">MH Link Manager Pro</span></h2>
-        <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 5px;">כדי לשמור על פרטיותך, הקישורים נטענים מהענן בלבד.</p>
-        <p style="color: var(--text-secondary); font-size: 0.95rem;">בעת יציאה (Logout) הכל נמחק מהמכשיר לחלוטין.</p>
-    </div>
+<div id="welcomeScreen" style="display:none;" class="visible">
+        <div class="timer-ring">
+            <svg viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="45"></circle>
+                <circle class="progress" cx="50" cy="50" r="45"></circle>
+            </svg>
+            <div class="timer-icon">🔒</div>
+        </div>
+        <div style="margin-bottom: 25px; padding: 16px; background: linear-gradient(135deg, rgba(217, 48, 37, 0.15), rgba(217, 48, 37, 0.05)); border: 1px solid rgba(217, 48, 37, 0.4); border-radius: 12px; font-size: 0.85rem; color: #fca5a5; max-width: 400px; width: 90%; line-height: 1.5; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: right; backdrop-filter: blur(5px);">
+            <span style="display:flex; align-items:center; gap:8px; font-size:1rem; margin-bottom:6px; color: #f87171;">⚠️ <b>הבהרה משפטית</b></span>
+            כל שימוש במערכת ובכלים המוצעים בה הוא על אחריות המשתמש בלבד. האתר אינו נושא בשום אחריות לכל נזק, אובדן מידע, או כל תוצאה אחרת שתנבע מהשימוש בו.
+        </div>
+        <h2 style="margin-bottom: 10px;">ברוכים הבאים לאתר שלי,<br><span style="color: var(--primary-color);">MH Link Manager Pro</span></h2>
+        <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 5px;">כדי לשמור על פרטיותך, הקישורים נטענים מהענן בלבד.</p>
+        <p style="color: var(--text-secondary); font-size: 0.95rem;">בעת יציאה (Logout) הכל נמחק מהמכשיר לחלוטין.</p>
+    </div>
 
     <div id="protectedContent" class="auth-required locked">
         <div id="controlsArea" class="glass-panel">
@@ -821,25 +834,29 @@
                 }
             });
 
-            // ניהול סנכרון חי ורציף (Real-time Enterprise Sync)
-            document.addEventListener('visibilitychange', async () => {
-                if (document.visibilityState === 'visible' && state.user && navigator.onLine) {
-                    try {
-                        if (typeof wakeLock !== 'undefined' && wakeLock !== null && 'wakeLock' in navigator) {
-                            wakeLock = await navigator.wakeLock.request('screen').catch(console.error);
-                        }
-                        
-                        updateSyncStatus('syncing', 'מחדש חיבור ענן...');
-                        // מכת חשמל לפיירבייס: סוגר ופותח את שקע הרשת כדי לכפות סנכרון onSnapshot מיידי
-                        await disableNetwork(db);
-                        await enableNetwork(db);
-                        
-                    } catch (e) { 
-                        console.error("Network reset err:", e); 
-                        forceReload(); // גיבוי קלאסי למקרה שהרשת ממש תקועה
-                    }
-                }
-            });
+            // כפיית סנכרון אגרסיבית (Enterprise Focus Sync)
+            // עובד גם כשהחלון מקבל פוקוס במחשב וגם כשהאפליקציה חוזרת מהרקע במובייל
+            const triggerSync = async () => {
+                if (state.user && navigator.onLine) {
+                    try {
+                        if (typeof wakeLock !== 'undefined' && wakeLock !== null && 'wakeLock' in navigator) {
+                            wakeLock = await navigator.wakeLock.request('screen').catch(console.error);
+                        }
+                        updateSyncStatus('syncing', 'מסנכרן...');
+                        // אתחול עמוק שמעיר את השרת של גוגל ומכריח משיכה חדשה
+                        await disableNetwork(db);
+                        await enableNetwork(db);
+                    } catch (e) { 
+                        forceReload(true); // גיבוי שקט
+                    }
+                }
+            };
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') triggerSync();
+            });
+            
+            window.addEventListener('focus', triggerSync);
 
             document.getElementById('editItemForm')?.addEventListener('submit', handleEditSubmit);
             document.getElementById('editAiForm')?.addEventListener('submit', handleEditAiSubmit);
@@ -914,7 +931,7 @@
         // ══════════════════════════════════════════════════════════════════════════
         // FIREBASE / AUTH
         // ══════════════════════════════════════════════════════════════════════════
-       function setupFirebaseListeners() {
+      function setupFirebaseListeners() {
             if (!auth || !db) return;
             onAuthStateChanged(auth, (user) => {
                 if (user) {
@@ -1011,12 +1028,47 @@
                 hideLoader();
             });
         }
+        let welcomeTimer = null;
         function toggleAppInterface(isLoggedIn) {
             document.getElementById('loggedInView').style.display = isLoggedIn ? 'flex' : 'none';
             document.getElementById('loggedOutView').style.display = isLoggedIn ? 'none' : 'flex';
-            document.getElementById('welcomeScreen').classList.toggle('visible', !isLoggedIn);
-            document.getElementById('protectedContent').classList.toggle('locked', !isLoggedIn);
-            if (!isLoggedIn) document.getElementById('itemCount').textContent = "ממתין להתחברות...";
+            
+            const welcomeScreen = document.getElementById('welcomeScreen');
+            const protectedContent = document.getElementById('protectedContent');
+            const progressCircle = document.querySelector('.timer-ring .progress');
+            
+            if (!isLoggedIn) {
+                clearTimeout(welcomeTimer);
+                welcomeScreen.style.display = 'flex';
+                welcomeScreen.classList.add('visible');
+                protectedContent.classList.add('locked');
+                document.getElementById('itemCount').textContent = "ממתין להתחברות...";
+                if (progressCircle) { progressCircle.style.transition = 'none'; progressCircle.style.strokeDashoffset = '0'; }
+            } else {
+                // המשתמש מחובר - מציג את מסך ההמתנה עם טיימר
+                welcomeScreen.style.display = 'flex';
+                welcomeScreen.classList.add('visible');
+                protectedContent.classList.add('locked');
+                
+                let secondsLeft = 3;
+                if (progressCircle) {
+                    progressCircle.style.transition = 'stroke-dashoffset 1s linear';
+                    progressCircle.style.strokeDashoffset = '283'; // התחלת התרוקנות המעגל
+                }
+                
+                const tick = setInterval(() => {
+                    secondsLeft--;
+                    if (progressCircle) {
+                        progressCircle.style.strokeDashoffset = (283 - (283 * (3 - secondsLeft) / 3));
+                    }
+                    if (secondsLeft <= 0) {
+                        clearInterval(tick);
+                        welcomeScreen.style.display = 'none';
+                        welcomeScreen.classList.remove('visible');
+                        protectedContent.classList.remove('locked');
+                    }
+                }, 1000);
+            }
         }
 
         function updateSyncStatus(status, label) {
