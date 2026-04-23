@@ -57,3 +57,24 @@ self.addEventListener('fetch', event => {
       .catch(() => caches.match(event.request))
   );
 });
+// טיפול בלחיצה על התראות מערכת (Push Notifications)
+self.addEventListener('notificationclick', event => {
+  event.notification.close(); // סוגר את ההתראה
+  
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      // אם האפליקציה כבר פתוחה באחד הטאבים, נביא אותה לפרונט
+      if (clientList.length > 0) {
+        let client = clientList[0];
+        for (let i = 0; i < clientList.length; i++) {
+          if (clientList[i].focused) {
+            client = clientList[i];
+          }
+        }
+        return client.focus();
+      }
+      // אם היא סגורה לגמרי, נפתח אותה מחדש
+      return clients.openWindow('/');
+    })
+  );
+});
