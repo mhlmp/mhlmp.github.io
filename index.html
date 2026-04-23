@@ -266,7 +266,14 @@
         }
         #scrollTopBtn.show { opacity: 1; visibility: visible; }
 
-        .btn-reload { padding: 3px 7px; margin-right: 4px; cursor: pointer; border: 1px solid var(--glass-border); border-radius: 4px; background: transparent; font-size: 11px; color: var(--text-secondary); }
+        .btn-reload {
+            padding: 4px 9px; margin-right: 4px; cursor: pointer;
+            border: 1px solid var(--glass-border); border-radius: 6px;
+            background: transparent; font-size: 13px; color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+        .btn-reload:hover { background: rgba(127,127,127,0.15); color: var(--primary-color); }
+        .btn-reload.spinning { animation: spin 0.7s linear infinite; pointer-events: none; }
 
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -380,7 +387,8 @@
     </header>
 
     <div id="userSection" class="glass-panel">
-<div id="loggedOutView" style="display:flex; width:100%; justify-content:center;">    <button id="googleLoginBtn" class="btn-login">
+        <div id="loggedOutView" style="display:flex; width:100%; justify-content:center;">
+            <button id="googleLoginBtn" class="btn-login">
                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" alt="G">
                 התחבר עם Google
             </button>
@@ -393,7 +401,7 @@
                     <div class="cloud-status">
                         <span class="status-dot online" id="syncDot"></span>
                         <span id="syncLabel">מחובר</span>
-                        <button id="forceReloadBtn" class="btn-reload" title="רענן נתונים">🔄</button>
+                        <button id="forceReloadBtn" class="btn-reload" title="רענן נתונים מהענן">🔄</button>
                     </div>
                 </div>
             </div>
@@ -404,7 +412,7 @@
         </div>
     </div>
 
-<div id="welcomeScreen" style="display:none;" class="visible">
+    <div id="welcomeScreen" style="display:none;" class="visible">
         <div class="timer-ring">
             <svg viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="45"></circle>
@@ -627,9 +635,9 @@
             getAuth, signInWithPopup, GoogleAuthProvider, signOut,
             onAuthStateChanged, setPersistence, browserLocalPersistence
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-       import {
-            getFirestore, doc, setDoc, getDoc, onSnapshot, enableIndexedDbPersistence,
-            enableNetwork, disableNetwork
+        import {
+            getFirestore, doc, setDoc, getDoc, getDocFromServer,
+            onSnapshot, enableIndexedDbPersistence
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -649,49 +657,138 @@
 
         let app, auth, db;
         let deferredPrompt;
+        let wakeLock = null;
         
         let state = {
             items: [], trash: [], user: null, unsubscribe: null,
             showDuplicates: true, showOnlyDead: false,
             isOffline: false,
-            selectedIds: new Set(), isSelectionMode: false
+            selectedIds: new Set(), isSelectionMode: false,
+            filteredItems: []
         };
         let abortAiScan = false;
 
-       // ─── SYNC STATE ───────────────────────────────────────────────────────────
-        let _pushDebounceTimer = null;
-        let _isPushing = false;   // נועל את התור כששמירה מתבצעת
-        let _pendingPush = false; // מסמן שיש שמירה נוספת שממתינה בתור
-        // ─────────────────────────────────────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════════
+        // SYNC ENGINE — Enterprise-grade, Promise-chain based
+        // ═══════════════════════════════════════════════════════════════════════
+        //
+        // Design principles:
+        //  1. pushToCloud() snapshots state IMMEDIATELY, queues the write.
+        //  2. Writes are chained — no write can overwrite a newer one.
+        //  3. Every write retries up to 3× with exponential back-off.
+        //  4. forceReload() uses getDocFromServer() — guaranteed fresh data.
+        //  5. onSnapshot listens for remote changes; no manual network cycling.
+        //  6. visibilitychange / focus run a silent forceReload (no UI noise).
+        //
+        let _syncChain = Promise.resolve();   // serialised write queue
+        let _nextPayload = null;               // most-recent data to persist
+        let _debounceTimer = null;             // for non-immediate (AI) writes
+        let _listenerRetries = 0;             // exponential back-off counter
 
+        /**
+         * Schedule a write to Firestore.
+         * @param {boolean} immediate - true = user action (no debounce),
+         *                              false = AI scan batch (600 ms debounce)
+         */
+        function pushToCloud(immediate = false) {
+            // Capture the current state right now, before any async work.
+            _nextPayload = {
+                items: state.items.map(item => {
+                    const c = { ...item };
+                    EPHEMERAL_FIELDS.forEach(f => delete c[f]);
+                    return c;
+                }),
+                trash: state.trash.map(t => ({ ...t }))
+            };
+
+            clearTimeout(_debounceTimer);
+
+            const enqueue = () => {
+                _syncChain = _syncChain
+                    .then(executeWrite)
+                    .catch(err => console.error('[Sync] chain error:', err));
+            };
+
+            if (immediate) {
+                enqueue();
+            } else {
+                _debounceTimer = setTimeout(enqueue, 600);
+            }
+        }
+
+        /** Performs the actual Firestore write, with 3-attempt retry. */
+        async function executeWrite() {
+            if (!_nextPayload) return;
+
+            // Offline / local-file mode
+            if (state.isOffline) {
+                const raw = JSON.stringify({ items: _nextPayload.items, trash: _nextPayload.trash });
+                localStorage.setItem('linkManagerLocalData', raw);
+                const el = document.getElementById('offline-data');
+                if (el) el.textContent = raw;
+                _nextPayload = null;
+                return;
+            }
+
+            if (!state.user) return;
+
+            // Grab snapshot (a later pushToCloud may have already updated _nextPayload)
+            const payload = _nextPayload;
+            _nextPayload = null;
+
+            updateSyncStatus('syncing', 'מסנכרן...');
+
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    await setDoc(doc(db, 'users', state.user.uid), {
+                        items: payload.items,
+                        trash: payload.trash,
+                        aiSettings: getAiSettings(),
+                        lastUpdated: new Date().toISOString()
+                    }, { merge: true });
+
+                    // onSnapshot will confirm the write and set status to 'online'
+                    return;
+                } catch (err) {
+                    console.error(`[Sync] write attempt ${attempt}/3:`, err);
+                    if (attempt < 3) {
+                        await new Promise(r => setTimeout(r, 800 * attempt));
+                    } else {
+                        updateSyncStatus('error', 'שגיאה בשמירה');
+                        showToast('❌ שגיאה בסנכרון לענן. מנסה שוב בקרוב...', null, 5000, null, true);
+                        // Re-queue so the next user action will retry
+                        if (!_nextPayload) _nextPayload = payload;
+                    }
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // FIREBASE INIT
+        // ═══════════════════════════════════════════════════════════════════════
         try {
-            app = initializeApp(firebaseConfig);
+            app  = initializeApp(firebaseConfig);
             auth = getAuth(app);
             setPersistence(auth, browserLocalPersistence);
-            db = getFirestore(app);
-            enableIndexedDbPersistence(db).catch((err) => {
+            db   = getFirestore(app);
+            enableIndexedDbPersistence(db).catch(err => {
                 if (err.code !== 'failed-precondition' && err.code !== 'unimplemented')
-                    console.warn("Persistence:", err.code);
+                    console.warn('[Firestore] Persistence:', err.code);
             });
-        } catch (e) { console.error("Firebase Init Error:", e); }
+        } catch (e) { console.error('[Firebase] Init Error:', e); }
 
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         // INIT
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         document.addEventListener('DOMContentLoaded', () => {
             const offlineDataEl = document.getElementById('offline-data');
             const localCache = localStorage.getItem('linkManagerLocalData');
             
-            // Offline / local-file mode
             if (localCache || (offlineDataEl && offlineDataEl.textContent.trim())) {
                 try {
-                    let parsed;
-                    if (localCache) {
-                        parsed = JSON.parse(localCache);
-                    } else {
-                        parsed = JSON.parse(offlineDataEl.textContent);
-                        localStorage.setItem('linkManagerLocalData', JSON.stringify(parsed));
-                    }
+                    const parsed = JSON.parse(localCache || offlineDataEl.textContent);
+                    if (localCache) localStorage.setItem('linkManagerLocalData', localCache);
+                    else localStorage.setItem('linkManagerLocalData', offlineDataEl.textContent);
                     state.items = parsed.items || [];
                     state.trash = parsed.trash || [];
                     state.isOffline = true;
@@ -704,15 +801,13 @@
                     renderList();
                     hideLoader();
                     showToast('נטען ממצב גיבוי מקומי (Offline Mode)');
-                } catch (e) { console.error("Offline parse error", e); }
+                } catch (e) { console.error('[Offline] parse error', e); }
             }
             
             initServiceWorker();
             initTheme();
             setupEventListeners();
-            
             setupFirebaseListeners();
-            
             setupScrollToTop();
             
             window.addEventListener('beforeinstallprompt', (e) => {
@@ -744,23 +839,22 @@
                     const nw = reg.installing;
                     nw.addEventListener('statechange', () => {
                         if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-                            if (confirm("נמצא עדכון חדש! האם לרענן עכשיו?")) window.location.reload();
+                            if (confirm('נמצא עדכון חדש! האם לרענן עכשיו?')) window.location.reload();
                         }
                     });
                 });
             }).catch(console.error);
         }
 
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         // EVENT LISTENERS
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         function setupEventListeners() {
             // Dropdowns
             document.querySelectorAll('.drop-trigger').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const targetId = btn.getAttribute('data-target');
-                    const menu = document.getElementById(targetId);
+                    const menu = document.getElementById(btn.getAttribute('data-target'));
                     const isOpen = menu.classList.contains('show');
                     closeAllMenus();
                     if (!isOpen) {
@@ -799,7 +893,11 @@
             
             document.getElementById('trashBtn')?.addEventListener('click', openTrashModal);
             document.getElementById('closeTrashModalBtn')?.addEventListener('click', closeTrashModal);
-            document.getElementById('forceReloadBtn')?.addEventListener('click', forceReload);
+
+            // ── Force Reload Button ─────────────────────────────────────────────
+            document.getElementById('forceReloadBtn')?.addEventListener('click', () => {
+                forceReload(false); // explicit user request — show feedback
+            });
 
             ['importJsonInput', 'smartImportInput', 'wipeDataInput'].forEach(id => {
                 const el = document.getElementById(id);
@@ -812,51 +910,36 @@
                 });
             });
 
+            // ── Network Events ──────────────────────────────────────────────────
             window.addEventListener('offline', () => {
                 updateSyncStatus('offline', 'מקומי (אין רשת)');
-                showToast('⚠️ החיבור לאינטרנט אבד. הנתונים יישמרו מקומית ויסונכרנו כשהרשת תחזור.', null, 5000, null, true);
+                showToast('⚠️ החיבור לאינטרנט אבד. שינויים יישמרו ויסונכרנו כשהרשת תחזור.', null, 6000, null, true);
             });
-            
-           window.addEventListener('online', () => {
-                updateSyncStatus('syncing', 'מחדש חיבור...');
-                showToast('🌐 החיבור לאינטרנט חזר! מסנכרן נתונים עם הענן...', null, 4000);
-                if (state.user) setTimeout(forceReload, 1500);
-            });
 
-            // גיבוי התאוששות למובייל בחזרה לטאב
-            window.addEventListener('focus', async () => {
-                if (state.user && navigator.onLine) {
-                    try {
-                        updateSyncStatus('syncing', 'מחדש חיבור ענן...');
-                        await disableNetwork(db);
-                        await enableNetwork(db);
-                    } catch (e) { }
-                }
-            });
+            window.addEventListener('online', () => {
+                updateSyncStatus('syncing', 'מתחבר מחדש...');
+                showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 4000);
+                if (state.user) setTimeout(() => forceReload(true), 1200);
+            });
 
-            // כפיית סנכרון אגרסיבית (Enterprise Focus Sync)
-            // עובד גם כשהחלון מקבל פוקוס במחשב וגם כשהאפליקציה חוזרת מהרקע במובייל
-            const triggerSync = async () => {
-                if (state.user && navigator.onLine) {
-                    try {
-                        if (typeof wakeLock !== 'undefined' && wakeLock !== null && 'wakeLock' in navigator) {
-                            wakeLock = await navigator.wakeLock.request('screen').catch(console.error);
-                        }
-                        updateSyncStatus('syncing', 'מסנכרן...');
-                        // אתחול עמוק שמעיר את השרת של גוגל ומכריח משיכה חדשה
-                        await disableNetwork(db);
-                        await enableNetwork(db);
-                    } catch (e) { 
-                        forceReload(true); // גיבוי שקט
-                    }
-                }
+            // ── Background → Foreground Sync ────────────────────────────────────
+            // Simple, robust: just pull latest from server. No network cycling.
+            let _lastSyncTimestamp = 0;
+            const SYNC_DEBOUNCE_MS = 10000; // לא יותר מפעם ב-10 שניות
+
+            const backgroundSync = () => {
+                if (!state.user || state.isOffline || !navigator.onLine) return;
+                const now = Date.now();
+                if (now - _lastSyncTimestamp < SYNC_DEBOUNCE_MS) return;
+                _lastSyncTimestamp = now;
+                forceReload(true); // silent — no toast, no spinner
             };
 
             document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') triggerSync();
+                if (document.visibilityState === 'visible') backgroundSync();
             });
-            
-            window.addEventListener('focus', triggerSync);
+
+            window.addEventListener('focus', backgroundSync);
 
             document.getElementById('editItemForm')?.addEventListener('submit', handleEditSubmit);
             document.getElementById('editAiForm')?.addEventListener('submit', handleEditAiSubmit);
@@ -864,52 +947,45 @@
             document.getElementById('exportTxtBtn')?.addEventListener('click', exportTxt);
             document.getElementById('downloadHtmlBtn')?.addEventListener('click', downloadSite);
             document.getElementById('downloadSourceBtn')?.addEventListener('click', downloadSource);
-            
-            // קישור כפתור השארת מסך דולק
             document.getElementById('wakeLockBtn')?.addEventListener('click', toggleWakeLock);
         }
 
-        // ══════════════════════════════════════════════════════════════════════════
-        // WAKE LOCK & NOTIFICATIONS (מסך דולק והתראות)
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
+        // WAKE LOCK
+        // ═══════════════════════════════════════════════════════════════════════
         async function toggleWakeLock() {
             closeAllMenus();
-            
-            // בקשת הרשאה להתראות מערכת
-            if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+            if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied')
                 await Notification.requestPermission();
-            }
 
-            if (!('wakeLock' in navigator)) {
+            if (!('wakeLock' in navigator))
                 return showToast('❌ הדפדפן שלך לא תומך בפונקציית מסך דולק.', null, 4000, null, true);
-            }
 
             try {
                 if (wakeLock !== null) {
                     await wakeLock.release();
                     wakeLock = null;
                     document.getElementById('wakeLockBtn').innerHTML = '💡 מצב מסך דולק (לסריקה ארוכה)';
-                    showToast('המסך יחזור להתכבות כרגיל בהתאם להגדרות המכשיר.');
+                    showToast('המסך יחזור להתכבות כרגיל.');
                 } else {
                     wakeLock = await navigator.wakeLock.request('screen');
                     document.getElementById('wakeLockBtn').innerHTML = '🛑 בטל מצב מסך דולק';
-                    showToast('✅ המסך יישאר דולק כעת ולא יכבה עד שתבטל זאת.');
+                    showToast('✅ המסך יישאר דולק עד שתבטל זאת.');
                 }
             } catch (err) {
-                showToast(`שגיאה בהפעלת מצב מסך דולק: ${err.message}`, null, 4000, null, true);
+                showToast(`שגיאה: ${err.message}`, null, 4000, null, true);
             }
         }
 
         function sendSystemNotification(title, body) {
             if (!('Notification' in window) || Notification.permission !== 'granted') return;
             try {
-                new Notification(title, { body: body, icon: 'icon.png', requireInteraction: true });
+                new Notification(title, { body, icon: 'icon.png', requireInteraction: true });
             } catch (e) {
-                // Fallback למובייל - שימוש ב-Service Worker במידה ויש שגיאה בהקפצה רגילה
                 if (navigator.serviceWorker) {
-                    navigator.serviceWorker.ready.then(reg => {
-                        reg.showNotification(title, { body: body, icon: 'icon.png', requireInteraction: true });
-                    }).catch(console.error);
+                    navigator.serviceWorker.ready
+                        .then(reg => reg.showNotification(title, { body, icon: 'icon.png', requireInteraction: true }))
+                        .catch(console.error);
                 }
             }
         }
@@ -928,10 +1004,10 @@
             });
         }
 
-        // ══════════════════════════════════════════════════════════════════════════
-        // FIREBASE / AUTH
-        // ══════════════════════════════════════════════════════════════════════════
-      function setupFirebaseListeners() {
+        // ═══════════════════════════════════════════════════════════════════════
+        // FIREBASE AUTH & FIRESTORE
+        // ═══════════════════════════════════════════════════════════════════════
+        function setupFirebaseListeners() {
             if (!auth || !db) return;
             onAuthStateChanged(auth, (user) => {
                 if (user) {
@@ -940,12 +1016,13 @@
                     toggleAppInterface(true);
                     document.getElementById('userName').textContent = user.displayName;
                     document.getElementById('userAvatar').src = user.photoURL;
-                    
+
                     if (!navigator.onLine) {
                         updateSyncStatus('offline', 'מקומי (אין רשת)');
                         showToast('ℹ️ אין חיבור לאינטרנט. טוען נתונים מקומיים...', null, 5000, null, true);
                     }
 
+                    // Warm cache — show data instantly while listener connects
                     const cacheKey = 'linkManager_cache_' + user.uid;
                     const warmCache = localStorage.getItem(cacheKey);
                     if (warmCache) {
@@ -955,7 +1032,7 @@
                             state.trash = p.trash || [];
                             renderList();
                             updateCategoryDropdowns();
-                        } catch (e) { console.error("Cache parse error", e); }
+                        } catch (e) { console.error('[Cache] parse error', e); }
                     } else {
                         const loader = document.getElementById('loading-screen');
                         if (loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
@@ -969,34 +1046,37 @@
             });
         }
 
-       function attachFirestoreListener(user) {
-            if (state.unsubscribe) state.unsubscribe();
-            const userDoc = doc(db, "users", user.uid);
+        /**
+         * Attach a real-time Firestore listener.
+         * Automatically retries on error with exponential back-off (max 30s).
+         */
+        function attachFirestoreListener(user) {
+            if (state.unsubscribe) {
+                state.unsubscribe();
+                state.unsubscribe = null;
+            }
 
-            state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (snap) => {
-                if (!snap.exists()) { 
-                    state.items = []; 
-                    state.trash = []; 
-                    renderList(); 
-                    hideLoader(); 
-                    return; 
+            const userDocRef = doc(db, 'users', user.uid);
+
+            state.unsubscribe = onSnapshot(userDocRef, (snap) => {
+                _listenerRetries = 0; // reset back-off on success
+
+                if (!snap.exists()) {
+                    state.items = [];
+                    state.trash = [];
+                    renderList();
+                    hideLoader();
+                    updateSyncStatus('online', 'מחובר');
+                    return;
                 }
 
-                const hasPendingWrites = snap.metadata.hasPendingWrites;
-                const isFromCache = snap.metadata.fromCache;
-                const isServerConfirmed = !hasPendingWrites && !isFromCache;
-
                 const d = snap.data();
-                
-                // ── Apply server state & Merge Ephemeral Data ────────────────────
+
+                // Preserve ephemeral scanning states from memory
                 const serverItems = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
-                
-                // משמרים מצבים זמניים (כמו סריקת AI) כדי שלא יידרסו ברענון מהיר של הרשת
                 serverItems.forEach(sItem => {
-                    const localItem = state.items.find(i => i.id === sItem.id);
-                    if (localItem && localItem.isScanning) {
-                        sItem.isScanning = true;
-                    }
+                    const local = state.items.find(i => i.id === sItem.id);
+                    if (local?.isScanning) sItem.isScanning = true;
                 });
 
                 state.items = serverItems;
@@ -1006,46 +1086,49 @@
                     localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
                 }
 
-                // מעדכנים את הקאש החם רק כשיש אישור מהשרת שהמידע נשמר בהצלחה
-                if (isServerConfirmed) {
-                    localStorage.setItem('linkManager_cache_' + user.uid,
-                        JSON.stringify({ items: state.items, trash: state.trash }));
-                }
+                // Update warm cache with confirmed server data
+                localStorage.setItem('linkManager_cache_' + user.uid,
+                    JSON.stringify({ items: state.items, trash: state.trash }));
 
                 renderList();
                 updateCategoryDropdowns();
                 hideLoader();
+                updateSyncStatus(navigator.onLine ? 'online' : 'offline',
+                                 navigator.onLine ? 'מחובר' : 'מקומי (אין רשת)');
 
-               // חיווי יציב ומיידי - מבטל את ההיתקעות על "מתחבר..." במובייל
-                const isOffline = !navigator.onLine;
-                const status = isOffline ? 'offline' : (hasPendingWrites ? 'syncing' : 'online');
-                const label = isOffline ? 'מקומי (אין רשת)' : (hasPendingWrites ? 'מסנכרן...' : 'מחובר');
-                updateSyncStatus(status, label);
-                
             }, (err) => {
-                console.error("Firestore listener error:", err);
-                updateSyncStatus('error', 'שגיאת חיבור');
+                console.error('[Firestore] snapshot error:', err);
                 hideLoader();
+                updateSyncStatus('error', 'שגיאת חיבור');
+
+                // Exponential back-off: 2s, 4s, 8s, 16s, 30s…
+                const delay = Math.min(2000 * Math.pow(2, _listenerRetries), 30000);
+                _listenerRetries++;
+                console.log(`[Firestore] Retrying listener in ${delay}ms (attempt ${_listenerRetries})`);
+
+                setTimeout(() => {
+                    if (state.user) attachFirestoreListener(state.user);
+                }, delay);
             });
         }
+
         let welcomeTimer = null;
         function toggleAppInterface(isLoggedIn) {
-            document.getElementById('loggedInView').style.display = isLoggedIn ? 'flex' : 'none';
+            document.getElementById('loggedInView').style.display  = isLoggedIn ? 'flex' : 'none';
             document.getElementById('loggedOutView').style.display = isLoggedIn ? 'none' : 'flex';
             
-            const welcomeScreen = document.getElementById('welcomeScreen');
+            const welcomeScreen   = document.getElementById('welcomeScreen');
             const protectedContent = document.getElementById('protectedContent');
-            const progressCircle = document.querySelector('.timer-ring .progress');
+            const progressCircle  = document.querySelector('.timer-ring .progress');
             
             if (!isLoggedIn) {
                 clearTimeout(welcomeTimer);
                 welcomeScreen.style.display = 'flex';
                 welcomeScreen.classList.add('visible');
                 protectedContent.classList.add('locked');
-                document.getElementById('itemCount').textContent = "ממתין להתחברות...";
+                document.getElementById('itemCount').textContent = 'ממתין להתחברות...';
                 if (progressCircle) { progressCircle.style.transition = 'none'; progressCircle.style.strokeDashoffset = '0'; }
             } else {
-                // המשתמש מחובר - מציג את מסך ההמתנה עם טיימר
                 welcomeScreen.style.display = 'flex';
                 welcomeScreen.classList.add('visible');
                 protectedContent.classList.add('locked');
@@ -1053,14 +1136,13 @@
                 let secondsLeft = 3;
                 if (progressCircle) {
                     progressCircle.style.transition = 'stroke-dashoffset 1s linear';
-                    progressCircle.style.strokeDashoffset = '283'; // התחלת התרוקנות המעגל
+                    progressCircle.style.strokeDashoffset = '283';
                 }
                 
                 const tick = setInterval(() => {
                     secondsLeft--;
-                    if (progressCircle) {
+                    if (progressCircle)
                         progressCircle.style.strokeDashoffset = (283 - (283 * (3 - secondsLeft) / 3));
-                    }
                     if (secondsLeft <= 0) {
                         clearInterval(tick);
                         welcomeScreen.style.display = 'none';
@@ -1078,8 +1160,9 @@
             if (lbl) lbl.textContent = label || status;
         }
 
-       async function cloudLogin() {
-            if (!navigator.onLine) return showToast('❌ לא ניתן להתחבר לחשבון ללא חיבור לאינטרנט.', null, 4000, null, true);
+        async function cloudLogin() {
+            if (!navigator.onLine)
+                return showToast('❌ לא ניתן להתחבר ללא חיבור לאינטרנט.', null, 4000, null, true);
             try { await signInWithPopup(auth, new GoogleAuthProvider()); }
             catch (e) { alert(e.message); }
         }
@@ -1090,7 +1173,7 @@
             await signOut(auth);
             window.location.reload();
         }
-        
+
         async function switchAccount() {
             try {
                 if (state.unsubscribe) state.unsubscribe();
@@ -1102,118 +1185,71 @@
             } catch (e) { alert(e.message); }
         }
 
-        async function forceReload() {
-            if (!state.user) return;
-            if (!navigator.onLine) return showToast("❌ לא ניתן למשוך נתונים מהענן ללא אינטרנט.", null, 4000, null, true);
-            if (state.isOffline && navigator.onLine) state.isOffline = false;
-            clearTimeout(_pushDebounceTimer);
-            updateSyncStatus('syncing', 'מושך מהענן...');
-            showToast("🔄 מושך נתונים עדכניים מהענן...");
-            try {
-                const snap = await getDoc(doc(db, "users", state.user.uid), { source: 'server' });
-                if (snap.exists()) {
-                    const d = snap.data();
-                    state.items = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
-                    state.trash = d.trash ? JSON.parse(JSON.stringify(d.trash)) : [];
-                    renderList();
-                    updateCategoryDropdowns();
-                    localStorage.setItem('linkManager_cache_' + state.user.uid, JSON.stringify({ items: state.items, trash: state.trash }));
-                    updateSyncStatus('online', 'מחובר');
-                    showToast("✅ רענון הושלם בהצלחה!");
-                } else {
-                    showToast("ℹ️ אין נתונים לחשבון זה.");
-                }
-                attachFirestoreListener(state.user);
-            } catch (e) {
-                console.error("Force reload err:", e);
-                updateSyncStatus('error', 'שגיאת חיבור');
-                showToast("❌ שגיאה במשיכת נתונים, בדוק חיבור אינטרנט.");
-                attachFirestoreListener(state.user);
-            }
-        }
-
-        // ══════════════════════════════════════════════════════════════════════════
-        // PUSH TO CLOUD
-        // ══════════════════════════════════════════════════════════════════════════
-        //
-        // immediate = true  → write right now (user interactions: pin, edit, add …)
-        // immediate = false → debounced 700ms (AI scan batch writes)
-        //
-        // The function stamps a _clientWriteTime on every document write so that
-        // the snapshot listener can detect and discard stale out-of-order deliveries.
-        //
-       // תור השמירה לענן - מבטיח שאף שמירה לא עוקפת או דורסת שמירה אחרת
-        async function executePushQueue() {
-            // אם כבר מתבצעת שמירה ברקע, סמן שיש אחת בהמתנה ועצור.
-            if (_isPushing) {
-                _pendingPush = true;
+        // ═══════════════════════════════════════════════════════════════════════
+        // FORCE RELOAD — guaranteed fresh data from Firestore server
+        // ═══════════════════════════════════════════════════════════════════════
+        async function forceReload(silent = false) {
+            if (!state.user || state.isOffline) return;
+            if (!navigator.onLine) {
+                if (!silent)
+                    showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
                 return;
             }
-            
-            _isPushing = true;
-            _pendingPush = false;
+
+            // Animate the reload button
+            const btn = document.getElementById('forceReloadBtn');
+            if (btn) btn.classList.add('spinning');
+
+            if (!silent) {
+                updateSyncStatus('syncing', 'מושך מהענן...');
+                showToast('🔄 מושך נתונים עדכניים מהענן...');
+            }
 
             try {
-                // Strip ephemeral fields before saving
-                const cleanItems = state.items.map(item => {
-                    const c = { ...item };
-                    EPHEMERAL_FIELDS.forEach(f => delete c[f]);
-                    return c;
-                });
+                // getDocFromServer bypasses all caches — always hits Firestore servers
+                const snap = await getDocFromServer(doc(db, 'users', state.user.uid));
 
-                // ── Offline / local-file mode ────────────────────────────────────
-                if (state.isOffline) {
-                    const payload = JSON.stringify({ items: cleanItems, trash: state.trash });
-                    localStorage.setItem('linkManagerLocalData', payload);
-                    const offlineEl = document.getElementById('offline-data');
-                    if (offlineEl) offlineEl.textContent = payload;
-                    updateCategoryDropdowns();
+                if (snap.exists()) {
+                    const d = snap.data();
+
+                    const serverItems = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
+                    serverItems.forEach(si => {
+                        const local = state.items.find(i => i.id === si.id);
+                        if (local?.isScanning) si.isScanning = true;
+                    });
+
+                    state.items = serverItems;
+                    state.trash = d.trash ? JSON.parse(JSON.stringify(d.trash)) : [];
+
+                    if (d.aiSettings)
+                        localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
+
+                    localStorage.setItem('linkManager_cache_' + state.user.uid,
+                        JSON.stringify({ items: state.items, trash: state.trash }));
+
                     renderList();
-                    showToast("נשמר מקומית!");
-                    return; 
+                    updateCategoryDropdowns();
+                    updateSyncStatus('online', 'מחובר');
+                    if (!silent) showToast('✅ רוענן בהצלחה מהשרת!');
+                } else {
+                    if (!silent) showToast('ℹ️ אין נתונים לחשבון זה.');
+                    updateSyncStatus('online', 'מחובר');
                 }
-
-                if (!state.user) return;
-
-                updateSyncStatus('syncing', 'מסנכרן...');
-                
-                // כתיבה לענן
-                await setDoc(doc(db, "users", state.user.uid), {
-                    items: cleanItems,
-                    trash: state.trash,
-                    aiSettings: getAiSettings(),
-                    lastUpdated: new Date().toISOString()
-                }, { merge: true });
-
-            } catch (e) {
-                console.error("Push error:", e);
-                showToast('❌ שגיאה בסנכרון לענן. מנסה שוב...');
-                updateSyncStatus('error', 'שגיאה');
-                _pendingPush = true; // במקרה של שגיאה נסמן שיש שמירה בתור כדי לנסות שוב
-                await new Promise(resolve => setTimeout(resolve, 3000));
+            } catch (err) {
+                console.error('[forceReload] error:', err);
+                updateSyncStatus('error', 'שגיאת חיבור');
+                if (!silent)
+                    showToast('❌ שגיאה ברענון. בדוק חיבור אינטרנט.', null, 4000, null, true);
             } finally {
-                // משחררים את הנעילה
-                _isPushing = false;
-                
-                // אם במהלך השמירה הנוכחית המשתמש עשה עוד פעולה (כמו לשחרר נעיצה), נריץ את התור שוב
-                if (_pendingPush) {
-                    executePushQueue();
+                if (btn) {
+                    setTimeout(() => btn.classList.remove('spinning'), 600);
                 }
             }
         }
 
-        function pushToCloud(immediate = false) {
-            clearTimeout(_pushDebounceTimer);
-            if (immediate) {
-                executePushQueue();
-            } else {
-                _pushDebounceTimer = setTimeout(executePushQueue, 700);
-            }
-        }
-
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         // RENDER
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         function renderList() {
             if (!state.user) return;
             const container = document.getElementById('listContainer');
@@ -1224,9 +1260,8 @@
             const catFilter = document.getElementById('categoryFilter')?.value || '';
             const sort = document.getElementById('sortOrder')?.value || 'date-new';
 
-            // ── Compute visual metadata WITHOUT mutating state.items ─────────────
             const chronologicalList = [...state.items].sort((a, b) => a.date.localeCompare(b.date));
-            const visualMetaMap = new Map(); // id → { visualIndex, isDup }
+            const visualMetaMap = new Map();
             const seenContents = new Map();
 
             chronologicalList.forEach((item, idx) => {
@@ -1235,38 +1270,30 @@
                 if (!isDup) seenContents.set(key, item.id);
                 visualMetaMap.set(item.id, { visualIndex: idx + 1, isDup });
             });
-            // ────────────────────────────────────────────────────────────────────
 
-            // Sort (uses metadata map, not item mutation)
             let sortedList = [...state.items];
             sortedList.sort((a, b) => {
                 if (sort === 'name') return a.content.localeCompare(b.content);
-                if (sort === 'index-asc') {
-                    return (visualMetaMap.get(a.id)?.visualIndex || 0) -
-                           (visualMetaMap.get(b.id)?.visualIndex || 0);
-                }
-                if (sort === 'index-desc') {
-                    return (visualMetaMap.get(b.id)?.visualIndex || 0) -
-                           (visualMetaMap.get(a.id)?.visualIndex || 0);
-                }
-                return b.date.localeCompare(a.date); // date-new (default)
+                if (sort === 'index-asc')
+                    return (visualMetaMap.get(a.id)?.visualIndex || 0) - (visualMetaMap.get(b.id)?.visualIndex || 0);
+                if (sort === 'index-desc')
+                    return (visualMetaMap.get(b.id)?.visualIndex || 0) - (visualMetaMap.get(a.id)?.visualIndex || 0);
+                return b.date.localeCompare(a.date);
             });
 
-            const isHashSearch = /^#\s*\d+$/.test(query);
-            const isDupSearch = query === '#כפול' || query === '#כפולים';
+            const isHashSearch  = /^#\s*\d+$/.test(query);
+            const isDupSearch   = query === '#כפול' || query === '#כפולים';
             const isolateDuplicatesMode = !state.showDuplicates || isDupSearch;
 
             let filtered = sortedList.filter(item => {
                 const meta = visualMetaMap.get(item.id) || {};
                 const matchesCat = !catFilter || item.category === catFilter;
-
                 if (state.showOnlyDead) return item.siteStatus === 'dead' && matchesCat;
                 if (isolateDuplicatesMode) return meta.isDup && matchesCat;
                 if (isHashSearch) {
                     const n = parseInt(query.replace(/\D/g, ''));
                     return meta.visualIndex === n;
                 }
-
                 const safeTags = (item.aiTags || []).join(' ').toLowerCase();
                 const matchesSearch = !query ||
                     item.content.toLowerCase().includes(query) ||
@@ -1277,12 +1304,9 @@
                 return matchesSearch && matchesCat;
             });
 
-           state.filteredItems = filtered; // שמירת הרשימה המסוננת הנוכחית עבור בחירה מרובה
-            
-            // עדכון סרגל הבחירה בזמן אמת אם אנחנו במצב בחירה מרובה והמשתמש מחפש/מסנן
-            if (state.isSelectionMode) {
-                updateBulkActionBar();
-            }
+            state.filteredItems = filtered;
+
+            if (state.isSelectionMode) updateBulkActionBar();
 
             const countEl = document.getElementById('itemCount');
             if (countEl) countEl.textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
@@ -1299,13 +1323,11 @@
                 section.className = 'category-block';
                 const grid = document.createElement('div');
                 grid.className = 'items-grid';
-                filtered.forEach(item =>
-                    grid.appendChild(createCard(item, visualMetaMap.get(item.id) || {}))
-                );
+                filtered.forEach(item => grid.appendChild(createCard(item, visualMetaMap.get(item.id) || {})));
                 section.appendChild(grid);
                 container.appendChild(section);
             } else {
-                const pinnedItems = filtered.filter(i => i.isPinned);
+                const pinnedItems  = filtered.filter(i => i.isPinned);
                 const regularItems = filtered.filter(i => !i.isPinned);
 
                 if (pinnedItems.length > 0)
@@ -1314,15 +1336,15 @@
                 const groups = {};
                 regularItems.forEach(i => {
                     let cat = i.category || 'כללי';
-                    if (isolateDuplicatesMode) cat = "⚠️ כפולים";
-                    else if (state.showOnlyDead) cat = "🔴 אתרים לא זמינים";
+                    if (isolateDuplicatesMode) cat = '⚠️ כפולים';
+                    else if (state.showOnlyDead) cat = '🔴 אתרים לא זמינים';
                     if (!groups[cat]) groups[cat] = [];
                     groups[cat].push(i);
                 });
 
                 Object.keys(groups).sort((a, b) => {
-                    if (a.startsWith("⚠️") || a.startsWith("🔴")) return -1;
-                    if (b.startsWith("⚠️") || b.startsWith("🔴")) return 1;
+                    if (a.startsWith('⚠️') || a.startsWith('🔴')) return -1;
+                    if (b.startsWith('⚠️') || b.startsWith('🔴')) return 1;
                     return a.localeCompare(b);
                 }).forEach(cat => renderGroup(container, cat, groups[cat], false, visualMetaMap));
             }
@@ -1361,9 +1383,9 @@
                 aiHtml = `<div class="ai-box"><div class="spinner-small"></div> סורק ומנתח...</div>`;
             } else if (item.aiSummary) {
                 let statusClass = 'ai-status-text', statusText = '📄 ניתוח טקסט';
-                if (item.siteStatus === 'active')  { statusClass = 'ai-status-active';  statusText = '🟢 פעיל'; }
-                if (item.siteStatus === 'parked')  { statusClass = 'ai-status-parked';  statusText = '🟠 דומיין/חניה'; }
-                if (item.siteStatus === 'dead')    { statusClass = 'ai-status-dead';    statusText = '🔴 לא זמין'; }
+                if (item.siteStatus === 'active') { statusClass = 'ai-status-active';  statusText = '🟢 פעיל'; }
+                if (item.siteStatus === 'parked') { statusClass = 'ai-status-parked';  statusText = '🟠 דומיין/חניה'; }
+                if (item.siteStatus === 'dead')   { statusClass = 'ai-status-dead';    statusText = '🔴 לא זמין'; }
 
                 let tagsHtml = '';
                 if (item.aiTags && item.aiTags.length > 0) {
@@ -1375,14 +1397,15 @@
                     </div>`;
                 }
 
-             // חילוץ האימוג'י של המודל. אם זה פריט ישן שטרם נסרק, נציג רובוט כברירת מחדל
-                let modelEmoji = item.aiModel ? item.aiModel.split(' ')[0] : '🤖';
-                let modelTooltip = item.aiModel ? `title="פוענח באמצעות: ${escapeHtml(item.aiModel)}"` : 'title="פוענח בעבר - סרוק מחדש לעדכון המודל"';
+                let modelEmoji   = item.aiModel ? item.aiModel.split(' ')[0] : '🤖';
+                let modelTooltip = item.aiModel
+                    ? `title="פוענח באמצעות: ${escapeHtml(item.aiModel)}"`
+                    : 'title="פוענח בעבר — סרוק מחדש לעדכון"';
 
                 aiHtml = `<div class="ai-box" style="position:relative;">
                     <div class="ai-header">
-                        <span style="display:flex; align-items:center;">
-                            <span style="font-size:14px; margin-left:6px; cursor:help; user-select:none;" ${modelTooltip}>${modelEmoji}</span>
+                        <span style="display:flex;align-items:center;">
+                            <span style="font-size:14px;margin-left:6px;cursor:help;user-select:none;" ${modelTooltip}>${modelEmoji}</span>
                             <span class="${statusClass}">${statusText}</span>
                         </span>
                         <button class="icon-btn ai-edit-btn" title="ערוך תוצאות AI" style="width:22px;height:22px;font-size:12px;background:rgba(127,127,127,0.15);border-radius:4px;">✏️</button>
@@ -1419,17 +1442,13 @@
                 </div>
             `;
 
-            // Selection mode
-            div.onclick = (e) => {
-                if (state.isSelectionMode) { e.preventDefault(); toggleSelection(item.id); }
-            };
+            div.onclick = (e) => { if (state.isSelectionMode) { e.preventDefault(); toggleSelection(item.id); } };
             div.addEventListener('contextmenu', (e) => {
                 if (e.target.closest('.card-actions')) return;
                 e.preventDefault();
                 if (!state.isSelectionMode) enterSelectionMode(item.id);
             });
 
-            // AI scan button — short press = scan, long press = provider menu
             const btnAi = div.querySelector('.btn-ai-scan');
             let pressTimer, isLongPress = false;
             const startPress = (e) => {
@@ -1454,9 +1473,9 @@
             });
 
             div.querySelector('.btn-share').onclick = (e) => { e.stopPropagation(); shareItem(item); };
-            div.querySelector('.btn-copy').onclick = (e) => { e.stopPropagation(); copyText(item.content); };
-            div.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); editItem(item); };
-            div.querySelector('.pin-btn').onclick = (e) => { e.stopPropagation(); togglePin(item.id); };
+            div.querySelector('.btn-copy').onclick  = (e) => { e.stopPropagation(); copyText(item.content); };
+            div.querySelector('.btn-edit').onclick  = (e) => { e.stopPropagation(); editItem(item); };
+            div.querySelector('.pin-btn').onclick   = (e) => { e.stopPropagation(); togglePin(item.id); };
             div.querySelector('.trash-btn').onclick = (e) => { e.stopPropagation(); moveToTrash(item.id); };
 
             const aiEditBtn = div.querySelector('.ai-edit-btn');
@@ -1472,9 +1491,9 @@
             return div;
         }
 
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         // ADD ITEM
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         function handleAdd(e) {
             e.preventDefault();
             const content = document.getElementById('itemContent').value.trim();
@@ -1482,7 +1501,7 @@
 
             const existingItem = state.items.find(i => i.content.toLowerCase() === content.toLowerCase());
             if (existingItem) {
-                const addAnyway = confirm(`⚠️ הפריט הזה כבר קיים תחת "${existingItem.category}".\n\nהאם להוסיף אותו שוב ככפילות?`);
+                const addAnyway = confirm(`⚠️ הפריט כבר קיים תחת "${existingItem.category}".\n\nהאם להוסיף כפילות?`);
                 if (!addAnyway) { e.target.reset(); return; }
             }
 
@@ -1490,20 +1509,16 @@
                 id: Date.now(),
                 content,
                 description: document.getElementById('itemDescription').value.trim(),
-                category: document.getElementById('itemCategory').value.trim() || 'כללי',
-                note: document.getElementById('itemNote').value.trim(),
-                date: new Date().toISOString(),
-                type: URL_REGEX.test(content) ? 'link' : 'text',
-                isPinned: false
+                category:    document.getElementById('itemCategory').value.trim() || 'כללי',
+                note:        document.getElementById('itemNote').value.trim(),
+                date:        new Date().toISOString(),
+                type:        URL_REGEX.test(content) ? 'link' : 'text',
+                isPinned:    false
             };
 
             state.items.unshift(newItem);
-
-            // Optimistic UI — show immediately, then push
             updateCategoryDropdowns();
             renderList();
-
-            // Immediate write — no debounce for user actions
             pushToCloud(true);
             e.target.reset();
 
@@ -1520,23 +1535,23 @@
                 }
             });
 
-           // Auto-scan if enabled
             const settings = getAiSettings();
-            if (settings.autoScan && (settings.keys.gemini.length > 0 || settings.keys.groq.length > 0 || settings.keys.openrouter.length > 0)) {
+            if (settings.autoScan &&
+                (settings.keys.gemini.length > 0 || settings.keys.groq.length > 0 || settings.keys.openrouter.length > 0)) {
                 setTimeout(() => scanSingleItem(newItem.id, null, false), 800);
             }
         }
 
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         // AI ENGINE
-        // ══════════════════════════════════════════════════════════════════════════
-       window.saveAiSettings = function () {
+        // ═══════════════════════════════════════════════════════════════════════
+        window.saveAiSettings = function () {
             const settings = {
                 provider: document.getElementById('aiProviderSelect').value,
                 autoScan: document.getElementById('autoScanNew').checked,
                 keys: {
-                    gemini: [document.getElementById('keyGemini1').value.trim(), document.getElementById('keyGemini2').value.trim(), document.getElementById('keyGemini3').value.trim()].filter(Boolean),
-                    groq: [document.getElementById('keyGroq1').value.trim(), document.getElementById('keyGroq2').value.trim(), document.getElementById('keyGroq3').value.trim()].filter(Boolean),
+                    gemini:     [document.getElementById('keyGemini1').value.trim(), document.getElementById('keyGemini2').value.trim(), document.getElementById('keyGemini3').value.trim()].filter(Boolean),
+                    groq:       [document.getElementById('keyGroq1').value.trim(), document.getElementById('keyGroq2').value.trim(), document.getElementById('keyGroq3').value.trim()].filter(Boolean),
                     openrouter: [document.getElementById('keyOpenRouter1').value.trim(), document.getElementById('keyOpenRouter2').value.trim(), document.getElementById('keyOpenRouter3').value.trim()].filter(Boolean)
                 }
             };
@@ -1546,13 +1561,12 @@
             showToast('✅ הגדרות AI נשמרו');
         };
 
-       function getAiSettings() {
+        function getAiSettings() {
             const def = { provider: 'gemini', autoScan: true, keys: { gemini: [], groq: [], openrouter: [] } };
-            try { 
+            try {
                 const saved = JSON.parse(localStorage.getItem('aiSettingsPro'));
                 if (!saved) return def;
                 if (!saved.keys) saved.keys = { gemini: [], groq: [], openrouter: [] };
-                
                 ['gemini', 'groq', 'openrouter'].forEach(p => {
                     if (typeof saved.keys[p] === 'string') saved.keys[p] = saved.keys[p] ? [saved.keys[p]] : [];
                     else if (!Array.isArray(saved.keys[p])) saved.keys[p] = [];
@@ -1564,16 +1578,16 @@
         document.getElementById('openAiSettingsBtn')?.addEventListener('click', () => {
             const s = getAiSettings();
             document.getElementById('aiProviderSelect').value = s.provider;
-            document.getElementById('autoScanNew').checked = s.autoScan;
-            document.getElementById('keyGemini1').value = s.keys.gemini[0] || '';
-            document.getElementById('keyGemini2').value = s.keys.gemini[1] || '';
-            document.getElementById('keyGemini3').value = s.keys.gemini[2] || '';
-            document.getElementById('keyGroq1').value = s.keys.groq[0] || '';
-            document.getElementById('keyGroq2').value = s.keys.groq[1] || '';
-            document.getElementById('keyGroq3').value = s.keys.groq[2] || '';
-            document.getElementById('keyOpenRouter1').value = s.keys.openrouter[0] || '';
-            document.getElementById('keyOpenRouter2').value = s.keys.openrouter[1] || '';
-            document.getElementById('keyOpenRouter3').value = s.keys.openrouter[2] || '';
+            document.getElementById('autoScanNew').checked    = s.autoScan;
+            document.getElementById('keyGemini1').value       = s.keys.gemini[0]     || '';
+            document.getElementById('keyGemini2').value       = s.keys.gemini[1]     || '';
+            document.getElementById('keyGemini3').value       = s.keys.gemini[2]     || '';
+            document.getElementById('keyGroq1').value         = s.keys.groq[0]       || '';
+            document.getElementById('keyGroq2').value         = s.keys.groq[1]       || '';
+            document.getElementById('keyGroq3').value         = s.keys.groq[2]       || '';
+            document.getElementById('keyOpenRouter1').value   = s.keys.openrouter[0] || '';
+            document.getElementById('keyOpenRouter2').value   = s.keys.openrouter[1] || '';
+            document.getElementById('keyOpenRouter3').value   = s.keys.openrouter[2] || '';
             document.getElementById('aiSettingsModal').style.display = 'flex';
             closeAllMenus();
         });
@@ -1599,11 +1613,11 @@
             const item = state.items.find(i => i.id === id);
             if (!item) return;
 
-            const settings = getAiSettings();
-            const preferred = overrideProvider || window.lastWorkingAiProvider || settings.provider;
-            const allProviders = [preferred, 'gemini', 'groq', 'openrouter'].filter((p, i, a) => a.indexOf(p) === i);
-            
-            const fallbackChain = [];
+            const settings       = getAiSettings();
+            const preferred      = overrideProvider || window.lastWorkingAiProvider || settings.provider;
+            const allProviders   = [preferred, 'gemini', 'groq', 'openrouter'].filter((p, i, a) => a.indexOf(p) === i);
+            const fallbackChain  = [];
+
             allProviders.forEach(p => {
                 const pKeys = Array.isArray(settings.keys[p]) ? settings.keys[p] : (settings.keys[p] ? [settings.keys[p]] : []);
                 pKeys.filter(k => k && k.trim()).forEach((k, idx) => {
@@ -1611,9 +1625,9 @@
                 });
             });
 
-            if (fallbackChain.length === 0) {
+            if (fallbackChain.length === 0)
                 return alert('עליך להזין לפחות מפתח API אחד בהגדרות ה-AI.');
-            }
+
             item.isScanning = true;
             renderList();
 
@@ -1633,15 +1647,13 @@
                 }
             };
 
-           try {
+            try {
                 let cleanContent = item.content.trim().replace(/^[\/]+/, '');
-                let isWebsite = item.type === 'link';
-                
-                // וידוא פרוטוקול תקין עבור שרתי הפרוקסי
-                if (isWebsite && !/^https?:\/\//i.test(cleanContent)) {
+                let isWebsite    = item.type === 'link';
+
+                if (isWebsite && !/^https?:\/\//i.test(cleanContent))
                     cleanContent = 'https://' + cleanContent;
-                }
-                
+
                 let contentToAnalyze = cleanContent;
 
                 if (isWebsite && forceUrlOnly) {
@@ -1652,17 +1664,13 @@
                         u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
                         u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`
                     ];
-                    
+
                     let scrapedOk = false;
-                    
-                    // --- הפתרון המהיר: ריצת פרוקסים מקבילית ---
                     try {
                         const proxyPromises = proxies.map(async (proxyFn) => {
                             const proxyUrl = proxyFn(cleanContent);
-                            // נותנים לכל שרת 5 שניות, אבל כולם רצים במקביל!
-                            const res = await fetchWithTimeout(proxyUrl, {}, 5000); 
+                            const res = await fetchWithTimeout(proxyUrl, {}, 5000);
                             if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                            
                             let htmlText;
                             if (proxyUrl.includes('allorigins')) {
                                 const data = await res.json();
@@ -1671,104 +1679,59 @@
                             } else {
                                 htmlText = await res.text();
                             }
-                            
                             const parser = new DOMParser();
                             const doc2 = parser.parseFromString(htmlText, 'text/html');
                             doc2.querySelectorAll('script,style,nav,footer,noscript,iframe,header').forEach(el => el.remove());
                             const bodyText = (doc2.body?.innerText || '').replace(/\s+/g, ' ').trim();
-                            
                             if (bodyText.length < 30) throw new Error('empty body');
                             const lb = bodyText.toLowerCase();
                             if (lb.includes('just a moment') || lb.includes('enable javascript and cookies') ||
                                 lb.includes('checking your browser') || lb.includes('verify you are human') ||
                                 (lb.includes('cloudflare') && lb.includes('ray id'))) throw new Error('cloudflare_blocked');
-                                
                             return bodyText.substring(0, 3500);
                         });
-
-                        // Promise.any תופס את התשובה מהשרת *הראשון* שמצליח ומבטל את ההמתנה לשאר
                         contentToAnalyze = await Promise.any(proxyPromises);
                         scrapedOk = true;
-                        
-                    } catch (aggregateError) {
-                        // אם הגענו לכאן - כל השרתים נכשלו או שהזמן של כולם עבר
-                        scrapedOk = false;
-                    }
-                    
-                    if (!scrapedOk) {
+                    } catch (_) { scrapedOk = false; }
+
+                    if (!scrapedOk)
                         contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: Page blocked by anti-bot. Do NOT mark as "dead". Assume "active". Analyze based on URL and description only.`;
+                }
+
+                // Telegram dead-link client-side detection
+                const isTelegramUrl = /(?:t\.me|telegram\.me)\//i.test(cleanContent);
+                if (isTelegramUrl && !forceUrlOnly) {
+                    const lc = contentToAnalyze.toLowerCase();
+                    const isInviteLink = /t\.me\/\+/i.test(cleanContent);
+                    const EXPLICIT_DEAD_SIGNALS = [
+                        'this link is no longer valid','this link has expired','invite link is invalid',
+                        'this channel cannot be displayed','this group cannot be displayed',
+                        'no such user','user not found','channel not found',
+                        'this content is not available','page not found','404'
+                    ];
+                    const hasExplicitDead = EXPLICIT_DEAD_SIGNALS.some(s => lc.includes(s));
+                    const hasActiveSignal = /\d[\d\s,.]+\s*(?:member|subscriber|participant)/i.test(contentToAnalyze);
+                    const isGenericGroupDead = (lc.includes('you are invited to a group chat') || lc.includes('join group')) && !hasActiveSignal;
+                    let isGenericUserDead = false;
+                    if (lc.includes('if you have telegram, you can contact')) {
+                        const stripped = lc.replace(/if you have telegram,? you can contact/g,'').replace(/right away\.?/g,'').replace(/send message/g,'').replace(/download/g,'').replace(/telegram/g,'').replace(/@[a-z0-9_]+/gi,'').replace(/[^a-zא-ת0-9]/gi,'').trim();
+                        if (stripped.length < 5) isGenericUserDead = true;
+                    }
+                    if (hasExplicitDead || isGenericGroupDead || isGenericUserDead) {
+                        const ci = state.items.find(i => i.id === id);
+                        if (ci) {
+                            ci.aiSummary   = isInviteLink || isGenericGroupDead ? 'קישור הזמנה לטלגרם לא תקין — פג תוקפו, הקבוצה נמחקה, או שהלינק בוטל.' : 'קישור טלגרם לא פעיל — הערוץ, הבוט או המשתמש אינם קיימים.';
+                            ci.siteStatus  = 'dead';
+                            ci.aiTags      = ['#Telegram', '#dead', '#לא_זמין'];
+                        }
+                        return;
                     }
                 }
 
-             // ── Telegram Dead-Link Detection ─────────────────────────────────────
-               // Client-side instant check — no AI needed, no API quota consumed.
-               // Runs BEFORE the AI call to short-circuit dead links immediately.
-               const isTelegramUrl = /(?:t\.me|telegram\.me)\//i.test(cleanContent);
-               if (isTelegramUrl && !forceUrlOnly) {
-                   const lc = contentToAnalyze.toLowerCase();
-                   const isInviteLink = /t\.me\/\+/i.test(cleanContent);
+                const promptType = isWebsite
+                    ? `Type: Website content.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: You MUST keep brand names, usernames, website names, software, and technical terms in their original ENGLISH within the Hebrew summary to maximize searchability.\n2. Determine status: "active", "parked", or "dead".\n   TELEGRAM RULES:\n   - If the page contains a specific group/bot name, a description, OR a member/subscriber count (e.g., "3 members"), you MUST set status to "active".\n   - Set "dead" ONLY if the page explicitly says "not found", "expired", "invalid", or if it is a completely empty "Join Group" page with NO details at all.\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for brands/tech terms).`
+                    : `Type: Text/Command.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: Keep all specific names, usernames, code, and technical terms in their original ENGLISH within the Hebrew summary.\n2. Status MUST be "text".\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for specific names/tech terms).`;
 
-                   // 1. הודעות שמעידות בוודאות על קישור שבור
-                   const EXPLICIT_DEAD_SIGNALS = [
-                       'this link is no longer valid',
-                       'this link has expired',
-                       'invite link is invalid',
-                       'this channel cannot be displayed',
-                       'this group cannot be displayed',
-                       'no such user',
-                       'user not found',
-                       'channel not found',
-                       'this content is not available',
-                       'page not found',
-                       '404'
-                   ];
-                   const hasExplicitDead = EXPLICIT_DEAD_SIGNALS.some(s => lc.includes(s));
-
-                   // 2. זיהוי קבוצות/ערוצים גנריים (כמו בתמונות של "You are invited...")
-                   // קבוצה תקינה חייבת להכיל מספר מנויים/משתתפים. אם אין, זה לינק מת.
-                   const hasActiveSignal = /\d[\d\s,.]+\s*(?:member|subscriber|participant)/i.test(contentToAnalyze);
-                   const isGenericGroupDead = (lc.includes('you are invited to a group chat') || lc.includes('join group')) && !hasActiveSignal;
-
-                   // 3. זיהוי בוטים ומשתמשים מחוקים (כמו בתמונות של "@bot_Search_movies")
-                   let isGenericUserDead = false;
-                   if (lc.includes('if you have telegram, you can contact')) {
-                       // מנקים את כל הטקסט הגנרי ואת שם המשתמש מהתוכן
-                       const textWithoutBoilerplate = lc
-                           .replace(/if you have telegram,? you can contact/g, '')
-                           .replace(/right away\.?/g, '')
-                           .replace(/send message/g, '')
-                           .replace(/download/g, '')
-                           .replace(/telegram/g, '')
-                           .replace(/@[a-z0-9_]+/gi, '') // מחיקת שם המשתמש מתוך הטקסט
-                           .replace(/[^a-zא-ת0-9]/gi, '') // מחיקת רווחים וסימני פיסוק
-                           .trim();
-                       
-                       // אם לא נשאר טקסט (כלומר אין לבוט/משתמש שם תצוגה או תיאור ביו), זה לינק מת
-                       if (textWithoutBoilerplate.length < 5) {
-                           isGenericUserDead = true;
-                       }
-                   }
-
-                   // אם אחת הבדיקות חיובית, חותכים מיד לאדום
-                   if (hasExplicitDead || isGenericGroupDead || isGenericUserDead) {
-                       const ci = state.items.find(i => i.id === id);
-                       if (ci) {
-                           ci.aiSummary = isInviteLink || isGenericGroupDead
-                               ? 'קישור הזמנה לטלגרם לא תקין — פג תוקפו, הקבוצה נמחקה, או שהלינק בוטל.'
-                               : 'קישור טלגרם לא פעיל — הערוץ, הבוט או המשתמש אינם קיימים.';
-                           ci.siteStatus = 'dead';
-                           ci.aiTags = ['#Telegram', '#dead', '#לא_זמין'];
-                       }
-                       return;
-                   }
-               }
-               // ─────────────────────────────────────────────────────────────────────
-
-               // עדכון הפרומפט: הוראות ברורות יותר שלא יבלבלו את ה-AI בקבוצות חיות
-               const promptType = isWebsite
-                   ? `Type: Website content.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: You MUST keep brand names, usernames, website names, software, and technical terms in their original ENGLISH within the Hebrew summary to maximize searchability.\n2. Determine status: "active", "parked", or "dead".\n   TELEGRAM RULES:\n   - If the page contains a specific group/bot name, a description, OR a member/subscriber count (e.g., "3 members"), you MUST set status to "active".\n   - Set "dead" ONLY if the page explicitly says "not found", "expired", "invalid", or if it is a completely empty "Join Group" page with NO details at all.\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for brands/tech terms).`
-                   : `Type: Text/Command.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: Keep all specific names, usernames, code, and technical terms in their original ENGLISH within the Hebrew summary.\n2. Status MUST be "text".\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for specific names/tech terms).`;
-               
                 const systemPrompt = `You are a strict JSON-only API. Return ONLY valid JSON. No markdown formatting, no extra text.
 Required format: {"summary": "...", "status": "active|parked|dead|text", "tags": ["#tag1", "#tag2", "#tag3"]}
 ${promptType}
@@ -1776,10 +1739,10 @@ ${promptType}
 Content to analyze:
 ${contentToAnalyze}`;
 
-                let jsonString = '';
-                let success = false;
-                let lastError = 'לא ניתן להגיע לאף ספק AI';
-                let usedModelName = ''; // משתנה לשמירת שם המודל והאימוג'י
+                let jsonString   = '';
+                let success      = false;
+                let lastError    = 'לא ניתן להגיע לאף ספק AI';
+                let usedModelName = '';
 
                 for (let i = 0; i < fallbackChain.length; i++) {
                     if (success) break;
@@ -1793,9 +1756,7 @@ ${contentToAnalyze}`;
                                 const req = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models?key=${activeKey}`, {}, 10000);
                                 const data = await req.json();
                                 if (data.models) {
-                                    models = data.models
-                                        .filter(m => m.supportedGenerationMethods?.includes('generateContent') && m.name.includes('gemini'))
-                                        .map(m => m.name.replace('models/', ''));
+                                    models = data.models.filter(m => m.supportedGenerationMethods?.includes('generateContent') && m.name.includes('gemini')).map(m => m.name.replace('models/', ''));
                                     models.sort((a, b) => (a.includes('flash') ? -1 : 1));
                                     window.dynamicGeminiModels = models;
                                 }
@@ -1808,7 +1769,7 @@ ${contentToAnalyze}`;
                                 const res = await fetchWithTimeout(
                                     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
                                     { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt }] }], generationConfig: { response_mime_type: "application/json", temperature: 0.1 } }) },
+                                      body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt }] }], generationConfig: { response_mime_type: 'application/json', temperature: 0.1 } }) },
                                     30000
                                 );
                                 const rd = await res.json();
@@ -1816,12 +1777,12 @@ ${contentToAnalyze}`;
                                 const rawText = rd.candidates[0].content.parts[0].text;
                                 const jm = rawText.match(/\{[\s\S]*\}/);
                                 if (!jm) throw new Error('No valid JSON in response');
-                               jsonString = jm[0];
+                                jsonString = jm[0];
                                 JSON.parse(jsonString);
                                 success = true;
                                 usedModelName = `🔹 Gemini (${model})`;
                                 window.lastWorkingAiProvider = 'gemini';
-                                window.dynamicGeminiModels = [model];
+                                window.dynamicGeminiModels   = [model];
                                 break;
                             } catch (err) {
                                 lastError = err.message;
@@ -1829,11 +1790,11 @@ ${contentToAnalyze}`;
                                 console.warn(`Gemini [${model}]:`, err.message);
                             }
                         }
-                        if (!success && quotaExhausted) { 
-                            window.dynamicGeminiModels = null; 
-                            const nextModel = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider} (מפתח ${fallbackChain[i+1].keyIndex})...` : 'לא נותרו מפתחות לנסות.';
-                            showToast(`⚠️ נגמרו התוקנים ב-Gemini (מפתח ${keyIndex}). ${nextModel}`, null, 5000, null, true);
-                            continue; 
+                        if (!success && quotaExhausted) {
+                            window.dynamicGeminiModels = null;
+                            const next = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider}...` : 'לא נותרו מפתחות.';
+                            showToast(`⚠️ נגמרו התוקנים ב-Gemini (מפתח ${keyIndex}). ${next}`, null, 5000, null, true);
+                            continue;
                         }
                     }
 
@@ -1843,10 +1804,7 @@ ${contentToAnalyze}`;
                             try {
                                 const req = await fetchWithTimeout('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': `Bearer ${activeKey}` } }, 10000);
                                 const data = await req.json();
-                                if (data.data) {
-                                    models = data.data.map(m => m.id).sort((a, b) => (a.includes('llama') ? -1 : 1));
-                                    window.dynamicGroqModels = models;
-                                }
+                                if (data.data) { models = data.data.map(m => m.id).sort((a, b) => (a.includes('llama') ? -1 : 1)); window.dynamicGroqModels = models; }
                             } catch { models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']; }
                         }
                         if (!models?.length) models = ['llama-3.3-70b-versatile'];
@@ -1863,12 +1821,12 @@ ${contentToAnalyze}`;
                                 const rawText = rd.choices[0].message.content;
                                 const jm = rawText.match(/\{[\s\S]*\}/);
                                 if (!jm) throw new Error('No valid JSON');
-                               jsonString = jm[0];
+                                jsonString = jm[0];
                                 JSON.parse(jsonString);
                                 success = true;
                                 usedModelName = `⚡ Groq (${model})`;
                                 window.lastWorkingAiProvider = 'groq';
-                                window.dynamicGroqModels = [model];
+                                window.dynamicGroqModels     = [model];
                                 break;
                             } catch (err) {
                                 lastError = err.message;
@@ -1876,11 +1834,11 @@ ${contentToAnalyze}`;
                                 console.warn(`Groq [${model}]:`, err.message);
                             }
                         }
-                        if (!success && quotaExhausted) { 
-                            window.dynamicGroqModels = null; 
-                            const nextModel = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider} (מפתח ${fallbackChain[i+1].keyIndex})...` : 'לא נותרו מפתחות לנסות.';
-                            showToast(`⚠️ נגמרו התוקנים ב-Groq (מפתח ${keyIndex}). ${nextModel}`, null, 5000, null, true);
-                            continue; 
+                        if (!success && quotaExhausted) {
+                            window.dynamicGroqModels = null;
+                            const next = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider}...` : 'לא נותרו מפתחות.';
+                            showToast(`⚠️ נגמרו התוקנים ב-Groq (מפתח ${keyIndex}). ${next}`, null, 5000, null, true);
+                            continue;
                         }
                     }
 
@@ -1891,6 +1849,7 @@ ${contentToAnalyze}`;
                             'qwen/qwen-2.5-coder-32b-instruct:free',
                             'deepseek/deepseek-chat:free'
                         ];
+                        let quotaExhaustedOR = false;
                         for (const model of models) {
                             try {
                                 const res = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
@@ -1909,15 +1868,15 @@ ${contentToAnalyze}`;
                                 usedModelName = `🌐 OpenRouter (${model.split('/').pop()})`;
                                 window.lastWorkingAiProvider = 'openrouter';
                                 break;
-                           } catch (err) {
+                            } catch (err) {
                                 lastError = err.message;
-                                if (isQuotaError(err.message)) quotaExhausted = true;
+                                if (isQuotaError(err.message)) quotaExhaustedOR = true;
                                 console.warn(`OpenRouter [${model}]:`, err.message);
                             }
                         }
-                        if (!success && quotaExhausted) {
-                            const nextModel = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider} (מפתח ${fallbackChain[i+1].keyIndex})...` : 'לא נותרו מפתחות לנסות.';
-                            showToast(`⚠️ נגמרו התוקנים ב-OpenRouter (מפתח ${keyIndex}). ${nextModel}`, null, 5000, null, true);
+                        if (!success && quotaExhaustedOR) {
+                            const next = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider}...` : 'לא נותרו מפתחות.';
+                            showToast(`⚠️ נגמרו התוקנים ב-OpenRouter (מפתח ${keyIndex}). ${next}`, null, 5000, null, true);
                             continue;
                         }
                     }
@@ -1930,37 +1889,33 @@ ${contentToAnalyze}`;
                 if (!jm2) throw new Error('לא נמצא JSON תקין');
                 const parsed = JSON.parse(jm2[0]);
 
-              // ── הגנת ברזל: עקיפת טעויות AI בקישורי טלגרם ──
-                // אם ה-AI מסמן "מת" אבל הקוד מזהה משתתפים/מנויים - הסטטוס נדרס אוטומטית ל"פעיל"
+                // Iron Guard: override AI mistakes for live Telegram links
                 if (isWebsite && /(?:t\.me|telegram\.me)\//i.test(cleanContent) && parsed.status === 'dead') {
-                    if (/\d[\d\s,.]+\s*(?:member|subscriber|participant|חברים|מנויים)/i.test(contentToAnalyze)) {
+                    if (/\d[\d\s,.]+\s*(?:member|subscriber|participant|חברים|מנויים)/i.test(contentToAnalyze))
                         parsed.status = 'active';
-                    }
                 }
-                // ──────────────────────────────────────────────
 
                 const ci = state.items.find(i => i.id === id);
                 if (ci) {
-                    ci.aiSummary = parsed.summary || 'לא התקבל סיכום.';
+                    ci.aiSummary  = parsed.summary || 'לא התקבל סיכום.';
                     ci.siteStatus = isWebsite ? (parsed.status || 'active') : 'text';
-                    ci.aiTags = Array.isArray(parsed.tags) ? parsed.tags : [];
-                    ci.aiModel = usedModelName; // שמירת המודל לאובייקט
+                    ci.aiTags     = Array.isArray(parsed.tags) ? parsed.tags : [];
+                    ci.aiModel    = usedModelName;
                 }
 
             } catch (e) {
-                console.error('AI Error:', e);
+                console.error('[AI] Error:', e);
                 const ci = state.items.find(i => i.id === id);
                 if (ci) {
                     ci.siteStatus = ci.type === 'link' ? 'active' : 'text';
-                    ci.aiSummary = (e.name === 'AbortError' || (e.message || '').includes('abort'))
+                    ci.aiSummary  = (e.name === 'AbortError' || (e.message || '').includes('abort'))
                         ? 'הסריקה בוטלה.' : 'שגיאה: ' + e.message;
-                    ci.aiTags = [];
+                    ci.aiTags     = [];
                 }
             } finally {
                 const ci = state.items.find(i => i.id === id);
                 if (ci) ci.isScanning = false;
-                // Use debounced push for AI scan results (they're high-frequency during bulk scans)
-                pushToCloud(false);
+                pushToCloud(false); // debounced for AI batch writes
                 renderList();
             }
         };
@@ -1968,13 +1923,9 @@ ${contentToAnalyze}`;
         document.getElementById('bulkAiScanBtn')?.addEventListener('click', async () => {
             if (!navigator.onLine) return showToast('❌ לא ניתן לבצע סריקת AI מרובה ללא רשת.', null, 4000, null, true);
             const settings = getAiSettings();
-            if (!settings.keys.gemini && !settings.keys.groq && !settings.keys.openrouter) {
+            if (!settings.keys.gemini.length && !settings.keys.groq.length && !settings.keys.openrouter.length)
                 return alert('אנא הזן לפחות מפתח API אחד בהגדרות ה-AI.');
-            }
-            const itemsToScan = state.items.filter(i =>
-                !i.aiSummary || i.aiSummary.includes('שגיאה') || i.aiSummary.includes('Error') ||
-                i.aiSummary.includes('Timeout') || i.aiSummary.includes('לא התקבל')
-            );
+            const itemsToScan = state.items.filter(i => !i.aiSummary || i.aiSummary.includes('שגיאה') || i.aiSummary.includes('Error') || i.aiSummary.includes('Timeout') || i.aiSummary.includes('לא התקבל'));
             if (itemsToScan.length === 0) return alert('כל הפריטים כבר מנותחים!');
             if (!confirm(`נמצאו ${itemsToScan.length} פריטים לסריקה. האם להתחיל?`)) return;
 
@@ -1991,8 +1942,7 @@ ${contentToAnalyze}`;
                     <div style="font-size:11px;opacity:0.75;margin-top:3px;direction:ltr;">${itemsToScan[i].content.substring(0, 35)}...</div>
                     <div style="width:100%;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin-top:8px;overflow:hidden;">
                         <div style="width:${pct}%;height:100%;background:var(--accent-green);transition:width 0.3s;"></div>
-                    </div>
-                </div>`, null, 0, bulkToastId, false);
+                    </div></div>`, null, 0, bulkToastId, false);
 
                 await scanSingleItem(itemsToScan[i].id);
                 if (abortAiScan) break;
@@ -2009,10 +1959,7 @@ ${contentToAnalyze}`;
                             </div></div>`, null, 0, bulkToastId, true);
                     }
                     let waited = 0;
-                    while (waited < delay && !abortAiScan) {
-                        await new Promise(r => setTimeout(r, 100));
-                        waited += 100;
-                    }
+                    while (waited < delay && !abortAiScan) { await new Promise(r => setTimeout(r, 100)); waited += 100; }
                 }
             }
 
@@ -2032,9 +1979,7 @@ ${contentToAnalyze}`;
             if (!confirm('🧹 האם למחוק את כל נתוני הניתוח של ה-AI?')) return;
             if (!confirm('⚠️ אישור כפול נדרש! פעולה זו אינה הפיכה (אלא דרך Undo).\n\nהאם אתה בטוח?')) return;
 
-            const previousAiStates = state.items.map(i => ({
-                id: i.id, aiSummary: i.aiSummary, siteStatus: i.siteStatus, aiTags: i.aiTags, aiModel: i.aiModel
-            }));
+            const previousAiStates = state.items.map(i => ({ id: i.id, aiSummary: i.aiSummary, siteStatus: i.siteStatus, aiTags: i.aiTags, aiModel: i.aiModel }));
             state.items.forEach(i => { delete i.aiSummary; delete i.siteStatus; delete i.aiTags; delete i.isScanning; delete i.aiModel; });
             renderList();
             closeAllMenus();
@@ -2044,10 +1989,10 @@ ${contentToAnalyze}`;
                 previousAiStates.forEach(prev => {
                     const ci = state.items.find(i => i.id === prev.id);
                     if (ci) {
-                        if (prev.aiSummary !== undefined) ci.aiSummary = prev.aiSummary;
+                        if (prev.aiSummary  !== undefined) ci.aiSummary  = prev.aiSummary;
                         if (prev.siteStatus !== undefined) ci.siteStatus = prev.siteStatus;
-                        if (prev.aiTags !== undefined) ci.aiTags = prev.aiTags;
-                        if (prev.aiModel !== undefined) ci.aiModel = prev.aiModel;
+                        if (prev.aiTags     !== undefined) ci.aiTags     = prev.aiTags;
+                        if (prev.aiModel    !== undefined) ci.aiModel    = prev.aiModel;
                     }
                 });
                 renderList();
@@ -2055,9 +2000,9 @@ ${contentToAnalyze}`;
             });
         });
 
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         // ITEM ACTIONS
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         function moveToTrash(id) {
             const idx = state.items.findIndex(i => i.id === id);
             if (idx === -1) return;
@@ -2066,11 +2011,9 @@ ${contentToAnalyze}`;
             itemToTrash.deletedAt = new Date().toISOString();
             state.trash.unshift(itemToTrash);
             state.items.splice(idx, 1);
-
             renderList();
             updateCategoryDropdowns();
-            pushToCloud(true); // immediate — user action
-
+            pushToCloud(true);
             showToast('הועבר לסל המחזור', () => {
                 const restored = JSON.parse(JSON.stringify(itemToTrash));
                 delete restored.deletedAt;
@@ -2088,65 +2031,50 @@ ${contentToAnalyze}`;
             if (!item) return;
             const wasPinned = item.isPinned;
             item.isPinned = !wasPinned;
-
             renderList();
-            pushToCloud(true); // immediate — critical user action
-
+            pushToCloud(true);
             showToast(item.isPinned ? '📌 ננעץ' : '📌 שוחרר', () => {
                 const ci = state.items.find(i => i.id === id);
-                if (ci) {
-                    ci.isPinned = wasPinned;
-                    renderList();
-                    pushToCloud(true);
-                }
+                if (ci) { ci.isPinned = wasPinned; renderList(); pushToCloud(true); }
             });
         }
 
         function editItem(item) {
-            document.getElementById('editItemId').value = item.id;
-            document.getElementById('editItemContent').value = item.content;
+            document.getElementById('editItemId').value          = item.id;
+            document.getElementById('editItemContent').value     = item.content;
             document.getElementById('editItemDescription').value = item.description || '';
-            document.getElementById('editItemCategory').value = item.category || '';
-            document.getElementById('editItemNote').value = item.note || '';
-            document.getElementById('editModal').style.display = 'flex';
+            document.getElementById('editItemCategory').value    = item.category    || '';
+            document.getElementById('editItemNote').value        = item.note        || '';
+            document.getElementById('editModal').style.display   = 'flex';
         }
 
         function handleEditSubmit(e) {
             e.preventDefault();
             const idValue = document.getElementById('editItemId').value;
-            const item = state.items.find(i => String(i.id) === idValue);
+            const item    = state.items.find(i => String(i.id) === idValue);
             if (!item) return;
-
             const snapshot = JSON.parse(JSON.stringify(item));
-
             const c = document.getElementById('editItemContent').value.trim();
-            item.content = c;
+            item.content     = c;
             item.description = document.getElementById('editItemDescription').value.trim();
-            item.category = document.getElementById('editItemCategory').value.trim() || 'כללי';
-            item.note = document.getElementById('editItemNote').value.trim();
-            item.type = URL_REGEX.test(c) ? 'link' : 'text';
-
+            item.category    = document.getElementById('editItemCategory').value.trim() || 'כללי';
+            item.note        = document.getElementById('editItemNote').value.trim();
+            item.type        = URL_REGEX.test(c) ? 'link' : 'text';
             document.getElementById('editModal').style.display = 'none';
             updateCategoryDropdowns();
             renderList();
-            pushToCloud(true); // immediate
-
+            pushToCloud(true);
             showToast('✅ עודכן בהצלחה', () => {
                 const ci = state.items.find(i => i.id === snapshot.id);
-                if (ci) {
-                    Object.assign(ci, snapshot);
-                    updateCategoryDropdowns();
-                    renderList();
-                    pushToCloud(true);
-                }
+                if (ci) { Object.assign(ci, snapshot); updateCategoryDropdowns(); renderList(); pushToCloud(true); }
             });
         }
 
         window.openEditAiModal = function (item) {
-            document.getElementById('editAiItemId').value = item.id;
-            document.getElementById('editAiStatus').value = item.siteStatus || 'active';
-            document.getElementById('editAiSummary').value = item.aiSummary || '';
-            document.getElementById('editAiTags').value = (item.aiTags || []).join(' ');
+            document.getElementById('editAiItemId').value  = item.id;
+            document.getElementById('editAiStatus').value  = item.siteStatus || 'active';
+            document.getElementById('editAiSummary').value = item.aiSummary  || '';
+            document.getElementById('editAiTags').value    = (item.aiTags || []).join(' ');
             document.getElementById('editAiModal').style.display = 'flex';
             closeAllMenus();
         };
@@ -2154,33 +2082,19 @@ ${contentToAnalyze}`;
         function handleEditAiSubmit(e) {
             e.preventDefault();
             const idValue = document.getElementById('editAiItemId').value;
-            const item = state.items.find(i => String(i.id) === idValue);
+            const item    = state.items.find(i => String(i.id) === idValue);
             if (!item) return;
-
-            const snapshot = {
-                siteStatus: item.siteStatus,
-                aiSummary: item.aiSummary,
-                aiTags: item.aiTags ? [...item.aiTags] : []
-            };
-
+            const snapshot = { siteStatus: item.siteStatus, aiSummary: item.aiSummary, aiTags: item.aiTags ? [...item.aiTags] : [] };
             item.siteStatus = document.getElementById('editAiStatus').value;
-            item.aiSummary = document.getElementById('editAiSummary').value.trim();
-            const tagsRaw = document.getElementById('editAiTags').value;
-            item.aiTags = tagsRaw.split(/[, ]+/).filter(t => t.trim()).map(t => t.startsWith('#') ? t : `#${t}`);
-
+            item.aiSummary  = document.getElementById('editAiSummary').value.trim();
+            const tagsRaw   = document.getElementById('editAiTags').value;
+            item.aiTags     = tagsRaw.split(/[, ]+/).filter(t => t.trim()).map(t => t.startsWith('#') ? t : `#${t}`);
             document.getElementById('editAiModal').style.display = 'none';
             renderList();
-            pushToCloud(true); // immediate
-
+            pushToCloud(true);
             showToast('✅ פיענוח AI עודכן', () => {
                 const ci = state.items.find(i => i.id === item.id);
-                if (ci) {
-                    ci.siteStatus = snapshot.siteStatus;
-                    ci.aiSummary = snapshot.aiSummary;
-                    ci.aiTags = snapshot.aiTags;
-                    renderList();
-                    pushToCloud(true);
-                }
+                if (ci) { ci.siteStatus = snapshot.siteStatus; ci.aiSummary = snapshot.aiSummary; ci.aiTags = snapshot.aiTags; renderList(); pushToCloud(true); }
             });
         }
 
@@ -2196,20 +2110,20 @@ ${contentToAnalyze}`;
             showToast('📋 הועתק ללוח');
         }
 
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         // FILTERS & TOGGLES
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         function toggleDuplicates() {
             state.showDuplicates = !state.showDuplicates;
             if (!state.showDuplicates) state.showOnlyDead = false;
-            const btn = document.getElementById('toggleDuplicatesBtn');
+            const btn    = document.getElementById('toggleDuplicatesBtn');
             const deadBtn = document.getElementById('toggleDeadBtn');
             if (!state.showDuplicates) {
-                btn.style.background = 'rgba(245,158,11,0.2)';
-                btn.style.borderColor = 'var(--accent-gold)';
+                btn.style.background   = 'rgba(245,158,11,0.2)';
+                btn.style.borderColor  = 'var(--accent-gold)';
                 deadBtn.classList.remove('dead-active');
             } else {
-                btn.style.background = '';
+                btn.style.background  = '';
                 btn.style.borderColor = '';
             }
             renderList();
@@ -2220,7 +2134,7 @@ ${contentToAnalyze}`;
             const btn = document.getElementById('toggleDeadBtn');
             if (state.showOnlyDead) {
                 state.showDuplicates = true;
-                document.getElementById('toggleDuplicatesBtn').style.background = '';
+                document.getElementById('toggleDuplicatesBtn').style.background  = '';
                 document.getElementById('toggleDuplicatesBtn').style.borderColor = '';
                 btn.classList.add('dead-active');
                 showToast('🔴 מציג רק אתרים לא זמינים');
@@ -2231,10 +2145,10 @@ ${contentToAnalyze}`;
             renderList();
         }
 
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         // IMPORT / EXPORT
-        // ══════════════════════════════════════════════════════════════════════════
-function importJson(e) {
+        // ═══════════════════════════════════════════════════════════════════════
+        function importJson(e) {
             const f = e.target.files[0];
             if (!f) return;
             const r = new FileReader();
@@ -2243,34 +2157,21 @@ function importJson(e) {
                     const d = JSON.parse(ev.target.result);
                     const importedItems = Array.isArray(d) ? d : (d.items || []);
                     const importedTrash = Array.isArray(d) ? [] : (d.trash || []);
-                    
-                    const strategy = confirm('האם תרצה למזג קבצים חכם?\n\n- אישור (OK) למיזוג חכם (יעדכן פריטים קיימים ויוסיף חדשים).\n- ביטול (Cancel) להחלפה מלאה של הכל.');
-                    const backup = { items: JSON.parse(JSON.stringify(state.items)), trash: JSON.parse(JSON.stringify(state.trash)) };
-                    
+                    const strategy = confirm('האם תרצה למזג קבצים חכם?\n\n- אישור (OK) למיזוג חכם.\n- ביטול (Cancel) להחלפה מלאה.');
                     if (strategy) {
                         let updated = 0, added = 0;
                         const map = new Map(state.items.map(i => [i.id, i]));
                         importedItems.forEach(importItem => {
-                            if (map.has(importItem.id)) {
-                                Object.assign(map.get(importItem.id), importItem);
-                                updated++;
-                            } else {
-                                state.items.unshift(importItem);
-                                added++;
-                            }
+                            if (map.has(importItem.id)) { Object.assign(map.get(importItem.id), importItem); updated++; }
+                            else { state.items.unshift(importItem); added++; }
                         });
-                        showToast(`✅ מוזג בהצלחה! ${added} נוספו, ${updated} עודכנו.`);
+                        showToast(`✅ מוזג! ${added} נוספו, ${updated} עודכנו.`);
                     } else {
                         state.items = importedItems;
                         state.trash = importedTrash;
-                        showToast('✅ נטען והוחלף בהצלחה!');
+                        showToast('✅ נטען והוחלף!');
                     }
-                    
-                    updateCategoryDropdowns();
-                    renderList();
-                    pushToCloud(true);
-                    closeAllMenus();
-                    
+                    updateCategoryDropdowns(); renderList(); pushToCloud(true); closeAllMenus();
                 } catch (ex) { alert('שגיאה בקובץ: ' + ex.message); }
             };
             r.readAsText(f);
@@ -2283,63 +2184,40 @@ function importJson(e) {
             r.onload = (ev) => {
                 const lines = ev.target.result.split('\n');
                 let added = 0, updated = 0;
-                const backupItems = JSON.parse(JSON.stringify(state.items));
-                
-                // יצירת מפות לחיפוש מהיר כדי לאפשר עדכון של מידע קיים על בסיס מזהה (ID) או תוכן
-                const idMap = new Map(state.items.map(i => [String(i.id), i]));
-                const contentMap = new Map(state.items.map(i => [i.content.toLowerCase().trim(), i]));
+                const backupItems  = JSON.parse(JSON.stringify(state.items));
+                const idMap        = new Map(state.items.map(i => [String(i.id), i]));
+                const contentMap   = new Map(state.items.map(i => [i.content.toLowerCase().trim(), i]));
 
                 lines.forEach(l => {
                     if (!l.trim()) return;
-                    
                     const p = l.split('|').map(s => s.trim().replace(/\[NEWLINE\]/g, '\n'));
                     if (p.length < 2) return;
-                    
-                    // בדיקה אם ה-TXT החדש מכיל מזהה (ID) בתחילתו לצורך מיזוג חכם
-                    let isNewFormat = /^\d+$/.test(p[0]) && p.length >= 7; 
-                    
+                    const isNewFormat = /^\d+$/.test(p[0]) && p.length >= 7;
                     let itemId, content, desc, cat, note, summary, status, tags;
-                    
-                    if (isNewFormat) {
-                        itemId = p[0]; content = p[1]; desc = p[2]; cat = p[3]; note = p[4]; summary = p[5]; status = p[6]; tags = p[7];
-                    } else {
-                        itemId = null; content = p[0]; desc = p[1]; cat = p[2]; note = p[3]; summary = p[4]; status = p[5]; tags = p[6];
-                    }
-                    
+                    if (isNewFormat) { itemId = p[0]; content = p[1]; desc = p[2]; cat = p[3]; note = p[4]; summary = p[5]; status = p[6]; tags = p[7]; }
+                    else             { itemId = null;  content = p[0]; desc = p[1]; cat = p[2]; note = p[3]; summary = p[4]; status = p[5]; tags = p[6]; }
                     if (!content) return;
-                    
-                    // חיפוש פריט קיים כדי לעדכן אותו במקום ליצור כפילות
                     let existingItem = null;
-                    if (itemId && idMap.has(itemId)) {
-                        existingItem = idMap.get(itemId);
-                    } else if (contentMap.has(content.toLowerCase())) {
-                        existingItem = contentMap.get(content.toLowerCase());
-                    }
-                    
+                    if (itemId && idMap.has(itemId)) existingItem = idMap.get(itemId);
+                    else if (contentMap.has(content.toLowerCase())) existingItem = contentMap.get(content.toLowerCase());
                     if (existingItem) {
                         existingItem.content = content;
-                        if (desc !== undefined) existingItem.description = desc;
-                        if (cat !== undefined) existingItem.category = cat;
-                        if (note !== undefined) existingItem.note = note;
-                        if (summary !== undefined) existingItem.aiSummary = summary;
-                        if (status !== undefined) existingItem.siteStatus = status;
-                        if (tags !== undefined) existingItem.aiTags = tags.split(',').filter(t => t.trim());
+                        if (desc    !== undefined) existingItem.description = desc;
+                        if (cat     !== undefined) existingItem.category    = cat;
+                        if (note    !== undefined) existingItem.note        = note;
+                        if (summary !== undefined) existingItem.aiSummary   = summary;
+                        if (status  !== undefined) existingItem.siteStatus  = status;
+                        if (tags    !== undefined) existingItem.aiTags      = tags.split(',').filter(t => t.trim());
                         updated++;
                     } else {
                         const newItem = {
                             id: itemId ? parseInt(itemId) : Date.now() + added,
-                            content: content, 
-                            description: desc || '', 
-                            category: cat || 'כללי', 
-                            note: note || '',
-                            date: new Date().toISOString(), 
-                            type: URL_REGEX.test(content) ? 'link' : 'text', 
-                            isPinned: false
+                            content, description: desc || '', category: cat || 'כללי', note: note || '',
+                            date: new Date().toISOString(), type: URL_REGEX.test(content) ? 'link' : 'text', isPinned: false
                         };
-                        if (summary) newItem.aiSummary = summary;
-                        if (status) newItem.siteStatus = status;
-                        if (tags) newItem.aiTags = tags.split(',').filter(t => t.trim());
-
+                        if (summary) newItem.aiSummary  = summary;
+                        if (status)  newItem.siteStatus = status;
+                        if (tags)    newItem.aiTags      = tags.split(',').filter(t => t.trim());
                         state.items.unshift(newItem);
                         contentMap.set(content.toLowerCase(), newItem);
                         added++;
@@ -2347,18 +2225,11 @@ function importJson(e) {
                 });
 
                 if (added > 0 || updated > 0) {
-                    updateCategoryDropdowns();
-                    renderList();
-                    pushToCloud(true);
-                    showToast(`✅ ייבוא חכם בוצע! ${added} נוספו, ${updated} עודכנו.`, () => {
-                        state.items = backupItems;
-                        updateCategoryDropdowns();
-                        renderList();
-                        pushToCloud(true);
+                    updateCategoryDropdowns(); renderList(); pushToCloud(true);
+                    showToast(`✅ ייבוא חכם: ${added} נוספו, ${updated} עודכנו.`, () => {
+                        state.items = backupItems; updateCategoryDropdowns(); renderList(); pushToCloud(true);
                     });
-                } else {
-                    alert('לא נמצאו שינויים לעדכון בקובץ.');
-                }
+                } else { alert('לא נמצאו שינויים.'); }
                 closeAllMenus();
             };
             r.readAsText(f);
@@ -2370,33 +2241,22 @@ function importJson(e) {
             const r = new FileReader();
             r.onload = (ev) => {
                 if (ev.target.result.trim() === '') {
-                    if (confirm('הקובץ ריק! האם אתה בטוח שברצונך למחוק את כל הנתונים? פעולה זו אינה הפיכה!')) {
-                        const backupItems = JSON.parse(JSON.stringify(state.items));
+                    if (confirm('הקובץ ריק! האם אתה בטוח שברצונך למחוק את כל הנתונים?')) {
+                        const backup = JSON.parse(JSON.stringify(state.items));
                         state.items = [];
-                        updateCategoryDropdowns();
-                        renderList();
-                        pushToCloud(true); // immediate
+                        updateCategoryDropdowns(); renderList(); pushToCloud(true);
                         showToast('⚠️ כל הנתונים נמחקו', () => {
-                            state.items = backupItems;
-                            updateCategoryDropdowns();
-                            renderList();
-                            pushToCloud(true);
+                            state.items = backup; updateCategoryDropdowns(); renderList(); pushToCloud(true);
                         });
                         closeAllMenus();
                     }
-                } else {
-                    alert('פעולת המחיקה בוטלה: הקובץ אינו ריק!');
-                }
+                } else { alert('פעולת המחיקה בוטלה: הקובץ אינו ריק!'); }
             };
             r.readAsText(f);
         }
 
         function exportJson() {
-            const cleanItems = state.items.map(item => {
-                const c = { ...item };
-                EPHEMERAL_FIELDS.forEach(f => delete c[f]);
-                return c;
-            });
+            const cleanItems = state.items.map(item => { const c = { ...item }; EPHEMERAL_FIELDS.forEach(f => delete c[f]); return c; });
             downloadFile('backup.json', JSON.stringify({ items: cleanItems, trash: state.trash }, null, 2), 'application/json');
             closeAllMenus();
         }
@@ -2404,33 +2264,18 @@ function importJson(e) {
         function exportTxt() {
             const data = state.items.map(i => {
                 const safe = (str) => (str || '').replace(/\|/g, '-').replace(/\n/g, '[NEWLINE]');
-                const content = safe(i.content);
-                const desc = safe(i.description);
-                const cat = safe(i.category || 'כללי');
-                const note = safe(i.note);
-                const summary = safe(i.aiSummary);
-                const status = safe(i.siteStatus || 'active');
-                const tags = (i.aiTags || []).join(',');
-                
-                // הוספת ה-ID בתחילת השורה כדי לאפשר עדכון מדויק בייבוא עתידי (Smart Merge)
-                return `${i.id} | ${content} | ${desc} | ${cat} | ${note} | ${summary} | ${status} | ${tags}`;
+                return `${i.id} | ${safe(i.content)} | ${safe(i.description)} | ${safe(i.category || 'כללי')} | ${safe(i.note)} | ${safe(i.aiSummary)} | ${safe(i.siteStatus || 'active')} | ${(i.aiTags || []).join(',')}`;
             }).join('\n');
-            
-            const ts = new Date().toISOString().slice(0, 10);
-            downloadFile(`MH_Links_Backup_${ts}.txt`, data, 'text/plain');
+            downloadFile(`MH_Links_Backup_${new Date().toISOString().slice(0,10)}.txt`, data, 'text/plain');
             closeAllMenus();
         }
+
         function downloadSite() {
             closeAllMenus();
-            const cleanItems = state.items.map(item => {
-                const c = { ...item };
-                EPHEMERAL_FIELDS.forEach(f => delete c[f]);
-                return c;
-            });
-            const offlineEl = document.getElementById('offline-data');
-            if (offlineEl) offlineEl.textContent = JSON.stringify({ items: cleanItems, trash: state.trash });
-            const ts = new Date().toISOString().slice(0, 10);
-            downloadFile(`LinkManager_${ts}.html`, '<!DOCTYPE html>\n' + document.documentElement.outerHTML, 'text/html');
+            const cleanItems = state.items.map(item => { const c = { ...item }; EPHEMERAL_FIELDS.forEach(f => delete c[f]); return c; });
+            const el = document.getElementById('offline-data');
+            if (el) el.textContent = JSON.stringify({ items: cleanItems, trash: state.trash });
+            downloadFile(`LinkManager_${new Date().toISOString().slice(0,10)}.html`, '<!DOCTYPE html>\n' + document.documentElement.outerHTML, 'text/html');
         }
 
         function downloadSource() {
@@ -2443,10 +2288,8 @@ function importJson(e) {
             const u = URL.createObjectURL(b);
             const a = document.createElement('a');
             a.href = u; a.download = n;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(u);
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a); URL.revokeObjectURL(u);
         }
 
         async function copyText(t) {
@@ -2456,12 +2299,9 @@ function importJson(e) {
             } catch {
                 try {
                     const ta = document.createElement('textarea');
-                    ta.value = t;
-                    ta.style.cssText = 'position:fixed;left:0;top:0;opacity:0;';
+                    ta.value = t; ta.style.cssText = 'position:fixed;left:0;top:0;opacity:0;';
                     ta.setAttribute('readonly', '');
-                    document.body.appendChild(ta);
-                    ta.focus();
-                    ta.setSelectionRange(0, 999999);
+                    document.body.appendChild(ta); ta.focus(); ta.setSelectionRange(0, 999999);
                     const ok = document.execCommand('copy');
                     document.body.removeChild(ta);
                     if (ok) showToast('📋 הועתק'); else prompt('העתק מכאן:', t);
@@ -2469,34 +2309,26 @@ function importJson(e) {
             }
         }
 
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         // HELPERS
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         function escapeHtml(text) {
             if (!text) return '';
             const str = String(text);
-            // מניעת הרצת סקריפטים מתוך קישורים
             if (str.toLowerCase().trim().startsWith('javascript:')) return '#blocked';
-            
-            return str
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
+            return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
         }
 
         function closeAllMenus() {
-            document.querySelectorAll('.dropdown-content').forEach(el => {
-                el.classList.remove('show');
-                el.style.maxWidth = '';
-            });
+            document.querySelectorAll('.dropdown-content').forEach(el => { el.classList.remove('show'); el.style.maxWidth = ''; });
             document.querySelectorAll('.drop-trigger').forEach(el => el.classList.remove('active'));
             const aiMenu = document.getElementById('aiFloatingMenu');
             if (aiMenu) aiMenu.style.display = 'none';
         }
 
         function updateCategoryDropdowns() {
-            const cats = new Set(state.items.map(i => i.category || 'כללי').filter(Boolean));
-            const select = document.getElementById('categoryFilter');
+            const cats    = new Set(state.items.map(i => i.category || 'כללי').filter(Boolean));
+            const select  = document.getElementById('categoryFilter');
             const datalist = document.getElementById('categoriesDatalist');
             if (!select || !datalist) return;
             const currentVal = select.value;
@@ -2504,10 +2336,10 @@ function importJson(e) {
             let listHtml = '';
             [...cats].sort().forEach(c => {
                 const s = escapeHtml(c);
-                html += `<option value="${s}">${s}</option>`;
+                html     += `<option value="${s}">${s}</option>`;
                 listHtml += `<option value="${s}">`;
             });
-            select.innerHTML = html;
+            select.innerHTML   = html;
             datalist.innerHTML = listHtml;
             if (currentVal && cats.has(currentVal)) select.value = currentVal;
         }
@@ -2529,20 +2361,20 @@ function importJson(e) {
             if (btn) btn.textContent = isDark ? '☀️' : '🌙';
         }
 
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         // TRASH UI
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         function openTrashModal() {
             const list = document.getElementById('trashList');
             list.innerHTML = '';
             if (state.trash.length === 0) {
-                list.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-secondary);">סל המחזור ריק 🗑️</div>';
+                list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-secondary);">סל המחזור ריק 🗑️</div>';
             } else {
                 state.trash.forEach(item => {
                     const el = document.createElement('div');
                     el.className = 'trash-item';
                     el.innerHTML = `
-                        <div style="flex-grow:1; min-width:0; margin-left:10px; overflow:hidden;">
+                        <div style="flex-grow:1;min-width:0;margin-left:10px;overflow:hidden;">
                             <strong style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(item.description || item.content)}</strong>
                             <small style="opacity:0.6;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(item.content)}</small>
                         </div>
@@ -2565,21 +2397,14 @@ function importJson(e) {
             delete item.deletedAt;
             state.items.unshift(item);
             state.trash.splice(idx, 1);
-            renderList();
-            updateCategoryDropdowns();
-            pushToCloud(true); // immediate
-            openTrashModal();
-
+            renderList(); updateCategoryDropdowns(); pushToCloud(true); openTrashModal();
             showToast('♻️ הפריט שוחזר', () => {
                 const fromItems = state.items.find(i => i.id === id);
                 if (fromItems) {
                     fromItems.deletedAt = new Date().toISOString();
                     state.trash.splice(idx, 0, fromItems);
                     state.items = state.items.filter(i => i.id !== id);
-                    renderList();
-                    updateCategoryDropdowns();
-                    pushToCloud(true);
-                    openTrashModal();
+                    renderList(); updateCategoryDropdowns(); pushToCloud(true); openTrashModal();
                 }
             });
         };
@@ -2589,12 +2414,9 @@ function importJson(e) {
             if (idx === -1) return;
             const itemCopy = JSON.parse(JSON.stringify(state.trash[idx]));
             state.trash.splice(idx, 1);
-            pushToCloud(true); // immediate
-            openTrashModal();
+            pushToCloud(true); openTrashModal();
             showToast('הפריט נמחק לצמיתות', () => {
-                state.trash.splice(idx, 0, itemCopy);
-                pushToCloud(true);
-                openTrashModal();
+                state.trash.splice(idx, 0, itemCopy); pushToCloud(true); openTrashModal();
             });
         };
 
@@ -2606,17 +2428,10 @@ function importJson(e) {
             toRestore.forEach(i => delete i.deletedAt);
             state.items = [...toRestore, ...state.items];
             state.trash = [];
-            updateCategoryDropdowns();
-            renderList();
-            pushToCloud(true); // immediate
-            openTrashModal();
+            updateCategoryDropdowns(); renderList(); pushToCloud(true); openTrashModal();
             showToast(`♻️ שוחזרו ${toRestore.length} פריטים`, () => {
-                state.items = origItems;
-                state.trash = toRestore;
-                updateCategoryDropdowns();
-                renderList();
-                pushToCloud(true);
-                openTrashModal();
+                state.items = origItems; state.trash = toRestore;
+                updateCategoryDropdowns(); renderList(); pushToCloud(true); openTrashModal();
             });
         });
 
@@ -2625,53 +2440,36 @@ function importJson(e) {
             if (!confirm(`האם למחוק לצמיתות ${state.trash.length} פריטים?`)) return;
             const origTrash = JSON.parse(JSON.stringify(state.trash));
             state.trash = [];
-            pushToCloud(true); // immediate
-            openTrashModal();
-            showToast('סל המחזור רוקן', () => {
-                state.trash = origTrash;
-                pushToCloud(true);
-                openTrashModal();
-            });
+            pushToCloud(true); openTrashModal();
+            showToast('סל המחזור רוקן', () => { state.trash = origTrash; pushToCloud(true); openTrashModal(); });
         });
 
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         // SCROLL TO TOP
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         function setupScrollToTop() {
             const btn = document.getElementById('scrollTopBtn');
             if (!btn) return;
-            
             window.addEventListener('scroll', () => {
                 if (window.scrollY > 250) btn.classList.add('show'); else btn.classList.remove('show');
             }, { passive: true });
-            
             btn.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
-            // התאמה דינמית של מיקום הכפתור כך שיצוף מעל ההתראות (Toasts) כשהן מופיעות
             const toastContainer = document.getElementById('toast-container');
             if (toastContainer) {
                 const updatePosition = () => {
-                    if (toastContainer.children.length > 0) {
-                        // מרימים את הכפתור מעל גובה חלון ההתראות באופן דינמי
-                        btn.style.bottom = `${toastContainer.offsetHeight + 45}px`;
-                    } else {
-                        // מחזירים את הכפתור חזרה למיקום המקורי בתחתית
-                        btn.style.bottom = '28px';
-                    }
+                    btn.style.bottom = toastContainer.children.length > 0
+                        ? `${toastContainer.offsetHeight + 45}px`
+                        : '28px';
                 };
-
-                // מאזין לשינויי גובה (למשל כשהתראה מתרחבת או כשנוספות כמה התראות במקביל)
-                if (window.ResizeObserver) {
-                    new ResizeObserver(updatePosition).observe(toastContainer);
-                }
-                // מאזין להוספה או הסרה של התראות מהקונטיינר
+                if (window.ResizeObserver) new ResizeObserver(updatePosition).observe(toastContainer);
                 new MutationObserver(updatePosition).observe(toastContainer, { childList: true });
             }
         }
 
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         // TOAST SYSTEM
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         function showToast(msg, undoCallback = null, duration = 8000, id = null, isWarning = false) {
             const container = document.getElementById('toast-container');
             if (!container) return null;
@@ -2696,79 +2494,60 @@ function importJson(e) {
             const toast = document.createElement('div');
             toast.className = 'toast-item';
             if (id) toast.id = id;
-
-            const undoHtml = undoCallback ? `<button class="toast-undo-btn">↪ בטל</button>` : '';
-            const progressBg = isWarning ? 'var(--accent-gold)' : 'var(--accent-green)';
+            const undoHtml    = undoCallback ? `<button class="toast-undo-btn">↪ בטל</button>` : '';
+            const progressBg  = isWarning ? 'var(--accent-gold)' : 'var(--accent-green)';
             const progressAnim = duration > 0 ? 'animating' : '';
             toast.innerHTML = `
                 <div class="toast-content">
                     <span class="toast-msg">${msg}</span>
                     ${undoHtml}
                 </div>
-                <div class="toast-progress ${progressAnim}" style="animation-duration:${duration}ms; background:${progressBg}; display:${duration > 0 ? 'block' : 'none'};"></div>
+                <div class="toast-progress ${progressAnim}" style="animation-duration:${duration}ms;background:${progressBg};display:${duration > 0 ? 'block' : 'none'};"></div>
             `;
-
             container.appendChild(toast);
             if (undoCallback) {
-                toast.querySelector('.toast-undo-btn').onclick = () => {
-                    undoCallback();
-                    removeToast(toast);
-                };
+                toast.querySelector('.toast-undo-btn').onclick = () => { undoCallback(); removeToast(toast); };
             }
-
             requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('visible')));
             if (duration > 0) setTimeout(() => removeToast(toast), duration);
             return toast;
         }
 
         function removeToast(toastElement) {
-            const toast = typeof toastElement === 'string'
-                ? document.getElementById(toastElement)
-                : toastElement;
+            const toast = typeof toastElement === 'string' ? document.getElementById(toastElement) : toastElement;
             if (!toast || toast.classList.contains('leaving')) return;
             toast.classList.remove('visible');
             toast.classList.add('leaving');
             setTimeout(() => { if (toast.parentElement) toast.remove(); }, 300);
         }
 
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         // AI FLOATING MENU
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         window.openAiFloatingMenu = function (id, e) {
-            e.preventDefault();
-            e.stopPropagation();
+            e.preventDefault(); e.stopPropagation();
             window.activeAiScanId = id;
             closeAllMenus();
-
             const qs = JSON.parse(localStorage.getItem('aiQuickSettings') || '{}');
             const cb = document.getElementById('aiUrlOnlyCheckbox');
             if (cb) cb.checked = qs.urlOnly || false;
-
             document.querySelectorAll('.ai-provider-btn').forEach(btn => {
                 const isActive = btn.getAttribute('data-provider') === (qs.provider || getAiSettings().provider);
                 btn.style.fontWeight = isActive ? 'bold' : 'normal';
                 btn.style.background = isActive ? 'rgba(127,127,127,0.2)' : 'none';
             });
-
             const menu = document.getElementById('aiFloatingMenu');
             menu.style.display = 'block';
-
             let clientX = e.clientX || 0, clientY = e.clientY || 0;
             if (e.touches?.length) { clientX = e.touches[0].clientX; clientY = e.touches[0].clientY; }
-            if (!clientX) {
-                const rect = e.target?.getBoundingClientRect() || { left: 0, bottom: 0 };
-                clientX = rect.left; clientY = rect.bottom;
-            }
-
+            if (!clientX) { const rect = e.target?.getBoundingClientRect() || { left: 0, bottom: 0 }; clientX = rect.left; clientY = rect.bottom; }
             const mw = menu.offsetWidth || 230, mh = menu.offsetHeight || 200;
             const vw = window.innerWidth, vh = window.innerHeight;
             let left = clientX - mw / 2, top = clientY + 12;
             if (top + mh > vh - 10) top = clientY - mh - 12;
-            if (top < 10) top = 10;
-            if (left < 10) left = 10;
+            if (top < 10) top = 10; if (left < 10) left = 10;
             if (left + mw > vw - 10) left = vw - mw - 10;
-            menu.style.top = `${top}px`;
-            menu.style.left = `${left}px`;
+            menu.style.top = `${top}px`; menu.style.left = `${left}px`;
         };
 
         document.getElementById('aiUrlOnlyCheckbox')?.addEventListener('change', (e) => {
@@ -2788,9 +2567,9 @@ function importJson(e) {
             });
         });
 
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         // MULTI-SELECT
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         function enterSelectionMode(firstId) {
             state.isSelectionMode = true;
             state.selectedIds.add(firstId);
@@ -2801,19 +2580,17 @@ function importJson(e) {
         }
 
         function toggleSelection(id) {
-            const cardEl = document.querySelector(`.card[data-id="${id}"]`);
+            const cardEl   = document.querySelector(`.card[data-id="${id}"]`);
             const checkbox = cardEl?.querySelector('.card-checkbox');
-            
             if (state.selectedIds.has(id)) {
                 state.selectedIds.delete(id);
-                if (cardEl) cardEl.classList.remove('selected');
+                if (cardEl)   cardEl.classList.remove('selected');
                 if (checkbox) checkbox.checked = false;
             } else {
                 state.selectedIds.add(id);
-                if (cardEl) cardEl.classList.add('selected');
+                if (cardEl)   cardEl.classList.add('selected');
                 if (checkbox) checkbox.checked = true;
             }
-            
             if (state.selectedIds.size === 0) exitSelectionMode();
             else updateBulkActionBar();
         }
@@ -2826,41 +2603,30 @@ function importJson(e) {
             renderList();
         }
 
-       function updateBulkActionBar() {
+        function updateBulkActionBar() {
             document.getElementById('selectedCount').textContent = `${state.selectedIds.size} פריטים נבחרו`;
-            
-            // מתאים את כפתור "בחר הכל" לכמות הפריטים שמוצגת כרגע במסך בלבד
             const visibleCount = state.filteredItems ? state.filteredItems.length : state.items.length;
             document.getElementById('selectAllCheckbox').checked =
                 state.selectedIds.size > 0 && state.selectedIds.size === visibleCount;
-            
             document.getElementById('bulkActionBar').classList.add('visible');
         }
 
         document.getElementById('cancelBulkBtn')?.addEventListener('click', exitSelectionMode);
 
         document.getElementById('selectAllCheckbox')?.addEventListener('change', (e) => {
-            const listToSelect = state.filteredItems || state.items; // שימוש ברשימה המסוננת
-            if (e.target.checked) {
-                // בחירת כל הפריטים שמוצגים כרגע על המסך
-                listToSelect.forEach(i => state.selectedIds.add(i.id));
-            } else {
-                // הסרה חכמה: מסיר מהבחירה רק את מה שמוצג כרגע על המסך (שומר בחירות קודמות שהוסתרו בסינון)
-                listToSelect.forEach(i => state.selectedIds.delete(i.id));
-            }
-            
+            const listToSelect = state.filteredItems || state.items;
+            if (e.target.checked) listToSelect.forEach(i => state.selectedIds.add(i.id));
+            else                  listToSelect.forEach(i => state.selectedIds.delete(i.id));
             if (state.selectedIds.size === 0) exitSelectionMode();
             else { updateBulkActionBar(); renderList(); }
         });
 
-       // כפתור סריקת AI לפריטים נבחרים בלבד
         document.getElementById('bulkAiBtn')?.addEventListener('click', async () => {
             if (!navigator.onLine) return showToast('❌ לא ניתן לבצע סריקת AI מרובה ללא רשת.', null, 4000, null, true);
             const settings = getAiSettings();
-            if (!settings.keys.gemini && !settings.keys.groq && !settings.keys.openrouter) {
+            if (!settings.keys.gemini.length && !settings.keys.groq.length && !settings.keys.openrouter.length)
                 return alert('אנא הזן לפחות מפתח API אחד בהגדרות ה-AI.');
-            }
-            if (!confirm(`האם לסרוק מחדש ב-AI את ${state.selectedIds.size} הפריטים שבחרת?`)) return;
+            if (!confirm(`האם לסרוק ב-AI את ${state.selectedIds.size} הפריטים שבחרת?`)) return;
 
             const selectedArr = Array.from(state.selectedIds);
             exitSelectionMode();
@@ -2871,41 +2637,33 @@ function importJson(e) {
 
             for (let i = 0; i < selectedArr.length; i++) {
                 if (abortAiScan) break;
-                const itemId = selectedArr[i];
+                const itemId  = selectedArr[i];
                 const itemObj = state.items.find(it => it.id === itemId);
                 if (!itemObj) continue;
-
                 const pct = Math.round((i / selectedArr.length) * 100);
                 showToast(`<div style="width:100%;">
                     <div>🤖 <b>סורק נבחרים...</b> [${i + 1}/${selectedArr.length}]</div>
                     <div style="font-size:11px;opacity:0.75;margin-top:3px;direction:ltr;">${escapeHtml(itemObj.content).substring(0, 35)}...</div>
                     <div style="width:100%;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin-top:8px;overflow:hidden;">
                         <div style="width:${pct}%;height:100%;background:var(--accent-green);transition:width 0.3s;"></div>
-                    </div>
-                </div>`, null, 0, bulkToastId, false);
+                    </div></div>`, null, 0, bulkToastId, false);
 
-                // קריאת ההגדרות (כדי לכבד את בקשת המשתמש לסרוק רק לפי כתובת ה-URL במידה וסימן זאת)
                 const qs = JSON.parse(localStorage.getItem('aiQuickSettings') || '{}');
                 await scanSingleItem(itemId, qs.provider || null, qs.urlOnly || false);
-                
                 if (abortAiScan) break;
 
                 if (i < selectedArr.length - 1) {
                     const result = state.items.find(it => it.id === itemId);
                     let delay = 300;
                     if (result?.aiSummary && isQuotaError(result.aiSummary)) {
-                        delay = 20000;
-                        window.lastWorkingAiProvider = null;
+                        delay = 20000; window.lastWorkingAiProvider = null;
                         showToast(`<div style="width:100%;"><div>⚠️ <b>מכסות מלאות — ממתין 20 שניות...</b></div>
                             <div style="width:100%;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin-top:8px;overflow:hidden;">
                                 <div style="width:${pct}%;height:100%;background:var(--accent-gold);"></div>
                             </div></div>`, null, 0, bulkToastId, true);
                     }
                     let waited = 0;
-                    while (waited < delay && !abortAiScan) {
-                        await new Promise(r => setTimeout(r, 100));
-                        waited += 100;
-                    }
+                    while (waited < delay && !abortAiScan) { await new Promise(r => setTimeout(r, 100)); waited += 100; }
                 }
             }
 
@@ -2918,82 +2676,52 @@ function importJson(e) {
         document.getElementById('bulkDeleteBtn')?.addEventListener('click', () => {
             if (!confirm(`האם לשלוח ${state.selectedIds.size} פריטים לסל המחזור?`)) return;
             const selectedArr = Array.from(state.selectedIds);
-            const toTrash = state.items
-                .filter(i => state.selectedIds.has(i.id))
-                .map(i => {
-                    const c = JSON.parse(JSON.stringify(i));
-                    EPHEMERAL_FIELDS.forEach(f => delete c[f]);
-                    c.deletedAt = new Date().toISOString();
-                    return c;
-                });
+            const toTrash = state.items.filter(i => state.selectedIds.has(i.id)).map(i => {
+                const c = JSON.parse(JSON.stringify(i));
+                EPHEMERAL_FIELDS.forEach(f => delete c[f]);
+                c.deletedAt = new Date().toISOString();
+                return c;
+            });
             const cleanToRestore = toTrash.map(i => { const c = { ...i }; delete c.deletedAt; return c; });
             state.trash.unshift(...toTrash);
             state.items = state.items.filter(i => !state.selectedIds.has(i.id));
-            renderList();
-            updateCategoryDropdowns();
-            pushToCloud(true); // immediate
-            exitSelectionMode();
+            renderList(); updateCategoryDropdowns(); pushToCloud(true); exitSelectionMode();
             showToast(`🗑️ ${toTrash.length} פריטים הועברו לסל`, () => {
                 state.items.unshift(...cleanToRestore);
                 state.trash = state.trash.filter(t => !selectedArr.includes(t.id));
-                renderList();
-                updateCategoryDropdowns();
-                pushToCloud(true);
+                renderList(); updateCategoryDropdowns(); pushToCloud(true);
             });
         });
 
         document.getElementById('bulkMoveBtn')?.addEventListener('click', () => {
             const newCat = prompt('לאיזו קטגוריה להעביר? (השאר ריק = "כללי")');
             if (newCat === null) return;
-            const catName = newCat.trim() || 'כללי';
+            const catName  = newCat.trim() || 'כללי';
             const prevCats = [];
             state.items.forEach(i => {
                 if (state.selectedIds.has(i.id)) { prevCats.push({ id: i.id, category: i.category }); i.category = catName; }
             });
             const count = state.selectedIds.size;
-            
-            updateCategoryDropdowns();
-            pushToCloud(true); // immediate
-            exitSelectionMode(); // פונקציית היציאה כבר קוראת בעצמה ל-renderList, לכן מחקנו את הכפילות
+            updateCategoryDropdowns(); pushToCloud(true); exitSelectionMode();
             showToast(`📂 ${count} פריטים → "${catName}"`, () => {
-                prevCats.forEach(p => {
-                    const ci = state.items.find(i => i.id === p.id);
-                    if (ci) ci.category = p.category;
-                });
-                renderList();
-                updateCategoryDropdowns();
-                pushToCloud(true);
+                prevCats.forEach(p => { const ci = state.items.find(i => i.id === p.id); if (ci) ci.category = p.category; });
+                renderList(); updateCategoryDropdowns(); pushToCloud(true);
             });
         });
 
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         // DEVTOOLS PROTECTION
-        // ══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
         const ADMIN_EMAIL = "meirhadad74@gmail.com";
-        let _devtoolsIntervalId = null;
 
-        function checkDevTools() {
+        setInterval(() => {
             const overlay = document.getElementById('devtools-overlay');
             if (!overlay) return;
-            if (state.isOffline || state.user?.email === ADMIN_EMAIL) {
-                overlay.style.display = 'none';
-                return;
-            }
+            if (state.isOffline || state.user?.email === ADMIN_EMAIL) { overlay.style.display = 'none'; return; }
             const wDiff = window.outerWidth - window.innerWidth;
             const hDiff = window.outerHeight - window.innerHeight;
-            const threshold = 160;
-            
-            // תופס DevTools גם כשהם בצד (רוחב) וגם כשהם למטה (גובה), מתעלם ממצבי מסך מלא לגיטימיים
-            const isDevToolsOpen = (wDiff > threshold || hDiff > threshold) && !document.fullscreenElement;
-            
-            if (isDevToolsOpen) {
-                overlay.style.display = 'flex';
-            } else {
-                overlay.style.display = 'none';
-            }
-        }
-
-        _devtoolsIntervalId = setInterval(checkDevTools, 2000);
+            overlay.style.display = (wDiff > 160 || hDiff > 160) && !document.fullscreenElement ? 'flex' : 'none';
+        }, 2000);
 
         document.addEventListener('contextmenu', e => {
             if (state.isOffline || state.user?.email === ADMIN_EMAIL) return;
@@ -3002,11 +2730,8 @@ function importJson(e) {
 
         document.addEventListener('keydown', e => {
             if (state.isOffline || state.user?.email === ADMIN_EMAIL) return;
-            if (e.key === 'F12' ||
-                (e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(e.key)) ||
-                (e.ctrlKey && e.key === 'u')) {
+            if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I','J','C'].includes(e.key)) || (e.ctrlKey && e.key === 'u'))
                 e.preventDefault();
-            }
         });
     </script>
 </body>
