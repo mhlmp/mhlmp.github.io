@@ -668,7 +668,7 @@
         };
         let abortAiScan = false;
 
-      async function pushToCloud() {
+     async function pushToCloud() {
             if (state.isOffline) {
                 const dataToSave = JSON.stringify({ items: state.items, trash: state.trash });
                 localStorage.setItem('linkManagerLocalData', dataToSave);
@@ -684,10 +684,10 @@
             try {
                 updateSyncStatus('syncing', 'מסנכרן...');
                 
-                const cleanItems = state.items.map(item => {
-                    const c = { ...item };
+                // הטריק שמנקה אוטומטית ערכי undefined ומבטיח שהסנכרון לא יקרוס
+                const cleanItems = JSON.parse(JSON.stringify(state.items));
+                cleanItems.forEach(c => {
                     EPHEMERAL_FIELDS.forEach(f => delete c[f]);
-                    return c;
                 });
                 
                 await setDoc(doc(db, "users", state.user.uid), { 
@@ -696,6 +696,9 @@
                     aiSettings: getAiSettings(), 
                     lastUpdated: new Date().toISOString() 
                 }, { merge: true });
+                
+                // מחזיר לחיווי 'מחובר' לאחר שמירה מוצלחת
+                updateSyncStatus('online', 'מחובר');
                 
             } catch (e) { 
                 console.error("Sync error:", e);
@@ -976,7 +979,7 @@
 
                     const userDoc = doc(db, "users", user.uid);
 
-                   state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
+                  state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
                         if (docSnap.exists()) {
                             const d = docSnap.data();
                             
@@ -994,16 +997,21 @@
                             }
                             localStorage.setItem('linkManager_cache_' + user.uid, JSON.stringify({ items: state.items, trash: state.trash }));
                             
-                            const isFromCache = docSnap.metadata.fromCache;
-                            
                             renderList();
                             updateCategoryDropdowns();
                             hideLoader();
 
-                            updateSyncStatus(
-                                isFromCache || !navigator.onLine ? 'offline' : 'online', 
-                                isFromCache || !navigator.onLine ? 'טוען / מקומי...' : 'מחובר'
-                            );
+                            const isFromCache = docSnap.metadata.fromCache;
+                            const hasPending = docSnap.metadata.hasPendingWrites;
+                            
+                            // חיווי חכם: מתחשב בשמירות שממתינות ברקע
+                            if (hasPending) {
+                                updateSyncStatus('syncing', 'מסנכרן...');
+                            } else if (!navigator.onLine) {
+                                updateSyncStatus('offline', 'אין רשת');
+                            } else {
+                                updateSyncStatus('online', 'מחובר');
+                            }
                         }
                     }, (err) => {
                         console.error(err);
@@ -1094,50 +1102,50 @@
             } catch (e) { alert(e.message); }
         }
 
-       async function forceReload(silent = false) {
-            if (!state.user || state.isOffline) return;
-            if (!navigator.onLine) {
-                if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
-                return;
-            }
+      async function forceReload(silent = false) {
+            if (!state.user || state.isOffline) return;
+            if (!navigator.onLine) {
+                if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
+                return;
+            }
 
-            const btn = document.getElementById('forceReloadBtn');
-            if (btn) btn.classList.add('spinning');
-            
-            if (!silent) {
-                updateSyncStatus('syncing', 'מושך מהענן...');
-                showToast("🔄 מושך נתונים עדכניים מהענן...");
-            }
+            const btn = document.getElementById('forceReloadBtn');
+            if (btn) btn.classList.add('spinning');
+            
+            if (!silent) {
+                updateSyncStatus('syncing', 'מושך מהענן...');
+                showToast("🔄 מושך נתונים עדכניים מהענן...");
+            }
 
-            try {
-                const snap = await getDocFromServer(doc(db, "users", state.user.uid));
-                if (snap.exists()) {
-                    const d = snap.data();
-                    const serverItems = d.items || [];
-                    serverItems.forEach(sItem => {
-                        const local = state.items.find(i => i.id === sItem.id);
-                        if (local?.isScanning) sItem.isScanning = true;
-                    });
+            try {
+                // שימוש ב-getDoc הבטוח שלא יוצר התנגשויות (Locks)
+                const snap = await getDoc(doc(db, "users", state.user.uid));
+                if (snap.exists()) {
+                    const d = snap.data();
+                    const serverItems = d.items || [];
+                    serverItems.forEach(sItem => {
+                        const local = state.items.find(i => i.id === sItem.id);
+                        if (local?.isScanning) sItem.isScanning = true;
+                    });
 
-                    state.items = serverItems;
-                    state.trash = d.trash || [];
-                    
-                    if (d.aiSettings) localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
-                    localStorage.setItem('linkManager_cache_' + state.user.uid, JSON.stringify({ items: state.items, trash: state.trash }));
-                    renderList();
-                    updateCategoryDropdowns();
-                }
-                updateSyncStatus('online', 'מחובר');
-                if (!silent) showToast("✅ רענון נתונים מהענן בוצע");
-            } catch (err) {
-                console.error(err);
-                updateSyncStatus('error', 'שגיאת חיבור');
-                if (!silent) showToast('❌ שגיאה ברענון. בדוק חיבור אינטרנט.', null, 4000, null, true);
-            } finally {
-                if (btn) setTimeout(() => btn.classList.remove('spinning'), 600);
-            }
-        }
-
+                    state.items = serverItems;
+                    state.trash = d.trash || [];
+                    
+                    if (d.aiSettings) localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
+                    localStorage.setItem('linkManager_cache_' + state.user.uid, JSON.stringify({ items: state.items, trash: state.trash }));
+                    renderList();
+                    updateCategoryDropdowns();
+                }
+                updateSyncStatus('online', 'מחובר');
+                if (!silent) showToast("✅ רענון נתונים מהענן בוצע");
+            } catch (err) {
+                console.error(err);
+                updateSyncStatus('error', 'שגיאת חיבור');
+                if (!silent) showToast('❌ שגיאה ברענון. בדוק חיבור אינטרנט.', null, 4000, null, true);
+            } finally {
+                if (btn) setTimeout(() => btn.classList.remove('spinning'), 600);
+            }
+        }
         // ═══════════════════════════════════════════════════════════════════════
         // RENDER
         // ═══════════════════════════════════════════════════════════════════════
