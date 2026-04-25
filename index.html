@@ -507,6 +507,7 @@
         <div id="listContainer"></div>
     </div>
 
+    <!-- Trash Modal -->
     <div id="trashModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -521,6 +522,7 @@
         </div>
     </div>
 
+    <!-- Edit Item Modal -->
     <div id="editModal" class="edit-modal-wrap">
         <div class="edit-modal-box">
             <h3>✏️ עריכת פריט</h3>
@@ -538,6 +540,7 @@
         </div>
     </div>
 
+    <!-- Edit AI Modal -->
     <div id="editAiModal" class="edit-modal-wrap">
         <div class="edit-modal-box">
             <h3>🤖✏️ עריכת פיענוח AI</h3>
@@ -562,6 +565,7 @@
         </div>
     </div>
 
+    <!-- AI Settings Modal -->
     <div id="aiSettingsModal" class="edit-modal-wrap">
         <div class="edit-modal-box" style="max-width:430px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
@@ -610,6 +614,7 @@
     <div id="toast-container"></div>
     <button id="scrollTopBtn" title="גלול למעלה">☝️</button>
 
+    <!-- Floating AI provider menu -->
     <div id="aiFloatingMenu">
         <div style="padding: 8px 15px; font-size: 11px; opacity: 0.7; font-weight: bold; border-bottom: 1px solid var(--glass-border);">בחר מנוע פענוח:</div>
         <div style="padding: 10px 15px; border-bottom: 1px solid rgba(127,127,127,0.1); display: flex; align-items: center; gap: 10px;">
@@ -663,7 +668,93 @@
         };
         let abortAiScan = false;
 
-        async function pushToCloud() {
+        // ═══════════════════════════════════════════════════════════════════════
+        // SYNC ENGINE — debounce + offline queue + BroadcastChannel + conflict guard
+        // ═══════════════════════════════════════════════════════════════════════
+        let _syncDebounceTimer   = null;
+        let _syncInFlight        = false;
+        let _offlineWriteQueued  = false;
+        let _lastServerTimestamp = null;   // timestamp שקיבלנו מהענן לאחרונה
+        let _localWriteTimestamp = null;   // timestamp שכתבנו לאחרונה
+
+        // BroadcastChannel — סנכרון מיידי בין טאבים באותו דפדפן
+        let _bc = null;
+        try {
+            _bc = new BroadcastChannel('mh-link-manager-sync');
+            _bc.onmessage = (e) => {
+                if (!state.user || e.data?.uid !== state.user?.uid) return;
+                if (e.data?.type === 'DATA_CHANGED') {
+                    // טאב אחר שמר — נעדכן את הממשק מהמטמון בלי לפגוע בענן
+                    try {
+                        const cached = JSON.parse(localStorage.getItem('linkManager_cache_' + state.user.uid) || '{}');
+                        if (cached.items) {
+                            cached.items.forEach(sItem => {
+                                const local = state.items.find(i => i.id === sItem.id);
+                                if (local?.isScanning) sItem.isScanning = true;
+                            });
+                            state.items = cached.items;
+                            state.trash = cached.trash || [];
+                            renderList();
+                            updateCategoryDropdowns();
+                        }
+                    } catch {}
+                }
+            };
+        } catch (e) { console.warn('[BroadcastChannel] לא נתמך:', e); }
+
+        function _broadcastChange() {
+            try { _bc?.postMessage({ type: 'DATA_CHANGED', uid: state.user?.uid }); } catch {}
+        }
+
+        // תור offline — שמירת שינויים שנעשו ללא רשת לשליחה כשהרשת חוזרת
+        function _flushOfflineQueue() {
+            if (!_offlineWriteQueued || !navigator.onLine || !state.user || state.isOffline) return;
+            _offlineWriteQueued = false;
+            console.log('[Sync] שולח תור offline לענן...');
+            _executeCloudWrite();
+        }
+
+        async function _executeCloudWrite() {
+            if (!state.user || state.isOffline || _syncInFlight) return;
+            if (!navigator.onLine) {
+                _offlineWriteQueued = true;
+                updateSyncStatus('offline', 'ממתין לרשת...');
+                return;
+            }
+            _syncInFlight = true;
+            updateSyncStatus('syncing', 'מסנכרן...');
+            try {
+                const cleanItems = JSON.parse(JSON.stringify(state.items));
+                cleanItems.forEach(c => EPHEMERAL_FIELDS.forEach(f => delete c[f]));
+
+                const writeTs = new Date().toISOString();
+                _localWriteTimestamp = writeTs;
+
+                await setDoc(doc(db, "users", state.user.uid), {
+                    items: cleanItems,
+                    trash: state.trash,
+                    aiSettings: getAiSettings(),
+                    lastUpdated: writeTs
+                }, { merge: true });
+
+                // עדכן מטמון
+                localStorage.setItem('linkManager_cache_' + state.user.uid,
+                    JSON.stringify({ items: state.items, trash: state.trash }));
+                _broadcastChange();
+                updateSyncStatus('online', 'מחובר ✓');
+            } catch (e) {
+                console.error('[Sync] שגיאת כתיבה:', e);
+                updateSyncStatus('error', 'שגיאה בשמירה');
+                showToast('⚠️ שגיאה בסנכרון לענן — יחזור אוטומטית', null, 4000, null, true);
+                // נסה שוב אחרי 5 שניות
+                setTimeout(() => { if (navigator.onLine) _executeCloudWrite(); }, 5000);
+            } finally {
+                _syncInFlight = false;
+            }
+        }
+
+        // pushToCloud — הפונקציה הראשית עם debounce של 1.2 שניות
+        function pushToCloud(immediate = false) {
             if (state.isOffline) {
                 const dataToSave = JSON.stringify({ items: state.items, trash: state.trash });
                 localStorage.setItem('linkManagerLocalData', dataToSave);
@@ -674,30 +765,13 @@
                 showToast("נשמר מקומית בהצלחה!");
                 return;
             }
-            
             if (!state.user) return;
-            try {
-                updateSyncStatus('syncing', 'מסנכרן...');
-                
-                // התיקון: ניקוי עמוק ובטוח של כל שדה זמני שעלול לחסום שמירה בענן
-                const cleanItems = JSON.parse(JSON.stringify(state.items));
-                cleanItems.forEach(c => {
-                    EPHEMERAL_FIELDS.forEach(f => delete c[f]);
-                });
-                
-                await setDoc(doc(db, "users", state.user.uid), { 
-                    items: cleanItems, 
-                    trash: state.trash, 
-                    aiSettings: getAiSettings(), 
-                    lastUpdated: new Date().toISOString() 
-                }, { merge: true });
-                
-                // אין צורך לעדכן כאן חיווי - מאזין ה-onSnapshot יעשה זאת אוטומטית כשהענן יאשר
-            } catch (e) { 
-                console.error("Sync error:", e);
-                showToast('שגיאה בסנכרון לענן'); 
-                updateSyncStatus('error', 'שגיאה בשמירה'); 
-            }
+
+            clearTimeout(_syncDebounceTimer);
+            updateSyncStatus('syncing', 'ממתין לשמירה...');
+
+            const delay = immediate ? 0 : 1200;
+            _syncDebounceTimer = setTimeout(() => _executeCloudWrite(), delay);
         }
         
         // ═══════════════════════════════════════════════════════════════════════
@@ -854,27 +928,30 @@
             });
 
           window.addEventListener('online', () => {
-                updateSyncStatus('syncing', 'מתחבר מחדש...');
-                showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 4000);
-                if (state.user) setTimeout(() => forceReload(true), 1200);
-            });
+                updateSyncStatus('syncing', 'מתחבר מחדש...');
+                showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 4000);
+                setTimeout(() => {
+                _flushOfflineQueue();
+                if (state.user) forceReload(true);
+            }, 800);
+            });
 
-            // ── סנכרון חכם בחזרה מהרקע (קריטי למובייל) ──
-            let _lastSyncTimestamp = 0;
-            const backgroundSync = () => {
-                if (!state.user || state.isOffline || !navigator.onLine) return;
-                const now = Date.now();
-                if (now - _lastSyncTimestamp < 8000) return; // מונע הצפה (השהיה של 8 שניות)
-                _lastSyncTimestamp = now;
-                forceReload(true); // כופה משיכת נתונים שקטה מהשרת
-            };
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') backgroundSync();
-            });
-            window.addEventListener('focus', backgroundSync);
-            // ───────────────────────────────────────────
+            // ── סנכרון חכם בחזרה מהרקע (קריטי למובייל) ──
+            let _lastSyncTimestamp = 0;
+            const backgroundSync = () => {
+                if (!state.user || state.isOffline || !navigator.onLine) return;
+                const now = Date.now();
+                if (now - _lastSyncTimestamp < 8000) return; // מונע הצפה (השהיה של 8 שניות)
+                _lastSyncTimestamp = now;
+                forceReload(true); // כופה משיכת נתונים שקטה מהשרת
+            };
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') backgroundSync();
+            });
+            window.addEventListener('focus', backgroundSync);
+            // ───────────────────────────────────────────
 
-            document.getElementById('editItemForm')?.addEventListener('submit', handleEditSubmit);
+            document.getElementById('editItemForm')?.addEventListener('submit', handleEditSubmit);
             document.getElementById('editAiForm')?.addEventListener('submit', handleEditAiSubmit);
             document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
             document.getElementById('exportTxtBtn')?.addEventListener('click', exportTxt);
@@ -937,7 +1014,7 @@
             });
         }
 
-        function setupFirebaseListeners() {
+       function setupFirebaseListeners() {
             if (!auth || !db) return;
             onAuthStateChanged(auth, (user) => {
                 if (user) {
@@ -972,11 +1049,24 @@
 
                     const userDoc = doc(db, "users", user.uid);
 
-                    state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
-                        hideLoader(); // התיקון: תמיד מעלים את מסך הטעינה ברגע שיש תגובה כלשהי
-
+                  state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
                         if (docSnap.exists()) {
                             const d = docSnap.data();
+                            const isFromCache   = docSnap.metadata.fromCache;
+                            const hasPending    = docSnap.metadata.hasPendingWrites;
+
+                            // ── Conflict guard ─────────────────────────────────────
+                            // אם זה עדכון מהשרת (לא מהמטמון, ולא כתיבה שלנו),
+                            // נוודא שהנתונים מהשרת לא ישנים מהנתונים שכתבנו זה עתה
+                            const serverTs = d.lastUpdated || '';
+                            if (!isFromCache && !hasPending && _localWriteTimestamp && serverTs < _localWriteTimestamp) {
+                                // השרת עדיין לא קיבל את הכתיבה האחרונה שלנו — מדלגים
+                                console.log('[Sync] מדלג על עדכון ישן מהשרת');
+                                return;
+                            }
+                            _lastServerTimestamp = serverTs;
+                            // ──────────────────────────────────────────────────────
+                            
                             const serverItems = d.items || [];
                             serverItems.forEach(sItem => {
                                 const local = state.items.find(i => i.id === sItem.id);
@@ -989,35 +1079,30 @@
                             if (d.aiSettings) {
                                 localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
                             }
-                            localStorage.setItem(userCacheKey, JSON.stringify({ items: state.items, trash: state.trash }));
-                        } else {
-                            // התיקון: טיפול במצב שבו עדיין אין מסמך בענן למשתמש
-                            if (state.items.length === 0) {
-                                state.items = [];
-                                state.trash = [];
+                            // שמור מטמון מעודכן
+                            localStorage.setItem('linkManager_cache_' + user.uid,
+                                JSON.stringify({ items: state.items, trash: state.trash }));
+                            
+                            renderList();
+                            updateCategoryDropdowns();
+                            hideLoader();
+
+                            // חיווי חכם: מתחשב במקור הנתונים
+                            if (hasPending || _syncInFlight) {
+                                updateSyncStatus('syncing', 'מסנכרן...');
+                            } else if (isFromCache || !navigator.onLine) {
+                                updateSyncStatus('offline', 'מקומי');
+                            } else {
+                                updateSyncStatus('online', 'מחובר ✓');
                             }
                         }
-
-                        renderList();
-                        updateCategoryDropdowns();
-
-                        // התיקון: חיווי חכם ומדויק יותר של מצב הרשת
-                        const isFromCache = docSnap.metadata.fromCache;
-                        const hasPending = docSnap.metadata.hasPendingWrites;
-                        
-                        if (hasPending) {
-                            updateSyncStatus('syncing', 'מסנכרן...');
-                        } else if (isFromCache && navigator.onLine) {
-                            updateSyncStatus('syncing', 'מתחבר לענן...');
-                        } else if (!navigator.onLine) {
-                            updateSyncStatus('offline', 'מקומי (אין רשת)');
-                        } else {
-                            updateSyncStatus('online', 'מחובר');
-                        }
                     }, (err) => {
-                        console.error(err);
-                        hideLoader();
+                        console.error('[Sync] onSnapshot error:', err);
                         updateSyncStatus('error', 'שגיאת חיבור');
+                        // נסה לאחד מחדש אחרי 8 שניות
+                        setTimeout(() => {
+                            if (navigator.onLine && state.user) setupFirebaseListeners();
+                        }, 8000);
                     });
                 } else {
                     toggleAppInterface(false);
@@ -1088,6 +1173,7 @@
 
         async function cloudLogout() {
             if (state.unsubscribe) state.unsubscribe();
+            try { _bc?.close(); } catch {}
             if (state.user) localStorage.removeItem('linkManager_cache_' + state.user.uid);
             await signOut(auth);
             window.location.reload();
@@ -1104,7 +1190,7 @@
             } catch (e) { alert(e.message); }
         }
 
-        async function forceReload(silent = false) {
+      async function forceReload(silent = false) {
             if (!state.user || state.isOffline) return;
             if (!navigator.onLine) {
                 if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
@@ -1120,7 +1206,7 @@
             }
 
             try {
-                // מנסה למשוך ישירות מהענן כדי לעקוף את המטמון
+                // שימוש ב-getDoc הבטוח שלא יוצר התנגשויות (Locks)
                 const snap = await getDocFromServer(doc(db, "users", state.user.uid));
                 if (snap.exists()) {
                     const d = snap.data();
@@ -1135,31 +1221,15 @@
                     
                     if (d.aiSettings) localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
                     localStorage.setItem('linkManager_cache_' + state.user.uid, JSON.stringify({ items: state.items, trash: state.trash }));
-                } else {
-                    state.items = [];
-                    state.trash = [];
+                    renderList();
+                    updateCategoryDropdowns();
                 }
-                
-                renderList();
-                updateCategoryDropdowns();
                 updateSyncStatus('online', 'מחובר');
                 if (!silent) showToast("✅ רענון נתונים מהענן בוצע");
-                
             } catch (err) {
-                console.error("Force reload network err:", err);
-                // התיקון: אם המשיכה הישירה מהענן חסומה, משתמש בגרסה בטוחה כדי לא להקריס
-                try {
-                    const fallbackSnap = await getDoc(doc(db, "users", state.user.uid));
-                    if (fallbackSnap.exists()) {
-                        state.items = fallbackSnap.data().items || [];
-                        renderList();
-                    }
-                    updateSyncStatus('online', 'מחובר (חלקי)');
-                    if (!silent) showToast('⚠️ רענון בוצע בהצלחה דרך גיבוי ענן.');
-                } catch(e) {
-                    updateSyncStatus('error', 'שגיאת חיבור');
-                    if (!silent) showToast('❌ שגיאה ברענון. ייתכן שהחיבור חסום.', null, 4000, null, true);
-                }
+                console.error(err);
+                updateSyncStatus('error', 'שגיאת חיבור');
+                if (!silent) showToast('❌ שגיאה ברענון. בדוק חיבור אינטרנט.', null, 4000, null, true);
             } finally {
                 if (btn) setTimeout(() => btn.classList.remove('spinning'), 600);
             }
