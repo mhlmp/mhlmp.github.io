@@ -669,122 +669,94 @@
         let abortAiScan = false;
 
         // ═══════════════════════════════════════════════════════════════════════
-        // SYNC ENGINE — debounce + offline queue + BroadcastChannel + conflict guard
+        // SYNC ENGINE v3 — clean rebuild
         // ═══════════════════════════════════════════════════════════════════════
-        let _syncDebounceTimer   = null;
-        let _syncInFlight        = false;
-        let _offlineWriteQueued  = false;
-        let _lastServerTimestamp = null;   // timestamp שקיבלנו מהענן לאחרונה
-        let _localWriteTimestamp = null;   // timestamp שכתבנו לאחרונה
 
-        // BroadcastChannel — סנכרון מיידי בין טאבים באותו דפדפן
+        // ── Debounce & write state ──────────────────────────────────────────
+        let _debounceTimer    = null;   // timer לדחיית כתיבה
+        let _writeInProgress  = false;  // כתיבה פעילה כרגע
+        let _pendingAfterWrite = false; // שינוי הגיע בזמן כתיבה
+        let _offlineDirty     = false;  // שינויים שממתינים לרשת
+
+        // ── BroadcastChannel: סנכרון מיידי בין טאבים באותו דפדפן ──────────────
         let _bc = null;
         try {
-            _bc = new BroadcastChannel('mh-link-manager-sync');
-            _bc.onmessage = (e) => {
-                if (!state.user || e.data?.uid !== state.user?.uid) return;
-                if (e.data?.type === 'DATA_CHANGED') {
-                    // טאב אחר שמר — נעדכן את הממשק מהמטמון בלי לפגוע בענן
-                    try {
-                        const cached = JSON.parse(localStorage.getItem('linkManager_cache_' + state.user.uid) || '{}');
-                        if (cached.items) {
-                            cached.items.forEach(sItem => {
-                                const local = state.items.find(i => i.id === sItem.id);
-                                if (local?.isScanning) sItem.isScanning = true;
-                            });
-                            state.items = cached.items;
-                            state.trash = cached.trash || [];
-                            renderList();
-                            updateCategoryDropdowns();
-                        }
-                    } catch {}
-                }
+            _bc = new BroadcastChannel('mh-link-sync-v3');
+            _bc.onmessage = ({ data }) => {
+                if (data?.type !== 'WRITTEN' || data?.uid !== state.user?.uid) return;
+                try {
+                    const c = JSON.parse(localStorage.getItem('mh_cache_' + state.user.uid) || 'null');
+                    if (c?.items) {
+                        c.items.forEach(s => { const l = state.items.find(i => i.id === s.id); if (l?.isScanning) s.isScanning = true; });
+                        state.items = c.items; state.trash = c.trash || [];
+                        renderList(); updateCategoryDropdowns();
+                    }
+                } catch {}
             };
-        } catch (e) { console.warn('[BroadcastChannel] לא נתמך:', e); }
+        } catch {}
 
-        function _broadcastChange() {
-            try { _bc?.postMessage({ type: 'DATA_CHANGED', uid: state.user?.uid }); } catch {}
-        }
-
-        // תור offline — שמירת שינויים שנעשו ללא רשת לשליחה כשהרשת חוזרת
-        function _flushOfflineQueue() {
-            if (!_offlineWriteQueued || !navigator.onLine || !state.user || state.isOffline) return;
-            _offlineWriteQueued = false;
-            console.log('[Sync] שולח תור offline לענן...');
-            _executeCloudWrite();
-        }
-
-        let _pendingWriteAfterFlight = false;
-        async function _executeCloudWrite() {
-            if (!state.user || state.isOffline) return;
-            if (_syncInFlight) {
-                // כתיבה בתהליך — נסמן שצריך לכתוב שוב אחריה
-                _pendingWriteAfterFlight = true;
-                return;
-            }
+        // ── פונקציית כתיבה פנימית ───────────────────────────────────────────────
+        async function _doWrite() {
+            if (!state.user || !db || state.isOffline) return;
             if (!navigator.onLine) {
-                _offlineWriteQueued = true;
-                updateSyncStatus('offline', 'ממתין לרשת...');
+                _offlineDirty = true;
+                updateSyncStatus('offline', 'אין רשת');
                 return;
             }
-            _syncInFlight = true;
-            updateSyncStatus('syncing', 'מסנכרן...');
+            _writeInProgress = true;
+            updateSyncStatus('syncing', 'שומר...');
             try {
-                const cleanItems = JSON.parse(JSON.stringify(state.items));
-                cleanItems.forEach(c => EPHEMERAL_FIELDS.forEach(f => delete c[f]));
-
-                const writeTs = new Date().toISOString();
-                _localWriteTimestamp = writeTs;
-
-                await setDoc(doc(db, "users", state.user.uid), {
-                    items: cleanItems,
-                    trash: state.trash,
+                const items = JSON.parse(JSON.stringify(state.items));
+                items.forEach(c => EPHEMERAL_FIELDS.forEach(f => delete c[f]));
+                await setDoc(doc(db, 'users', state.user.uid), {
+                    items, trash: state.trash,
                     aiSettings: getAiSettings(),
-                    lastUpdated: writeTs
+                    lastUpdated: new Date().toISOString()
                 }, { merge: true });
-
-                // עדכן מטמון
-                localStorage.setItem('linkManager_cache_' + state.user.uid,
+                localStorage.setItem('mh_cache_' + state.user.uid,
                     JSON.stringify({ items: state.items, trash: state.trash }));
-                _broadcastChange();
+                try { _bc?.postMessage({ type: 'WRITTEN', uid: state.user.uid }); } catch {}
                 updateSyncStatus('online', 'מחובר ✓');
-            } catch (e) {
-                console.error('[Sync] שגיאת כתיבה:', e);
-                updateSyncStatus('error', 'שגיאה בשמירה');
-                showToast('⚠️ שגיאה בסנכרון לענן — יחזור אוטומטית', null, 4000, null, true);
-                // נסה שוב אחרי 5 שניות
-                setTimeout(() => { if (navigator.onLine) _executeCloudWrite(); }, 5000);
+            } catch (err) {
+                console.error('[Sync] write error:', err);
+                updateSyncStatus('error', 'שגיאת שמירה');
+                showToast('⚠️ שגיאה בשמירה — מנסה שוב בעוד 5 שניות', null, 4000, null, true);
+                setTimeout(pushToCloud, 5000);
             } finally {
-                _syncInFlight = false;
-                if (_pendingWriteAfterFlight) {
-                    _pendingWriteAfterFlight = false;
-                    setTimeout(_executeCloudWrite, 100);
+                _writeInProgress = false;
+                if (_pendingAfterWrite) {
+                    _pendingAfterWrite = false;
+                    setTimeout(_doWrite, 300);
                 }
             }
         }
 
-        // pushToCloud — הפונקציה הראשית עם debounce של 1.2 שניות
+        // ── pushToCloud — נקודת השמירה היחידה לחוץ ──────────────────────────────
         function pushToCloud(immediate = false) {
             if (state.isOffline) {
-                const dataToSave = JSON.stringify({ items: state.items, trash: state.trash });
-                localStorage.setItem('linkManagerLocalData', dataToSave);
+                const data = JSON.stringify({ items: state.items, trash: state.trash });
+                localStorage.setItem('linkManagerLocalData', data);
                 const el = document.getElementById('offline-data');
-                if (el) el.textContent = dataToSave;
-                updateCategoryDropdowns();
-                renderList();
-                showToast("נשמר מקומית בהצלחה!");
+                if (el) el.textContent = data;
+                updateCategoryDropdowns(); renderList();
+                showToast('נשמר מקומית ✓');
                 return;
             }
             if (!state.user) return;
-
-            clearTimeout(_syncDebounceTimer);
-            updateSyncStatus('syncing', 'ממתין לשמירה...');
-
-            const delay = immediate ? 0 : 1200;
-            _syncDebounceTimer = setTimeout(() => _executeCloudWrite(), delay);
+            if (_writeInProgress) { _pendingAfterWrite = true; return; }
+            clearTimeout(_debounceTimer);
+            const delay = immediate ? 80 : 1400;
+            _debounceTimer = setTimeout(_doWrite, delay);
         }
-        
-        // ═══════════════════════════════════════════════════════════════════════
+
+        // ── שטיפת תור offline כשהרשת חוזרת ────────────────────────────────
+        function _flushIfDirty() {
+            if (_offlineDirty && navigator.onLine && state.user && !state.isOffline) {
+                _offlineDirty = false;
+                _doWrite();
+            }
+        }
+
         // FIREBASE INIT
         // ═══════════════════════════════════════════════════════════════════════
         try {
@@ -940,10 +912,7 @@
           window.addEventListener('online', () => {
                 updateSyncStatus('syncing', 'מתחבר מחדש...');
                 showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 4000);
-                setTimeout(() => {
-                _flushOfflineQueue();
-                if (state.user) forceReload(true);
-            }, 800);
+                setTimeout(() => { _flushIfDirty(); if (state.user) forceReload(true); }, 800);
             });
 
             // ── סנכרון חכם בחזרה מהרקע (קריטי למובייל) ──
@@ -1062,36 +1031,33 @@
                   state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
                         if (docSnap.exists()) {
                             const d = docSnap.data();
-                            const isFromCache   = docSnap.metadata.fromCache;
-                            const hasPending    = docSnap.metadata.hasPendingWrites;
 
-                            const serverTs = d.lastUpdated || '';
-                            _lastServerTimestamp = serverTs;
-                            
                             const serverItems = d.items || [];
                             serverItems.forEach(sItem => {
                                 const local = state.items.find(i => i.id === sItem.id);
                                 if (local?.isScanning) sItem.isScanning = true;
                             });
-
                             state.items = serverItems;
                             state.trash = d.trash || [];
-                            
-                            if (d.aiSettings) {
+
+                            if (d.aiSettings)
                                 localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
-                            }
-                            // שמור מטמון מעודכן
-                            localStorage.setItem('linkManager_cache_' + user.uid,
-                                JSON.stringify({ items: state.items, trash: state.trash }));
-                            
+
+                            // שמירת מטמון כפולה (שתי מפתחות לאחור התאימות)
+                            const cacheVal = JSON.stringify({ items: state.items, trash: state.trash });
+                            localStorage.setItem('linkManager_cache_' + user.uid, cacheVal);
+                            localStorage.setItem('mh_cache_' + user.uid, cacheVal);
+
                             renderList();
                             updateCategoryDropdowns();
                             hideLoader();
 
-                            // חיווי חכם: מתחשב במקור הנתונים
-                            if (hasPending || _syncInFlight) {
+                            const hasPending = docSnap.metadata.hasPendingWrites;
+                            const isFromCache = docSnap.metadata.fromCache;
+
+                            if (hasPending) {
                                 updateSyncStatus('syncing', 'מסנכרן...');
-                            } else if (isFromCache || !navigator.onLine) {
+                            } else if (!navigator.onLine || isFromCache) {
                                 updateSyncStatus('offline', 'מקומי');
                             } else {
                                 updateSyncStatus('online', 'מחובר ✓');
@@ -1100,8 +1066,7 @@
                     }, (err) => {
                         console.error('[Sync] onSnapshot error:', err);
                         updateSyncStatus('error', 'שגיאת חיבור');
-                    });
-                } else {
+                    })              } else {
                     toggleAppInterface(false);
                     hideLoader();
                 }
