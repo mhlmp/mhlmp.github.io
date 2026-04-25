@@ -637,7 +637,7 @@
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import {
             getFirestore, doc, setDoc, getDoc, getDocFromServer,
-            onSnapshot, enableIndexedDbPersistence
+            onSnapshot, enableIndexedDbPersistence, serverTimestamp
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -652,8 +652,19 @@
 
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
 
+        // ═══════════════════════════════════════════════════════════════════════
+        //  ⚙️ SYNC ENGINE v4 — Professional Multi-Device Sync
+        // ═══════════════════════════════════════════════════════════════════════
+        //  Strategy: Last-Writer-Wins per item + Pending-Writes Lock + Tombstones
+        //  Cache: Single source of truth (lm_cache_v4_<uid>)
+        //  Conflict resolution: by item.updatedAt timestamps (per-item granularity)
+        //  Network resilience: queued offline writes + delta-merge on reconnect
+        // ═══════════════════════════════════════════════════════════════════════
+
         // Fields that are computed at render time — never saved to Firestore
         const EPHEMERAL_FIELDS = ['isScanning'];
+        const CACHE_KEY_PREFIX = 'lm_cache_v4_';
+        const SCHEMA_VERSION   = 4;
 
         let app, auth, db;
         let deferredPrompt;
@@ -664,75 +675,218 @@
             showDuplicates: true, showOnlyDead: false,
             isOffline: false,
             selectedIds: new Set(), isSelectionMode: false,
-            filteredItems: []
+            filteredItems: [],
+            lastServerSync: 0          // timestamp (ms) of last successful server snapshot
         };
         let abortAiScan = false;
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // SYNC ENGINE v3 — clean rebuild
-        // ═══════════════════════════════════════════════════════════════════════
+        // ─── Sync state ────────────────────────────────────────────────────────
+        let _debounceTimer    = null;   // pending write timer
+        let _writeInProgress  = false;  // active Firestore write
+        let _pendingAfterWrite = false; // change occurred during write
+        let _offlineDirty     = false;  // changes waiting for network
+        let _localMutationCounter = 0;  // increments on each local change
 
-        // ── Debounce & write state ──────────────────────────────────────────
-        let _debounceTimer    = null;   // timer לדחיית כתיבה
-        let _writeInProgress  = false;  // כתיבה פעילה כרגע
-        let _pendingAfterWrite = false; // שינוי הגיע בזמן כתיבה
-        let _offlineDirty     = false;  // שינויים שממתינים לרשת
+        // ─── Helpers: timestamps & merge ──────────────────────────────────────
+        function nowIso() { return new Date().toISOString(); }
 
-        // ── BroadcastChannel: סנכרון מיידי בין טאבים באותו דפדפן ──────────────
+        function stampItem(item) {
+            // Set/refresh updatedAt on every local mutation. ID stays the same.
+            item.updatedAt = nowIso();
+            if (!item.createdAt) item.createdAt = item.date || item.updatedAt;
+            return item;
+        }
+
+        function stampAll(items) { items.forEach(stampItem); return items; }
+
+        function isPendingWrite() {
+            return _writeInProgress || _debounceTimer !== null;
+        }
+
+        /**
+         * Merge server items with local items by ID.
+         * Per-item resolution: prefer the version with the newer updatedAt.
+         * If item exists only on server → adopt it.
+         * If item exists only locally AND has updatedAt newer than serverDocLastUpdated → keep local (in-flight).
+         * Otherwise (only local, older) → it was deleted on another device → drop.
+         */
+        function mergeItems(serverItems, localItems, serverDocLastUpdated) {
+            const byId = new Map();
+            const serverDocTime = serverDocLastUpdated || 0;
+
+            // 1) Seed with server items
+            serverItems.forEach(s => byId.set(String(s.id), { src: 'server', item: s }));
+
+            // 2) Reconcile with local
+            localItems.forEach(l => {
+                const key = String(l.id);
+                const localTime  = l.updatedAt ? Date.parse(l.updatedAt) : 0;
+                const existing   = byId.get(key);
+
+                if (!existing) {
+                    // Item only locally. Keep ONLY if it's newer than the doc's lastUpdated
+                    // (meaning it's a pending local change not yet synced).
+                    // Otherwise, it was deleted on another device.
+                    if (localTime > serverDocTime - 1500 || isPendingWrite()) {
+                        byId.set(key, { src: 'local', item: l });
+                    }
+                    // else: drop — was deleted remotely
+                    return;
+                }
+
+                // Conflict: both server & local exist. Pick newer.
+                const serverTime = existing.item.updatedAt ? Date.parse(existing.item.updatedAt) : 0;
+                if (localTime > serverTime) {
+                    byId.set(key, { src: 'local', item: l });
+                } else {
+                    // Server wins — but preserve ephemeral fields (e.g., isScanning) from local
+                    EPHEMERAL_FIELDS.forEach(f => {
+                        if (l[f] !== undefined) existing.item[f] = l[f];
+                    });
+                }
+            });
+
+            return Array.from(byId.values()).map(v => v.item);
+        }
+
+        function mergeTrash(serverTrash, localTrash) {
+            const byId = new Map();
+            serverTrash.forEach(s => byId.set(String(s.id), s));
+            localTrash.forEach(l => {
+                const ex = byId.get(String(l.id));
+                if (!ex) byId.set(String(l.id), l);
+                else {
+                    // Prefer the one with the later deletedAt
+                    const lt = l.deletedAt ? Date.parse(l.deletedAt) : 0;
+                    const et = ex.deletedAt ? Date.parse(ex.deletedAt) : 0;
+                    if (lt > et) byId.set(String(l.id), l);
+                }
+            });
+            return Array.from(byId.values());
+        }
+
+        // ─── BroadcastChannel: instant cross-tab sync (same browser) ──────────
         let _bc = null;
         try {
-            _bc = new BroadcastChannel('mh-link-sync-v3');
+            _bc = new BroadcastChannel('mh-link-sync-v4');
             _bc.onmessage = ({ data }) => {
                 if (data?.type !== 'WRITTEN' || data?.uid !== state.user?.uid) return;
+                if (data.mutationId === _localMutationCounter) return; // own message
                 try {
-                    const c = JSON.parse(localStorage.getItem('mh_cache_' + state.user.uid) || 'null');
+                    const c = readCache();
                     if (c?.items) {
-                        c.items.forEach(s => { const l = state.items.find(i => i.id === s.id); if (l?.isScanning) s.isScanning = true; });
-                        state.items = c.items; state.trash = c.trash || [];
+                        // Replace state from cache (other tab just wrote it)
+                        c.items.forEach(s => {
+                            const l = state.items.find(i => String(i.id) === String(s.id));
+                            if (l?.isScanning) s.isScanning = true;
+                        });
+                        state.items = c.items;
+                        state.trash = c.trash || [];
                         renderList(); updateCategoryDropdowns();
                     }
                 } catch {}
             };
         } catch {}
 
-        // ── פונקציית כתיבה פנימית ───────────────────────────────────────────────
+        // ─── Cache I/O (single source of truth) ───────────────────────────────
+        function cacheKey() { return state.user ? CACHE_KEY_PREFIX + state.user.uid : null; }
+
+        function writeCache() {
+            const k = cacheKey();
+            if (!k) return;
+            try {
+                const cleanItems = state.items.map(i => {
+                    const c = { ...i }; EPHEMERAL_FIELDS.forEach(f => delete c[f]); return c;
+                });
+                localStorage.setItem(k, JSON.stringify({
+                    schema: SCHEMA_VERSION,
+                    items: cleanItems,
+                    trash: state.trash,
+                    cachedAt: Date.now()
+                }));
+            } catch (e) { console.warn('[Cache] write failed:', e); }
+        }
+
+        function readCache() {
+            const k = cacheKey();
+            if (!k) return null;
+            try {
+                const raw = localStorage.getItem(k);
+                if (!raw) return null;
+                return JSON.parse(raw);
+            } catch { return null; }
+        }
+
+        function clearCache() {
+            const k = cacheKey();
+            if (k) localStorage.removeItem(k);
+            // Cleanup legacy keys (one-time migration)
+            try {
+                Object.keys(localStorage)
+                    .filter(key => key.startsWith('linkManager_cache_') || key.startsWith('mh_cache_'))
+                    .forEach(key => localStorage.removeItem(key));
+            } catch {}
+        }
+
+        // ─── Internal write to Firestore ──────────────────────────────────────
         async function _doWrite() {
+            _debounceTimer = null;
             if (!state.user || !db || state.isOffline) return;
             if (!navigator.onLine) {
                 _offlineDirty = true;
+                writeCache(); // at least keep local copy
                 updateSyncStatus('offline', 'אין רשת');
                 return;
             }
+            if (_writeInProgress) { _pendingAfterWrite = true; return; }
+
             _writeInProgress = true;
+            const myMutationId = ++_localMutationCounter;
             updateSyncStatus('syncing', 'שומר...');
             try {
-                const items = JSON.parse(JSON.stringify(state.items));
-                items.forEach(c => EPHEMERAL_FIELDS.forEach(f => delete c[f]));
+                // Strip ephemeral fields & ensure timestamps
+                const items = state.items.map(item => {
+                    const c = JSON.parse(JSON.stringify(item));
+                    EPHEMERAL_FIELDS.forEach(f => delete c[f]);
+                    if (!c.updatedAt) c.updatedAt = nowIso();
+                    if (!c.createdAt) c.createdAt = c.date || c.updatedAt;
+                    return c;
+                });
+
                 await setDoc(doc(db, 'users', state.user.uid), {
-                    items, trash: state.trash,
+                    schema: SCHEMA_VERSION,
+                    items,
+                    trash: state.trash,
                     aiSettings: getAiSettings(),
-                    lastUpdated: new Date().toISOString()
+                    lastUpdated:      serverTimestamp(),
+                    lastUpdatedClient: nowIso()
                 }, { merge: true });
-                localStorage.setItem('mh_cache_' + state.user.uid,
-                    JSON.stringify({ items: state.items, trash: state.trash }));
-                try { _bc?.postMessage({ type: 'WRITTEN', uid: state.user.uid }); } catch {}
+
+                writeCache();
+                try { _bc?.postMessage({ type: 'WRITTEN', uid: state.user.uid, mutationId: myMutationId }); } catch {}
                 updateSyncStatus('online', 'מחובר ✓');
             } catch (err) {
                 console.error('[Sync] write error:', err);
                 updateSyncStatus('error', 'שגיאת שמירה');
                 showToast('⚠️ שגיאה בשמירה — מנסה שוב בעוד 5 שניות', null, 4000, null, true);
-                setTimeout(pushToCloud, 5000);
+                setTimeout(() => pushToCloud(true), 5000);
             } finally {
                 _writeInProgress = false;
                 if (_pendingAfterWrite) {
                     _pendingAfterWrite = false;
-                    setTimeout(_doWrite, 300);
+                    setTimeout(_doWrite, 250);
                 }
             }
         }
 
-        // ── pushToCloud — נקודת השמירה היחידה לחוץ ──────────────────────────────
+        /**
+         * pushToCloud — the ONLY public entry point for saving.
+         * @param {boolean} immediate — if true, save almost immediately (80ms)
+         */
         function pushToCloud(immediate = false) {
+            // Always update cache instantly so a refresh never loses data
+            writeCache();
+
             if (state.isOffline) {
                 const data = JSON.stringify({ items: state.items, trash: state.trash });
                 localStorage.setItem('linkManagerLocalData', data);
@@ -743,13 +897,12 @@
                 return;
             }
             if (!state.user) return;
+
             if (_writeInProgress) { _pendingAfterWrite = true; return; }
             clearTimeout(_debounceTimer);
-            const delay = immediate ? 80 : 1400;
-            _debounceTimer = setTimeout(_doWrite, delay);
+            _debounceTimer = setTimeout(_doWrite, immediate ? 80 : 1200);
         }
 
-        // ── שטיפת תור offline כשהרשת חוזרת ────────────────────────────────
         function _flushIfDirty() {
             if (_offlineDirty && navigator.onLine && state.user && !state.isOffline) {
                 _offlineDirty = false;
@@ -757,6 +910,7 @@
             }
         }
 
+        // ═══════════════════════════════════════════════════════════════════════
         // FIREBASE INIT
         // ═══════════════════════════════════════════════════════════════════════
         try {
@@ -843,7 +997,6 @@
         // EVENT LISTENERS
         // ═══════════════════════════════════════════════════════════════════════
         function setupEventListeners() {
-            // Dropdowns
             document.querySelectorAll('.drop-trigger').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -887,9 +1040,8 @@
             document.getElementById('trashBtn')?.addEventListener('click', openTrashModal);
             document.getElementById('closeTrashModalBtn')?.addEventListener('click', closeTrashModal);
 
-            // ── Force Reload Button ─────────────────────────────────────────────
             document.getElementById('forceReloadBtn')?.addEventListener('click', () => {
-                forceReload(false); // explicit user request — show feedback
+                forceReload(false);
             });
 
             ['importJsonInput', 'smartImportInput', 'wipeDataInput'].forEach(id => {
@@ -903,34 +1055,42 @@
                 });
             });
 
-            // ── Network Events ──────────────────────────────────────────────────
+            // Network events ────────────────────────────────────────────────────
             window.addEventListener('offline', () => {
                 updateSyncStatus('offline', 'מקומי (אין רשת)');
-                showToast('⚠️ החיבור לאינטרנט אבד. שינויים יישמרו ויסונכרנו כשהרשת תחזור.', null, 6000, null, true);
+                showToast('⚠️ החיבור אבד. שינויים יישמרו ויסונכרנו כשהרשת תחזור.', null, 6000, null, true);
             });
 
-          window.addEventListener('online', () => {
-                updateSyncStatus('syncing', 'מתחבר מחדש...');
-                showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 4000);
-                setTimeout(() => { _flushIfDirty(); if (state.user) forceReload(true); }, 800);
-            });
+            window.addEventListener('online', () => {
+                updateSyncStatus('syncing', 'מתחבר מחדש...');
+                showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 4000);
+                // Order: 1) flush pending local writes  2) pull latest from server
+                setTimeout(() => {
+                    _flushIfDirty();
+                    if (state.user && !state.isOffline) {
+                        // Wait briefly so the flushed write is acknowledged before pulling
+                        setTimeout(() => forceReload(true), 1500);
+                    }
+                }, 600);
+            });
 
-            // ── סנכרון חכם בחזרה מהרקע (קריטי למובייל) ──
-            let _lastSyncTimestamp = 0;
-            const backgroundSync = () => {
-                if (!state.user || state.isOffline || !navigator.onLine) return;
-                const now = Date.now();
-                if (now - _lastSyncTimestamp < 8000) return; // מונע הצפה (השהיה של 8 שניות)
-                _lastSyncTimestamp = now;
-                forceReload(true); // כופה משיכת נתונים שקטה מהשרת
-            };
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') backgroundSync();
-            });
-            window.addEventListener('focus', backgroundSync);
-            // ───────────────────────────────────────────
+            // Smart background sync — onSnapshot remains the primary listener,
+            // but a focused sync on visibility/focus catches edge cases (e.g., killed tab)
+            let _lastVisibilitySync = 0;
+            const visibilitySync = () => {
+                if (!state.user || state.isOffline || !navigator.onLine) return;
+                if (isPendingWrite()) return;          // don't conflict with own write
+                const now = Date.now();
+                if (now - _lastVisibilitySync < 6000) return;
+                _lastVisibilitySync = now;
+                forceReload(true);
+            };
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') visibilitySync();
+            });
+            window.addEventListener('focus', visibilitySync);
 
-            document.getElementById('editItemForm')?.addEventListener('submit', handleEditSubmit);
+            document.getElementById('editItemForm')?.addEventListener('submit', handleEditSubmit);
             document.getElementById('editAiForm')?.addEventListener('submit', handleEditAiSubmit);
             document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
             document.getElementById('exportTxtBtn')?.addEventListener('click', exportTxt);
@@ -966,19 +1126,6 @@
             }
         }
 
-        function sendSystemNotification(title, body) {
-            if (!('Notification' in window) || Notification.permission !== 'granted') return;
-            try {
-                new Notification(title, { body, icon: 'icon.png', requireInteraction: true });
-            } catch (e) {
-                if (navigator.serviceWorker) {
-                    navigator.serviceWorker.ready
-                        .then(reg => reg.showNotification(title, { body, icon: 'icon.png', requireInteraction: true }))
-                        .catch(console.error);
-                }
-            }
-        }
-
         function repositionDropdown(menu) {
             menu.style.right = '0';
             menu.style.left = 'auto';
@@ -993,7 +1140,10 @@
             });
         }
 
-       function setupFirebaseListeners() {
+        // ═══════════════════════════════════════════════════════════════════════
+        // FIREBASE LISTENERS — onSnapshot with proper merge
+        // ═══════════════════════════════════════════════════════════════════════
+        function setupFirebaseListeners() {
             if (!auth || !db) return;
             onAuthStateChanged(auth, (user) => {
                 if (user) {
@@ -1006,21 +1156,16 @@
                         showToast('ℹ️ אין חיבור לאינטרנט. טוען נתונים מקומיים...', null, 5000, null, true);
                     }
 
-                    const userCacheKey = 'linkManager_cache_' + user.uid;
-                    const warmCache = localStorage.getItem(userCacheKey);
-                    
-                    if (warmCache) {
-                        try {
-                            const parsedCache = JSON.parse(warmCache);
-                            state.items = parsedCache.items || [];
-                            state.trash = parsedCache.trash || [];
-                            state.items.forEach(i => i.isScanning = false);
-                            renderList(); 
-                            updateCategoryDropdowns();
-                        } catch(e) { console.error("Cache load error", e); }
+                    // ─── Warm load from cache ──────────────────────────────────
+                    const cache = readCache();
+                    if (cache?.items) {
+                        state.items = cache.items.map(i => ({ ...i, isScanning: false }));
+                        state.trash = cache.trash || [];
+                        renderList();
+                        updateCategoryDropdowns();
                     } else if (state.items.length === 0) {
                         const loader = document.getElementById('loading-screen');
-                        if(loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
+                        if (loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
                     }
 
                     document.getElementById('userName').textContent = user.displayName;
@@ -1028,45 +1173,63 @@
 
                     const userDoc = doc(db, "users", user.uid);
 
-                  state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
-                        if (docSnap.exists()) {
-                            const d = docSnap.data();
+                    // ─── Real-time listener ────────────────────────────────────
+                    state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
+                        if (!docSnap.exists()) { hideLoader(); return; }
 
-                            const serverItems = d.items || [];
-                            serverItems.forEach(sItem => {
-                                const local = state.items.find(i => i.id === sItem.id);
-                                if (local?.isScanning) sItem.isScanning = true;
-                            });
-                            state.items = serverItems;
-                            state.trash = d.trash || [];
+                        const d = docSnap.data();
+                        const hasPending  = docSnap.metadata.hasPendingWrites;
+                        const isFromCache = docSnap.metadata.fromCache;
 
-                            if (d.aiSettings)
-                                localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
+                        // Skip pure local-pending events — we'll react to the server confirmation.
+                        // This prevents flicker / overwriting our own optimistic updates.
+                        if (hasPending) {
+                            updateSyncStatus('syncing', 'מסנכרן...');
+                            return;
+                        }
 
-                            // שמירת מטמון כפולה (שתי מפתחות לאחור התאימות)
-                            const cacheVal = JSON.stringify({ items: state.items, trash: state.trash });
-                            localStorage.setItem('linkManager_cache_' + user.uid, cacheVal);
-                            localStorage.setItem('mh_cache_' + user.uid, cacheVal);
+                        const serverItems = Array.isArray(d.items) ? d.items : [];
+                        const serverTrash = Array.isArray(d.trash) ? d.trash : [];
 
-                            renderList();
-                            updateCategoryDropdowns();
-                            hideLoader();
+                        // doc-level last update (server clock) → ms
+                        let serverDocTime = 0;
+                        if (d.lastUpdated?.toMillis) serverDocTime = d.lastUpdated.toMillis();
+                        else if (d.lastUpdatedClient) serverDocTime = Date.parse(d.lastUpdatedClient);
 
-                            const hasPending = docSnap.metadata.hasPendingWrites;
-                            const isFromCache = docSnap.metadata.fromCache;
+                        // ── Critical: merge instead of overwrite ───────────────
+                        // If we have a pending local write, our local items already include
+                        // changes that may not yet be on the server — keep them.
+                        const merged = mergeItems(serverItems, state.items, serverDocTime);
+                        const mergedTrash = mergeTrash(serverTrash, state.trash);
 
-                            if (hasPending) {
-                                updateSyncStatus('syncing', 'מסנכרן...');
-                            } else if (!navigator.onLine || isFromCache) {
-                                updateSyncStatus('offline', 'מקומי');
-                            } else {
-                                updateSyncStatus('online', 'מחובר ✓');
-                            }
+                        // Preserve isScanning flags
+                        merged.forEach(m => {
+                            const local = state.items.find(i => String(i.id) === String(m.id));
+                            if (local?.isScanning) m.isScanning = true;
+                        });
+
+                        state.items = merged;
+                        state.trash = mergedTrash;
+                        state.lastServerSync = serverDocTime || Date.now();
+
+                        if (d.aiSettings)
+                            localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
+
+                        writeCache();
+                        renderList();
+                        updateCategoryDropdowns();
+                        hideLoader();
+
+                        if (!navigator.onLine || isFromCache) {
+                            updateSyncStatus('offline', 'מקומי');
+                        } else {
+                            updateSyncStatus('online', 'מחובר ✓');
                         }
                     }, (err) => {
                         console.error('[Sync] onSnapshot error:', err);
                         updateSyncStatus('error', 'שגיאת חיבור');
-                    })              } else {
+                    });
+                } else {
                     toggleAppInterface(false);
                     hideLoader();
                 }
@@ -1107,8 +1270,6 @@
                     
                     if (secondsLeft <= 0) {
                         clearInterval(tick);
-                        
-                        // ממתינים שנייה אחת (1000 מילישניות) כדי שהמעגל ישלים את הסיבוב
                         setTimeout(() => {
                             welcomeScreen.style.display = 'none';
                             welcomeScreen.classList.remove('visible');
@@ -1136,7 +1297,7 @@
         async function cloudLogout() {
             if (state.unsubscribe) state.unsubscribe();
             try { _bc?.close(); } catch {}
-            if (state.user) localStorage.removeItem('linkManager_cache_' + state.user.uid);
+            clearCache();
             await signOut(auth);
             window.location.reload();
         }
@@ -1144,7 +1305,7 @@
         async function switchAccount() {
             try {
                 if (state.unsubscribe) state.unsubscribe();
-                if (state.user) localStorage.removeItem('linkManager_cache_' + state.user.uid);
+                clearCache();
                 await signOut(auth);
                 const provider = new GoogleAuthProvider();
                 provider.setCustomParameters({ prompt: 'select_account' });
@@ -1152,11 +1313,17 @@
             } catch (e) { alert(e.message); }
         }
 
-      async function forceReload(silent = false) {
+        // ─── Force reload (manual or post-reconnect) ──────────────────────────
+        async function forceReload(silent = false) {
             if (!state.user || state.isOffline) return;
             if (!navigator.onLine) {
                 if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
                 return;
+            }
+            // If we have unsaved local changes, flush them first
+            if (isPendingWrite()) {
+                if (!silent) showToast('⏳ ממתין לסיום שמירה לפני רענון...', null, 2500);
+                await new Promise(r => setTimeout(r, 1500));
             }
 
             const btn = document.getElementById('forceReloadBtn');
@@ -1168,26 +1335,34 @@
             }
 
             try {
-                // שימוש ב-getDoc הבטוח שלא יוצר התנגשויות (Locks)
                 const snap = await getDocFromServer(doc(db, "users", state.user.uid));
                 if (snap.exists()) {
                     const d = snap.data();
-                    const serverItems = d.items || [];
-                    serverItems.forEach(sItem => {
-                        const local = state.items.find(i => i.id === sItem.id);
-                        if (local?.isScanning) sItem.isScanning = true;
+                    const serverItems = Array.isArray(d.items) ? d.items : [];
+                    const serverTrash = Array.isArray(d.trash) ? d.trash : [];
+                    let serverDocTime = 0;
+                    if (d.lastUpdated?.toMillis) serverDocTime = d.lastUpdated.toMillis();
+                    else if (d.lastUpdatedClient) serverDocTime = Date.parse(d.lastUpdatedClient);
+
+                    // Merge instead of overwrite — protects in-flight local edits
+                    const merged = mergeItems(serverItems, state.items, serverDocTime);
+                    const mergedTrash = mergeTrash(serverTrash, state.trash);
+                    merged.forEach(m => {
+                        const local = state.items.find(i => String(i.id) === String(m.id));
+                        if (local?.isScanning) m.isScanning = true;
                     });
 
-                    state.items = serverItems;
-                    state.trash = d.trash || [];
+                    state.items = merged;
+                    state.trash = mergedTrash;
+                    state.lastServerSync = serverDocTime || Date.now();
                     
                     if (d.aiSettings) localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
-                    localStorage.setItem('linkManager_cache_' + state.user.uid, JSON.stringify({ items: state.items, trash: state.trash }));
+                    writeCache();
                     renderList();
                     updateCategoryDropdowns();
                 }
                 updateSyncStatus('online', 'מחובר');
-                if (!silent) showToast("✅ רענון נתונים מהענן בוצע");
+                if (!silent) showToast("✅ רענון מהענן בוצע");
             } catch (err) {
                 console.error(err);
                 updateSyncStatus('error', 'שגיאת חיבור');
@@ -1196,6 +1371,7 @@
                 if (btn) setTimeout(() => btn.classList.remove('spinning'), 600);
             }
         }
+
         // ═══════════════════════════════════════════════════════════════════════
         // RENDER
         // ═══════════════════════════════════════════════════════════════════════
@@ -1209,7 +1385,7 @@
             const catFilter = document.getElementById('categoryFilter')?.value || '';
             const sort = document.getElementById('sortOrder')?.value || 'date-new';
 
-            const chronologicalList = [...state.items].sort((a, b) => a.date.localeCompare(b.date));
+            const chronologicalList = [...state.items].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
             const visualMetaMap = new Map();
             const seenContents = new Map();
 
@@ -1227,7 +1403,7 @@
                     return (visualMetaMap.get(a.id)?.visualIndex || 0) - (visualMetaMap.get(b.id)?.visualIndex || 0);
                 if (sort === 'index-desc')
                     return (visualMetaMap.get(b.id)?.visualIndex || 0) - (visualMetaMap.get(a.id)?.visualIndex || 0);
-                return b.date.localeCompare(a.date);
+                return (b.date || '').localeCompare(a.date || '');
             });
 
             const isHashSearch  = /^#\s*\d+$/.test(query);
@@ -1454,13 +1630,16 @@
                 if (!addAnyway) { e.target.reset(); return; }
             }
 
+            const now = nowIso();
             const newItem = {
                 id: Date.now(),
                 content,
                 description: document.getElementById('itemDescription').value.trim(),
                 category:    document.getElementById('itemCategory').value.trim() || 'כללי',
                 note:        document.getElementById('itemNote').value.trim(),
-                date:        new Date().toISOString(),
+                date:        now,
+                createdAt:   now,
+                updatedAt:   now,
                 type:        URL_REGEX.test(content) ? 'link' : 'text',
                 isPinned:    false
             };
@@ -1672,6 +1851,7 @@
                             ci.aiSummary   = isInviteLink || isGenericGroupDead ? 'קישור הזמנה לטלגרם לא תקין — פג תוקפו, הקבוצה נמחקה, או שהלינק בוטל.' : 'קישור טלגרם לא פעיל — הערוץ, הבוט או המשתמש אינם קיימים.';
                             ci.siteStatus  = 'dead';
                             ci.aiTags      = ['#Telegram', '#dead', '#לא_זמין'];
+                            ci.updatedAt   = nowIso();
                         }
                         return;
                     }
@@ -1838,7 +2018,6 @@ ${contentToAnalyze}`;
                 if (!jm2) throw new Error('לא נמצא JSON תקין');
                 const parsed = JSON.parse(jm2[0]);
 
-                // Iron Guard: override AI mistakes for live Telegram links
                 if (isWebsite && /(?:t\.me|telegram\.me)\//i.test(cleanContent) && parsed.status === 'dead') {
                     if (/\d[\d\s,.]+\s*(?:member|subscriber|participant|חברים|מנויים)/i.test(contentToAnalyze))
                         parsed.status = 'active';
@@ -1850,6 +2029,7 @@ ${contentToAnalyze}`;
                     ci.siteStatus = isWebsite ? (parsed.status || 'active') : 'text';
                     ci.aiTags     = Array.isArray(parsed.tags) ? parsed.tags : [];
                     ci.aiModel    = usedModelName;
+                    ci.updatedAt  = nowIso();
                 }
 
             } catch (e) {
@@ -1860,6 +2040,7 @@ ${contentToAnalyze}`;
                     ci.aiSummary  = (e.name === 'AbortError' || (e.message || '').includes('abort'))
                         ? 'הסריקה בוטלה.' : 'שגיאה: ' + e.message;
                     ci.aiTags     = [];
+                    ci.updatedAt  = nowIso();
                 }
             } finally {
                 const ci = state.items.find(i => i.id === id);
@@ -1916,6 +2097,7 @@ ${contentToAnalyze}`;
             const finalMsg = abortAiScan ? '🛑 <b>הסריקה הופסקה.</b>' : '✅ <b>סריקת ה-AI הסתיימה בהצלחה!</b>';
             showToast(finalMsg, null, 4000, bulkToastId, false);
             setTimeout(() => removeToast(bulkToastId), 4000);
+            pushToCloud(true); // final flush after batch
         });
 
         document.getElementById('cancelBulkAiBtn')?.addEventListener('click', () => {
@@ -1929,7 +2111,8 @@ ${contentToAnalyze}`;
             if (!confirm('⚠️ אישור כפול נדרש! פעולה זו אינה הפיכה (אלא דרך Undo).\n\nהאם אתה בטוח?')) return;
 
             const previousAiStates = state.items.map(i => ({ id: i.id, aiSummary: i.aiSummary, siteStatus: i.siteStatus, aiTags: i.aiTags, aiModel: i.aiModel }));
-            state.items.forEach(i => { delete i.aiSummary; delete i.siteStatus; delete i.aiTags; delete i.isScanning; delete i.aiModel; });
+            const stamp = nowIso();
+            state.items.forEach(i => { delete i.aiSummary; delete i.siteStatus; delete i.aiTags; delete i.isScanning; delete i.aiModel; i.updatedAt = stamp; });
             renderList();
             closeAllMenus();
             pushToCloud(true);
@@ -1942,6 +2125,7 @@ ${contentToAnalyze}`;
                         if (prev.siteStatus !== undefined) ci.siteStatus = prev.siteStatus;
                         if (prev.aiTags     !== undefined) ci.aiTags     = prev.aiTags;
                         if (prev.aiModel    !== undefined) ci.aiModel    = prev.aiModel;
+                        ci.updatedAt = nowIso();
                     }
                 });
                 renderList();
@@ -1957,7 +2141,8 @@ ${contentToAnalyze}`;
             if (idx === -1) return;
             const itemToTrash = JSON.parse(JSON.stringify(state.items[idx]));
             EPHEMERAL_FIELDS.forEach(f => delete itemToTrash[f]);
-            itemToTrash.deletedAt = new Date().toISOString();
+            itemToTrash.deletedAt = nowIso();
+            itemToTrash.updatedAt = nowIso();
             state.trash.unshift(itemToTrash);
             state.items.splice(idx, 1);
             renderList();
@@ -1966,6 +2151,7 @@ ${contentToAnalyze}`;
             showToast('הועבר לסל המחזור', () => {
                 const restored = JSON.parse(JSON.stringify(itemToTrash));
                 delete restored.deletedAt;
+                restored.updatedAt = nowIso();
                 state.items.unshift(restored);
                 const ti = state.trash.findIndex(t => t.id === id);
                 if (ti > -1) state.trash.splice(ti, 1);
@@ -1980,11 +2166,12 @@ ${contentToAnalyze}`;
             if (!item) return;
             const wasPinned = item.isPinned;
             item.isPinned = !wasPinned;
+            item.updatedAt = nowIso();
             renderList();
             pushToCloud(true);
             showToast(item.isPinned ? '📌 ננעץ' : '📌 שוחרר', () => {
                 const ci = state.items.find(i => i.id === id);
-                if (ci) { ci.isPinned = wasPinned; renderList(); pushToCloud(true); }
+                if (ci) { ci.isPinned = wasPinned; ci.updatedAt = nowIso(); renderList(); pushToCloud(true); }
             });
         }
 
@@ -2009,13 +2196,14 @@ ${contentToAnalyze}`;
             item.category    = document.getElementById('editItemCategory').value.trim() || 'כללי';
             item.note        = document.getElementById('editItemNote').value.trim();
             item.type        = URL_REGEX.test(c) ? 'link' : 'text';
+            item.updatedAt   = nowIso();
             document.getElementById('editModal').style.display = 'none';
             updateCategoryDropdowns();
             renderList();
             pushToCloud(true);
             showToast('✅ עודכן בהצלחה', () => {
                 const ci = state.items.find(i => i.id === snapshot.id);
-                if (ci) { Object.assign(ci, snapshot); updateCategoryDropdowns(); renderList(); pushToCloud(true); }
+                if (ci) { Object.assign(ci, snapshot); ci.updatedAt = nowIso(); updateCategoryDropdowns(); renderList(); pushToCloud(true); }
             });
         }
 
@@ -2038,12 +2226,13 @@ ${contentToAnalyze}`;
             item.aiSummary  = document.getElementById('editAiSummary').value.trim();
             const tagsRaw   = document.getElementById('editAiTags').value;
             item.aiTags     = tagsRaw.split(/[, ]+/).filter(t => t.trim()).map(t => t.startsWith('#') ? t : `#${t}`);
+            item.updatedAt  = nowIso();
             document.getElementById('editAiModal').style.display = 'none';
             renderList();
             pushToCloud(true);
             showToast('✅ פיענוח AI עודכן', () => {
                 const ci = state.items.find(i => i.id === item.id);
-                if (ci) { ci.siteStatus = snapshot.siteStatus; ci.aiSummary = snapshot.aiSummary; ci.aiTags = snapshot.aiTags; renderList(); pushToCloud(true); }
+                if (ci) { ci.siteStatus = snapshot.siteStatus; ci.aiSummary = snapshot.aiSummary; ci.aiTags = snapshot.aiTags; ci.updatedAt = nowIso(); renderList(); pushToCloud(true); }
             });
         }
 
@@ -2107,15 +2296,18 @@ ${contentToAnalyze}`;
                     const importedItems = Array.isArray(d) ? d : (d.items || []);
                     const importedTrash = Array.isArray(d) ? [] : (d.trash || []);
                     const strategy = confirm('האם תרצה למזג קבצים חכם?\n\n- אישור (OK) למיזוג חכם.\n- ביטול (Cancel) להחלפה מלאה.');
+                    const stamp = nowIso();
                     if (strategy) {
                         let updated = 0, added = 0;
                         const map = new Map(state.items.map(i => [i.id, i]));
                         importedItems.forEach(importItem => {
+                            importItem.updatedAt = stamp;
                             if (map.has(importItem.id)) { Object.assign(map.get(importItem.id), importItem); updated++; }
                             else { state.items.unshift(importItem); added++; }
                         });
                         showToast(`✅ מוזג! ${added} נוספו, ${updated} עודכנו.`);
                     } else {
+                        importedItems.forEach(i => i.updatedAt = stamp);
                         state.items = importedItems;
                         state.trash = importedTrash;
                         showToast('✅ נטען והוחלף!');
@@ -2133,6 +2325,7 @@ ${contentToAnalyze}`;
             r.onload = (ev) => {
                 const lines = ev.target.result.split('\n');
                 let added = 0, updated = 0;
+                const stamp = nowIso();
                 const backupItems  = JSON.parse(JSON.stringify(state.items));
                 const idMap        = new Map(state.items.map(i => [String(i.id), i]));
                 const contentMap   = new Map(state.items.map(i => [i.content.toLowerCase().trim(), i]));
@@ -2157,12 +2350,14 @@ ${contentToAnalyze}`;
                         if (summary !== undefined) existingItem.aiSummary   = summary;
                         if (status  !== undefined) existingItem.siteStatus  = status;
                         if (tags    !== undefined) existingItem.aiTags      = tags.split(',').filter(t => t.trim());
+                        existingItem.updatedAt = stamp;
                         updated++;
                     } else {
                         const newItem = {
                             id: itemId ? parseInt(itemId) : Date.now() + added,
                             content, description: desc || '', category: cat || 'כללי', note: note || '',
-                            date: new Date().toISOString(), type: URL_REGEX.test(content) ? 'link' : 'text', isPinned: false
+                            date: stamp, createdAt: stamp, updatedAt: stamp,
+                            type: URL_REGEX.test(content) ? 'link' : 'text', isPinned: false
                         };
                         if (summary) newItem.aiSummary  = summary;
                         if (status)  newItem.siteStatus = status;
@@ -2206,7 +2401,7 @@ ${contentToAnalyze}`;
 
         function exportJson() {
             const cleanItems = state.items.map(item => { const c = { ...item }; EPHEMERAL_FIELDS.forEach(f => delete c[f]); return c; });
-            downloadFile('backup.json', JSON.stringify({ items: cleanItems, trash: state.trash }, null, 2), 'application/json');
+            downloadFile('backup.json', JSON.stringify({ items: cleanItems, trash: state.trash, schema: SCHEMA_VERSION }, null, 2), 'application/json');
             closeAllMenus();
         }
 
@@ -2344,13 +2539,14 @@ ${contentToAnalyze}`;
             if (idx === -1) return;
             const item = JSON.parse(JSON.stringify(state.trash[idx]));
             delete item.deletedAt;
+            item.updatedAt = nowIso();
             state.items.unshift(item);
             state.trash.splice(idx, 1);
             renderList(); updateCategoryDropdowns(); pushToCloud(true); openTrashModal();
             showToast('♻️ הפריט שוחזר', () => {
                 const fromItems = state.items.find(i => i.id === id);
                 if (fromItems) {
-                    fromItems.deletedAt = new Date().toISOString();
+                    fromItems.deletedAt = nowIso();
                     state.trash.splice(idx, 0, fromItems);
                     state.items = state.items.filter(i => i.id !== id);
                     renderList(); updateCategoryDropdowns(); pushToCloud(true); openTrashModal();
@@ -2374,7 +2570,8 @@ ${contentToAnalyze}`;
             if (!confirm(`האם לשחזר את כל ${state.trash.length} הפריטים?`)) return;
             const origItems = JSON.parse(JSON.stringify(state.items));
             const toRestore = JSON.parse(JSON.stringify(state.trash));
-            toRestore.forEach(i => delete i.deletedAt);
+            const stamp = nowIso();
+            toRestore.forEach(i => { delete i.deletedAt; i.updatedAt = stamp; });
             state.items = [...toRestore, ...state.items];
             state.trash = [];
             updateCategoryDropdowns(); renderList(); pushToCloud(true); openTrashModal();
@@ -2620,15 +2817,18 @@ ${contentToAnalyze}`;
             const finalMsg = abortAiScan ? '🛑 <b>הסריקה הופסקה.</b>' : '✅ <b>סריקת ה-AI הסתיימה בהצלחה!</b>';
             showToast(finalMsg, null, 4000, bulkToastId, false);
             setTimeout(() => removeToast(bulkToastId), 4000);
+            pushToCloud(true);
         });
 
         document.getElementById('bulkDeleteBtn')?.addEventListener('click', () => {
             if (!confirm(`האם לשלוח ${state.selectedIds.size} פריטים לסל המחזור?`)) return;
             const selectedArr = Array.from(state.selectedIds);
+            const stamp = nowIso();
             const toTrash = state.items.filter(i => state.selectedIds.has(i.id)).map(i => {
                 const c = JSON.parse(JSON.stringify(i));
                 EPHEMERAL_FIELDS.forEach(f => delete c[f]);
-                c.deletedAt = new Date().toISOString();
+                c.deletedAt = stamp;
+                c.updatedAt = stamp;
                 return c;
             });
             const cleanToRestore = toTrash.map(i => { const c = { ...i }; delete c.deletedAt; return c; });
@@ -2636,6 +2836,7 @@ ${contentToAnalyze}`;
             state.items = state.items.filter(i => !state.selectedIds.has(i.id));
             renderList(); updateCategoryDropdowns(); pushToCloud(true); exitSelectionMode();
             showToast(`🗑️ ${toTrash.length} פריטים הועברו לסל`, () => {
+                cleanToRestore.forEach(i => i.updatedAt = nowIso());
                 state.items.unshift(...cleanToRestore);
                 state.trash = state.trash.filter(t => !selectedArr.includes(t.id));
                 renderList(); updateCategoryDropdowns(); pushToCloud(true);
@@ -2646,14 +2847,15 @@ ${contentToAnalyze}`;
             const newCat = prompt('לאיזו קטגוריה להעביר? (השאר ריק = "כללי")');
             if (newCat === null) return;
             const catName  = newCat.trim() || 'כללי';
+            const stamp = nowIso();
             const prevCats = [];
             state.items.forEach(i => {
-                if (state.selectedIds.has(i.id)) { prevCats.push({ id: i.id, category: i.category }); i.category = catName; }
+                if (state.selectedIds.has(i.id)) { prevCats.push({ id: i.id, category: i.category }); i.category = catName; i.updatedAt = stamp; }
             });
             const count = state.selectedIds.size;
             updateCategoryDropdowns(); pushToCloud(true); exitSelectionMode();
             showToast(`📂 ${count} פריטים → "${catName}"`, () => {
-                prevCats.forEach(p => { const ci = state.items.find(i => i.id === p.id); if (ci) ci.category = p.category; });
+                prevCats.forEach(p => { const ci = state.items.find(i => i.id === p.id); if (ci) { ci.category = p.category; ci.updatedAt = nowIso(); } });
                 renderList(); updateCategoryDropdowns(); pushToCloud(true);
             });
         });
@@ -2681,6 +2883,20 @@ ${contentToAnalyze}`;
             if (state.isOffline || state.user?.email === ADMIN_EMAIL) return;
             if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I','J','C'].includes(e.key)) || (e.ctrlKey && e.key === 'u'))
                 e.preventDefault();
+        });
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // SAFETY: flush pending writes before tab closes
+        // ═══════════════════════════════════════════════════════════════════════
+        window.addEventListener('beforeunload', () => {
+            // If there's a pending debounced write, force it now (cache always saved)
+            writeCache();
+            if (_debounceTimer) {
+                clearTimeout(_debounceTimer);
+                // Best-effort: try synchronous flush via the network. setDoc returns a Promise
+                // we cannot await here, but the cache is already saved which is the main safety net.
+                try { _doWrite(); } catch {}
+            }
         });
     </script>
 </body>
