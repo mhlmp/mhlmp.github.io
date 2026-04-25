@@ -669,37 +669,40 @@
         let abortAiScan = false;
 
       async function pushToCloud() {
-            if (state.isOffline) {
-                const dataToSave = JSON.stringify({ items: state.items, trash: state.trash });
-                localStorage.setItem('linkManagerLocalData', dataToSave);
-                const el = document.getElementById('offline-data');
-                if (el) el.textContent = dataToSave;
-                updateCategoryDropdowns();
-                renderList();
-                showToast("נשמר מקומית בהצלחה!");
-                return;
-            }
-            
-            if (!state.user) return;
-            try {
-                updateSyncStatus('syncing', 'מסנכרן...');
-                const cleanItems = state.items.map(item => {
-                    const c = { ...item };
-                    EPHEMERAL_FIELDS.forEach(f => delete c[f]);
-                    return c;
-                });
-                await setDoc(doc(db, "users", state.user.uid), { 
-                    items: cleanItems, 
-                    trash: state.trash, 
-                    aiSettings: getAiSettings(), 
-                    lastUpdated: new Date().toISOString() 
-                }, { merge: true });
-            } catch (e) { 
-                console.error("Sync error:", e);
-                showToast('שגיאה בסנכרון לענן'); 
-                updateSyncStatus('error', 'שגיאה בשמירה'); 
-            }
-        }
+            if (state.isOffline) {
+                const dataToSave = JSON.stringify({ items: state.items, trash: state.trash });
+                localStorage.setItem('linkManagerLocalData', dataToSave);
+                const el = document.getElementById('offline-data');
+                if (el) el.textContent = dataToSave;
+                updateCategoryDropdowns();
+                renderList();
+                showToast("נשמר מקומית בהצלחה!");
+                return;
+            }
+            
+            if (!state.user) return;
+            try {
+                updateSyncStatus('syncing', 'מסנכרן...');
+                
+                const cleanItems = state.items.map(item => {
+                    const c = { ...item };
+                    EPHEMERAL_FIELDS.forEach(f => delete c[f]);
+                    return c;
+                });
+                
+                await setDoc(doc(db, "users", state.user.uid), { 
+                    items: cleanItems, 
+                    trash: state.trash, 
+                    aiSettings: getAiSettings(), 
+                    lastUpdated: new Date().toISOString() 
+                }, { merge: true });
+                
+            } catch (e) { 
+                console.error("Sync error:", e);
+                showToast('שגיאה בסנכרון לענן'); 
+                updateSyncStatus('error', 'שגיאה בשמירה'); 
+            }
+        }
         
         // ═══════════════════════════════════════════════════════════════════════
         // FIREBASE INIT
@@ -973,7 +976,7 @@
 
                     const userDoc = doc(db, "users", user.uid);
 
-                    state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
+                   state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
                         if (docSnap.exists()) {
                             const d = docSnap.data();
                             
@@ -990,11 +993,18 @@
                                 localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
                             }
                             localStorage.setItem('linkManager_cache_' + user.uid, JSON.stringify({ items: state.items, trash: state.trash }));
+                            
+                            const isFromCache = docSnap.metadata.fromCache;
+                            
                             renderList();
                             updateCategoryDropdowns();
                             hideLoader();
+
+                            updateSyncStatus(
+                                isFromCache || !navigator.onLine ? 'offline' : 'online', 
+                                isFromCache || !navigator.onLine ? 'טוען / מקומי...' : 'מחובר'
+                            );
                         }
-                        updateSyncStatus(navigator.onLine ? 'online' : 'offline', navigator.onLine ? 'מחובר' : 'מקומי (אין רשת)');
                     }, (err) => {
                         console.error(err);
                         updateSyncStatus('error', 'שגיאת חיבור');
