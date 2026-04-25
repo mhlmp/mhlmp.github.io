@@ -714,8 +714,14 @@
             _executeCloudWrite();
         }
 
+        let _pendingWriteAfterFlight = false;
         async function _executeCloudWrite() {
-            if (!state.user || state.isOffline || _syncInFlight) return;
+            if (!state.user || state.isOffline) return;
+            if (_syncInFlight) {
+                // כתיבה בתהליך — נסמן שצריך לכתוב שוב אחריה
+                _pendingWriteAfterFlight = true;
+                return;
+            }
             if (!navigator.onLine) {
                 _offlineWriteQueued = true;
                 updateSyncStatus('offline', 'ממתין לרשת...');
@@ -750,6 +756,10 @@
                 setTimeout(() => { if (navigator.onLine) _executeCloudWrite(); }, 5000);
             } finally {
                 _syncInFlight = false;
+                if (_pendingWriteAfterFlight) {
+                    _pendingWriteAfterFlight = false;
+                    setTimeout(_executeCloudWrite, 100);
+                }
             }
         }
 
@@ -1055,17 +1065,8 @@
                             const isFromCache   = docSnap.metadata.fromCache;
                             const hasPending    = docSnap.metadata.hasPendingWrites;
 
-                            // ── Conflict guard ─────────────────────────────────────
-                            // אם זה עדכון מהשרת (לא מהמטמון, ולא כתיבה שלנו),
-                            // נוודא שהנתונים מהשרת לא ישנים מהנתונים שכתבנו זה עתה
                             const serverTs = d.lastUpdated || '';
-                            if (!isFromCache && !hasPending && _localWriteTimestamp && serverTs < _localWriteTimestamp) {
-                                // השרת עדיין לא קיבל את הכתיבה האחרונה שלנו — מדלגים
-                                console.log('[Sync] מדלג על עדכון ישן מהשרת');
-                                return;
-                            }
                             _lastServerTimestamp = serverTs;
-                            // ──────────────────────────────────────────────────────
                             
                             const serverItems = d.items || [];
                             serverItems.forEach(sItem => {
@@ -1099,10 +1100,6 @@
                     }, (err) => {
                         console.error('[Sync] onSnapshot error:', err);
                         updateSyncStatus('error', 'שגיאת חיבור');
-                        // נסה לאחד מחדש אחרי 8 שניות
-                        setTimeout(() => {
-                            if (navigator.onLine && state.user) setupFirebaseListeners();
-                        }, 8000);
                     });
                 } else {
                     toggleAppInterface(false);
