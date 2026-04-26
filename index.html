@@ -507,7 +507,6 @@
         <div id="listContainer"></div>
     </div>
 
-    <!-- Trash Modal -->
     <div id="trashModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -522,7 +521,6 @@
         </div>
     </div>
 
-    <!-- Edit Item Modal -->
     <div id="editModal" class="edit-modal-wrap">
         <div class="edit-modal-box">
             <h3>✏️ עריכת פריט</h3>
@@ -540,7 +538,6 @@
         </div>
     </div>
 
-    <!-- Edit AI Modal -->
     <div id="editAiModal" class="edit-modal-wrap">
         <div class="edit-modal-box">
             <h3>🤖✏️ עריכת פיענוח AI</h3>
@@ -565,7 +562,6 @@
         </div>
     </div>
 
-    <!-- AI Settings Modal -->
     <div id="aiSettingsModal" class="edit-modal-wrap">
         <div class="edit-modal-box" style="max-width:430px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
@@ -614,7 +610,6 @@
     <div id="toast-container"></div>
     <button id="scrollTopBtn" title="גלול למעלה">☝️</button>
 
-    <!-- Floating AI provider menu -->
     <div id="aiFloatingMenu">
         <div style="padding: 8px 15px; font-size: 11px; opacity: 0.7; font-weight: bold; border-bottom: 1px solid var(--glass-border);">בחר מנוע פענוח:</div>
         <div style="padding: 10px 15px; border-bottom: 1px solid rgba(127,127,127,0.1); display: flex; align-items: center; gap: 10px;">
@@ -653,15 +648,8 @@
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
 
         // ═══════════════════════════════════════════════════════════════════════
-        //  ⚙️ SYNC ENGINE v4 — Professional Multi-Device Sync
+        //  ⚙️ SYNC ENGINE v4.1 — Deterministic Multi-Device Sync
         // ═══════════════════════════════════════════════════════════════════════
-        //  Strategy: Last-Writer-Wins per item + Pending-Writes Lock + Tombstones
-        //  Cache: Single source of truth (lm_cache_v4_<uid>)
-        //  Conflict resolution: by item.updatedAt timestamps (per-item granularity)
-        //  Network resilience: queued offline writes + delta-merge on reconnect
-        // ═══════════════════════════════════════════════════════════════════════
-
-        // Fields that are computed at render time — never saved to Firestore
         const EPHEMERAL_FIELDS = ['isScanning'];
         const CACHE_KEY_PREFIX = 'lm_cache_v4_';
         const SCHEMA_VERSION   = 4;
@@ -676,93 +664,25 @@
             isOffline: false,
             selectedIds: new Set(), isSelectionMode: false,
             filteredItems: [],
-            lastServerSync: 0          // timestamp (ms) of last successful server snapshot
+            lastServerSync: 0
         };
         let abortAiScan = false;
 
         // ─── Sync state ────────────────────────────────────────────────────────
-        let _debounceTimer    = null;   // pending write timer
-        let _writeInProgress  = false;  // active Firestore write
-        let _pendingAfterWrite = false; // change occurred during write
-        let _offlineDirty     = false;  // changes waiting for network
-        let _localMutationCounter = 0;  // increments on each local change
+        let _debounceTimer    = null;
+        let _writeInProgress  = false;
+        let _pendingAfterWrite = false;
+        let _offlineDirty     = false;
+        let _localMutationCounter = 0;
 
-        // ─── Helpers: timestamps & merge ──────────────────────────────────────
+        // Promises for background loading lock-screen UX
+        let resolveDataLoaded;
+        const initialDataLoadedPromise = new Promise(resolve => resolveDataLoaded = resolve);
+
         function nowIso() { return new Date().toISOString(); }
-
-        function stampItem(item) {
-            // Set/refresh updatedAt on every local mutation. ID stays the same.
-            item.updatedAt = nowIso();
-            if (!item.createdAt) item.createdAt = item.date || item.updatedAt;
-            return item;
-        }
-
-        function stampAll(items) { items.forEach(stampItem); return items; }
 
         function isPendingWrite() {
             return _writeInProgress || _debounceTimer !== null;
-        }
-
-        /**
-         * Merge server items with local items by ID.
-         * Per-item resolution: prefer the version with the newer updatedAt.
-         * If item exists only on server → adopt it.
-         * If item exists only locally AND has updatedAt newer than serverDocLastUpdated → keep local (in-flight).
-         * Otherwise (only local, older) → it was deleted on another device → drop.
-         */
-        function mergeItems(serverItems, localItems, serverDocLastUpdated) {
-            const byId = new Map();
-            const serverDocTime = serverDocLastUpdated || 0;
-
-            // 1) Seed with server items
-            serverItems.forEach(s => byId.set(String(s.id), { src: 'server', item: s }));
-
-            // 2) Reconcile with local
-            localItems.forEach(l => {
-                const key = String(l.id);
-                const localTime  = l.updatedAt ? Date.parse(l.updatedAt) : 0;
-                const existing   = byId.get(key);
-
-                if (!existing) {
-                    // Item only locally. Keep ONLY if it's newer than the doc's lastUpdated
-                    // (meaning it's a pending local change not yet synced).
-                    // Otherwise, it was deleted on another device.
-                    if (localTime > serverDocTime - 1500 || isPendingWrite()) {
-                        byId.set(key, { src: 'local', item: l });
-                    }
-                    // else: drop — was deleted remotely
-                    return;
-                }
-
-                // Conflict: both server & local exist. Pick newer.
-                const serverTime = existing.item.updatedAt ? Date.parse(existing.item.updatedAt) : 0;
-                if (localTime > serverTime) {
-                    byId.set(key, { src: 'local', item: l });
-                } else {
-                    // Server wins — but preserve ephemeral fields (e.g., isScanning) from local
-                    EPHEMERAL_FIELDS.forEach(f => {
-                        if (l[f] !== undefined) existing.item[f] = l[f];
-                    });
-                }
-            });
-
-            return Array.from(byId.values()).map(v => v.item);
-        }
-
-        function mergeTrash(serverTrash, localTrash) {
-            const byId = new Map();
-            serverTrash.forEach(s => byId.set(String(s.id), s));
-            localTrash.forEach(l => {
-                const ex = byId.get(String(l.id));
-                if (!ex) byId.set(String(l.id), l);
-                else {
-                    // Prefer the one with the later deletedAt
-                    const lt = l.deletedAt ? Date.parse(l.deletedAt) : 0;
-                    const et = ex.deletedAt ? Date.parse(ex.deletedAt) : 0;
-                    if (lt > et) byId.set(String(l.id), l);
-                }
-            });
-            return Array.from(byId.values());
         }
 
         // ─── BroadcastChannel: instant cross-tab sync (same browser) ──────────
@@ -771,11 +691,10 @@
             _bc = new BroadcastChannel('mh-link-sync-v4');
             _bc.onmessage = ({ data }) => {
                 if (data?.type !== 'WRITTEN' || data?.uid !== state.user?.uid) return;
-                if (data.mutationId === _localMutationCounter) return; // own message
+                if (data.mutationId === _localMutationCounter) return; 
                 try {
                     const c = readCache();
                     if (c?.items) {
-                        // Replace state from cache (other tab just wrote it)
                         c.items.forEach(s => {
                             const l = state.items.find(i => String(i.id) === String(s.id));
                             if (l?.isScanning) s.isScanning = true;
@@ -788,7 +707,7 @@
             };
         } catch {}
 
-        // ─── Cache I/O (single source of truth) ───────────────────────────────
+        // ─── Cache I/O (single source of truth for offline) ───────────────────
         function cacheKey() { return state.user ? CACHE_KEY_PREFIX + state.user.uid : null; }
 
         function writeCache() {
@@ -820,7 +739,6 @@
         function clearCache() {
             const k = cacheKey();
             if (k) localStorage.removeItem(k);
-            // Cleanup legacy keys (one-time migration)
             try {
                 Object.keys(localStorage)
                     .filter(key => key.startsWith('linkManager_cache_') || key.startsWith('mh_cache_'))
@@ -834,7 +752,7 @@
             if (!state.user || !db || state.isOffline) return;
             if (!navigator.onLine) {
                 _offlineDirty = true;
-                writeCache(); // at least keep local copy
+                writeCache(); 
                 updateSyncStatus('offline', 'אין רשת');
                 return;
             }
@@ -844,7 +762,6 @@
             const myMutationId = ++_localMutationCounter;
             updateSyncStatus('syncing', 'שומר...');
             try {
-                // Strip ephemeral fields & ensure timestamps
                 const items = state.items.map(item => {
                     const c = JSON.parse(JSON.stringify(item));
                     EPHEMERAL_FIELDS.forEach(f => delete c[f]);
@@ -879,12 +796,7 @@
             }
         }
 
-        /**
-         * pushToCloud — the ONLY public entry point for saving.
-         * @param {boolean} immediate — if true, save almost immediately (80ms)
-         */
         function pushToCloud(immediate = false) {
-            // Always update cache instantly so a refresh never loses data
             writeCache();
 
             if (state.isOffline) {
@@ -940,13 +852,11 @@
                     state.trash = parsed.trash || [];
                     state.isOffline = true;
                     state.user = { displayName: 'גיבוי מקומי', photoURL: 'icon.png', uid: 'offline' };
-                    toggleAppInterface(true);
                     document.getElementById('userName').textContent = 'מצב לא-מקוון (קובץ)';
                     document.getElementById('userAvatar').src = 'icon.png';
                     updateSyncStatus('offline', 'עריכה מקומית');
                     updateCategoryDropdowns();
                     renderList();
-                    hideLoader();
                     showToast('נטען ממצב גיבוי מקומי (Offline Mode)');
                 } catch (e) { console.error('[Offline] parse error', e); }
             }
@@ -971,13 +881,6 @@
                 }
             });
         });
-
-        function hideLoader() {
-            const el = document.getElementById('loading-screen');
-            if (!el || el.style.display === 'none') return;
-            el.style.opacity = '0';
-            setTimeout(() => { el.style.display = 'none'; }, 400);
-        }
 
         function initServiceWorker() {
             if (!('serviceWorker' in navigator)) return;
@@ -1040,9 +943,7 @@
             document.getElementById('trashBtn')?.addEventListener('click', openTrashModal);
             document.getElementById('closeTrashModalBtn')?.addEventListener('click', closeTrashModal);
 
-            document.getElementById('forceReloadBtn')?.addEventListener('click', () => {
-                forceReload(false);
-            });
+            document.getElementById('forceReloadBtn')?.addEventListener('click', () => forceReload(false));
 
             ['importJsonInput', 'smartImportInput', 'wipeDataInput'].forEach(id => {
                 const el = document.getElementById(id);
@@ -1055,7 +956,7 @@
                 });
             });
 
-            // Network events ────────────────────────────────────────────────────
+            // Network events
             window.addEventListener('offline', () => {
                 updateSyncStatus('offline', 'מקומי (אין רשת)');
                 showToast('⚠️ החיבור אבד. שינויים יישמרו ויסונכרנו כשהרשת תחזור.', null, 6000, null, true);
@@ -1064,22 +965,18 @@
             window.addEventListener('online', () => {
                 updateSyncStatus('syncing', 'מתחבר מחדש...');
                 showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 4000);
-                // Order: 1) flush pending local writes  2) pull latest from server
                 setTimeout(() => {
                     _flushIfDirty();
                     if (state.user && !state.isOffline) {
-                        // Wait briefly so the flushed write is acknowledged before pulling
                         setTimeout(() => forceReload(true), 1500);
                     }
                 }, 600);
             });
 
-            // Smart background sync — onSnapshot remains the primary listener,
-            // but a focused sync on visibility/focus catches edge cases (e.g., killed tab)
             let _lastVisibilitySync = 0;
             const visibilitySync = () => {
                 if (!state.user || state.isOffline || !navigator.onLine) return;
-                if (isPendingWrite()) return;          // don't conflict with own write
+                if (isPendingWrite()) return; 
                 const now = Date.now();
                 if (now - _lastVisibilitySync < 6000) return;
                 _lastVisibilitySync = now;
@@ -1099,9 +996,6 @@
             document.getElementById('wakeLockBtn')?.addEventListener('click', toggleWakeLock);
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // WAKE LOCK
-        // ═══════════════════════════════════════════════════════════════════════
         async function toggleWakeLock() {
             closeAllMenus();
             if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied')
@@ -1141,7 +1035,7 @@
         }
 
         // ═══════════════════════════════════════════════════════════════════════
-        // FIREBASE LISTENERS — onSnapshot with proper merge
+        // FIREBASE LISTENERS & PRELOAD LOGIC (FIXES 1 & 3)
         // ═══════════════════════════════════════════════════════════════════════
         function setupFirebaseListeners() {
             if (!auth || !db) return;
@@ -1149,135 +1043,128 @@
                 if (user) {
                     state.isOffline = false;
                     state.user = user;
-                    toggleAppInterface(true);
+                    
+                    document.getElementById('userName').textContent = user.displayName;
+                    document.getElementById('userAvatar').src = user.photoURL;
 
-                    if (!navigator.onLine) {
-                        updateSyncStatus('offline', 'מקומי (אין רשת)');
-                        showToast('ℹ️ אין חיבור לאינטרנט. טוען נתונים מקומיים...', null, 5000, null, true);
-                    }
+                    // Initialize Lock Screen sequence immediately 
+                    handleLockScreen(true);
 
-                    // ─── Warm load from cache ──────────────────────────────────
+                    // Pre-fill with cache for a swift render if available
                     const cache = readCache();
                     if (cache?.items) {
                         state.items = cache.items.map(i => ({ ...i, isScanning: false }));
                         state.trash = cache.trash || [];
                         renderList();
                         updateCategoryDropdowns();
-                    } else if (state.items.length === 0) {
-                        const loader = document.getElementById('loading-screen');
-                        if (loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
                     }
 
-                    document.getElementById('userName').textContent = user.displayName;
-                    document.getElementById('userAvatar').src = user.photoURL;
-
+                    // Setup snapshot listener
                     const userDoc = doc(db, "users", user.uid);
-
-                    // ─── Real-time listener ────────────────────────────────────
                     state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
-                        if (!docSnap.exists()) { hideLoader(); return; }
-
-                        const d = docSnap.data();
-                        const hasPending  = docSnap.metadata.hasPendingWrites;
-                        const isFromCache = docSnap.metadata.fromCache;
-
-                        // Skip pure local-pending events — we'll react to the server confirmation.
-                        // This prevents flicker / overwriting our own optimistic updates.
-                        if (hasPending) {
-                            updateSyncStatus('syncing', 'מסנכרן...');
-                            return;
-                        }
-
+                        const d = docSnap.data() || { items: [], trash: [] };
                         const serverItems = Array.isArray(d.items) ? d.items : [];
                         const serverTrash = Array.isArray(d.trash) ? d.trash : [];
 
-                        // doc-level last update (server clock) → ms
-                        let serverDocTime = 0;
-                        if (d.lastUpdated?.toMillis) serverDocTime = d.lastUpdated.toMillis();
-                        else if (d.lastUpdatedClient) serverDocTime = Date.parse(d.lastUpdatedClient);
+                        // Real-time synchronization
+                        // If we are actively saving a file, retain local modifications, 
+                        // Otherwise trust the server implicitly to achieve immediate sync.
+                        if (isPendingWrite()) {
+                            state.items = mergePendingLocal(serverItems, state.items);
+                            state.trash = mergePendingLocal(serverTrash, state.trash);
+                        } else {
+                            state.items = serverItems.map(si => {
+                                const localMatch = state.items.find(li => li.id === si.id);
+                                if (localMatch && localMatch.isScanning) si.isScanning = true;
+                                return si;
+                            });
+                            state.trash = serverTrash;
+                        }
 
-                        // ── Critical: merge instead of overwrite ───────────────
-                        // If we have a pending local write, our local items already include
-                        // changes that may not yet be on the server — keep them.
-                        const merged = mergeItems(serverItems, state.items, serverDocTime);
-                        const mergedTrash = mergeTrash(serverTrash, state.trash);
-
-                        // Preserve isScanning flags
-                        merged.forEach(m => {
-                            const local = state.items.find(i => String(i.id) === String(m.id));
-                            if (local?.isScanning) m.isScanning = true;
-                        });
-
-                        state.items = merged;
-                        state.trash = mergedTrash;
-                        state.lastServerSync = serverDocTime || Date.now();
-
-                        if (d.aiSettings)
-                            localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
-
+                        if (d.aiSettings) localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
                         writeCache();
                         renderList();
                         updateCategoryDropdowns();
-                        hideLoader();
 
-                        if (!navigator.onLine || isFromCache) {
+                        if (!navigator.onLine || docSnap.metadata.fromCache) {
                             updateSyncStatus('offline', 'מקומי');
                         } else {
                             updateSyncStatus('online', 'מחובר ✓');
+                        }
+
+                        // Notify preloading mechanism that data has arrived
+                        if (!docSnap.metadata.fromCache || !navigator.onLine) {
+                            resolveDataLoaded(); 
                         }
                     }, (err) => {
                         console.error('[Sync] onSnapshot error:', err);
                         updateSyncStatus('error', 'שגיאת חיבור');
                     });
                 } else {
-                    toggleAppInterface(false);
-                    hideLoader();
+                    handleLockScreen(false);
                 }
             });
         }
 
-        let welcomeTimer = null;
-        function toggleAppInterface(isLoggedIn) {
+        function mergePendingLocal(serverArr, localArr) {
+            const byId = new Map(serverArr.map(s => [String(s.id), s]));
+            localArr.forEach(l => {
+                const sItem = byId.get(String(l.id));
+                // Only keep local if server lacks it OR local is newer (we just wrote it and it's pending)
+                if (!sItem || Date.parse(l.updatedAt || 0) > Date.parse(sItem.updatedAt || 0)) {
+                    byId.set(String(l.id), l);
+                } else {
+                    EPHEMERAL_FIELDS.forEach(f => { if(l[f]) sItem[f] = l[f]; });
+                }
+            });
+            return Array.from(byId.values());
+        }
+
+        function handleLockScreen(isLoggedIn) {
             document.getElementById('loggedInView').style.display  = isLoggedIn ? 'flex' : 'none';
             document.getElementById('loggedOutView').style.display = isLoggedIn ? 'none' : 'flex';
             
-            const welcomeScreen   = document.getElementById('welcomeScreen');
+            const welcomeScreen  = document.getElementById('welcomeScreen');
             const protectedContent = document.getElementById('protectedContent');
             const progressCircle  = document.querySelector('.timer-ring .progress');
             
             if (!isLoggedIn) {
-                clearTimeout(welcomeTimer);
                 welcomeScreen.style.display = 'flex';
                 welcomeScreen.classList.add('visible');
                 protectedContent.classList.add('locked');
                 document.getElementById('itemCount').textContent = 'ממתין להתחברות...';
                 if (progressCircle) { progressCircle.style.transition = 'none'; progressCircle.style.strokeDashoffset = '0'; }
-            } else {
-                welcomeScreen.style.display = 'flex';
-                welcomeScreen.classList.add('visible');
-                protectedContent.classList.add('locked');
-                
-                let secondsLeft = 3;
-                if (progressCircle) {
-                    progressCircle.style.transition = 'stroke-dashoffset 1s linear';
-                    progressCircle.style.strokeDashoffset = '283';
-                }
-                
-               const tick = setInterval(() => {
+                return;
+            }
+
+            // Logged in: Initiate loading screen logic
+            welcomeScreen.style.display = 'flex';
+            welcomeScreen.classList.add('visible');
+            protectedContent.classList.add('locked');
+            
+            let secondsLeft = 3;
+            if (progressCircle) {
+                progressCircle.style.transition = 'stroke-dashoffset 1s linear';
+                progressCircle.style.strokeDashoffset = '283';
+            }
+            
+            const aestheticTimerPromise = new Promise(resolve => {
+                const tick = setInterval(() => {
                     secondsLeft--;
-                    if (progressCircle)
-                        progressCircle.style.strokeDashoffset = (283 - (283 * (3 - secondsLeft) / 3));
-                    
+                    if (progressCircle) progressCircle.style.strokeDashoffset = (283 - (283 * (3 - secondsLeft) / 3));
                     if (secondsLeft <= 0) {
                         clearInterval(tick);
-                        setTimeout(() => {
-                            welcomeScreen.style.display = 'none';
-                            welcomeScreen.classList.remove('visible');
-                            protectedContent.classList.remove('locked');
-                        }, 1000);
+                        resolve();
                     }
                 }, 1000);
-            }
+            });
+
+            // Wait for BOTH the 3 second lock screen AND the background data fetch to finish
+            Promise.all([aestheticTimerPromise, initialDataLoadedPromise]).then(() => {
+                welcomeScreen.style.display = 'none';
+                welcomeScreen.classList.remove('visible');
+                protectedContent.classList.remove('locked');
+            });
         }
 
         function updateSyncStatus(status, label) {
@@ -1313,14 +1200,13 @@
             } catch (e) { alert(e.message); }
         }
 
-        // ─── Force reload (manual or post-reconnect) ──────────────────────────
+        // ─── Force reload: Reliable Refresh from Cloud (FIX 2) ────────────────
         async function forceReload(silent = false) {
             if (!state.user || state.isOffline) return;
             if (!navigator.onLine) {
                 if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
                 return;
             }
-            // If we have unsaved local changes, flush them first
             if (isPendingWrite()) {
                 if (!silent) showToast('⏳ ממתין לסיום שמירה לפני רענון...', null, 2500);
                 await new Promise(r => setTimeout(r, 1500));
@@ -1338,31 +1224,19 @@
                 const snap = await getDocFromServer(doc(db, "users", state.user.uid));
                 if (snap.exists()) {
                     const d = snap.data();
-                    const serverItems = Array.isArray(d.items) ? d.items : [];
-                    const serverTrash = Array.isArray(d.trash) ? d.trash : [];
-                    let serverDocTime = 0;
-                    if (d.lastUpdated?.toMillis) serverDocTime = d.lastUpdated.toMillis();
-                    else if (d.lastUpdatedClient) serverDocTime = Date.parse(d.lastUpdatedClient);
-
-                    // Merge instead of overwrite — protects in-flight local edits
-                    const merged = mergeItems(serverItems, state.items, serverDocTime);
-                    const mergedTrash = mergeTrash(serverTrash, state.trash);
-                    merged.forEach(m => {
-                        const local = state.items.find(i => String(i.id) === String(m.id));
-                        if (local?.isScanning) m.isScanning = true;
-                    });
-
-                    state.items = merged;
-                    state.trash = mergedTrash;
-                    state.lastServerSync = serverDocTime || Date.now();
                     
+                    // Directly replace the cache and local variables with deterministic server data. 
+                    // Bypasses stale local caching explicitly for this forced refresh.
+                    state.items = Array.isArray(d.items) ? d.items : [];
+                    state.trash = Array.isArray(d.trash) ? d.trash : [];
+
                     if (d.aiSettings) localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
                     writeCache();
                     renderList();
                     updateCategoryDropdowns();
                 }
                 updateSyncStatus('online', 'מחובר');
-                if (!silent) showToast("✅ רענון מהענן בוצע");
+                if (!silent) showToast("✅ רענון מהענן בוצע - הנתונים סונכרנו");
             } catch (err) {
                 console.error(err);
                 updateSyncStatus('error', 'שגיאת חיבור');
@@ -1826,7 +1700,6 @@
                         contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: Page blocked by anti-bot. Do NOT mark as "dead". Assume "active". Analyze based on URL and description only.`;
                 }
 
-                // Telegram dead-link client-side detection
                 const isTelegramUrl = /(?:t\.me|telegram\.me)\//i.test(cleanContent);
                 if (isTelegramUrl && !forceUrlOnly) {
                     const lc = contentToAnalyze.toLowerCase();
@@ -2045,7 +1918,7 @@ ${contentToAnalyze}`;
             } finally {
                 const ci = state.items.find(i => i.id === id);
                 if (ci) ci.isScanning = false;
-                pushToCloud(false); // debounced for AI batch writes
+                pushToCloud(false);
                 renderList();
             }
         };
@@ -2097,7 +1970,7 @@ ${contentToAnalyze}`;
             const finalMsg = abortAiScan ? '🛑 <b>הסריקה הופסקה.</b>' : '✅ <b>סריקת ה-AI הסתיימה בהצלחה!</b>';
             showToast(finalMsg, null, 4000, bulkToastId, false);
             setTimeout(() => removeToast(bulkToastId), 4000);
-            pushToCloud(true); // final flush after batch
+            pushToCloud(true);
         });
 
         document.getElementById('cancelBulkAiBtn')?.addEventListener('click', () => {
@@ -2889,12 +2762,9 @@ ${contentToAnalyze}`;
         // SAFETY: flush pending writes before tab closes
         // ═══════════════════════════════════════════════════════════════════════
         window.addEventListener('beforeunload', () => {
-            // If there's a pending debounced write, force it now (cache always saved)
             writeCache();
             if (_debounceTimer) {
                 clearTimeout(_debounceTimer);
-                // Best-effort: try synchronous flush via the network. setDoc returns a Promise
-                // we cannot await here, but the cache is already saved which is the main safety net.
                 try { _doWrite(); } catch {}
             }
         });
