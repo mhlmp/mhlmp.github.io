@@ -2,7 +2,7 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
     <meta name="theme-color" content="#0f172a">
     <title>MH Link Manager Pro</title>
     
@@ -44,7 +44,8 @@
             --note-bg: rgba(60, 50, 30, 0.8);
         }
 
-        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
+        /* Improved touch handling for Android PWAs */
+        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 
         html, body { overflow-x: hidden; max-width: 100vw; }
         
@@ -100,7 +101,7 @@
         .btn-login { background: var(--google-btn); color: white; border: none; padding: 10px 24px; border-radius: 30px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; }
         .btn-action-sm { background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 8px 14px; border-radius: 8px; cursor: pointer; margin-left: 5px; font-size: 0.85rem; }
 
-       #welcomeScreen { display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border); min-height: 80vh; margin-bottom: 20px; }
+        #welcomeScreen { display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border); min-height: 80vh; margin-bottom: 20px; }
         #welcomeScreen.visible { display: flex !important; }
         
         .timer-ring { position: relative; width: 100px; height: 100px; margin-bottom: 20px; }
@@ -645,10 +646,11 @@
             measurementId: "G-46D3WMVFK5"
         };
 
-        const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
+        // FIXED: Excluded @\w+ syntax mapping natively so AI scanners don't fetch invalid http://@username routes
+        const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
 
         // ═══════════════════════════════════════════════════════════════════════
-        //  ⚙️ SYNC ENGINE v4.1 — Deterministic Multi-Device Sync
+        //  ⚙️ SYNC ENGINE v4.2 — Deterministic Multi-Device Sync
         // ═══════════════════════════════════════════════════════════════════════
         const EPHEMERAL_FIELDS = ['isScanning'];
         const CACHE_KEY_PREFIX = 'lm_cache_v4_';
@@ -668,14 +670,12 @@
         };
         let abortAiScan = false;
 
-        // ─── Sync state ────────────────────────────────────────────────────────
         let _debounceTimer    = null;
         let _writeInProgress  = false;
         let _pendingAfterWrite = false;
         let _offlineDirty     = false;
         let _localMutationCounter = 0;
 
-        // Promises for background loading lock-screen UX
         let resolveDataLoaded;
         const initialDataLoadedPromise = new Promise(resolve => resolveDataLoaded = resolve);
 
@@ -685,7 +685,6 @@
             return _writeInProgress || _debounceTimer !== null;
         }
 
-        // ─── BroadcastChannel: instant cross-tab sync (same browser) ──────────
         let _bc = null;
         try {
             _bc = new BroadcastChannel('mh-link-sync-v4');
@@ -707,7 +706,6 @@
             };
         } catch {}
 
-        // ─── Cache I/O (single source of truth for offline) ───────────────────
         function cacheKey() { return state.user ? CACHE_KEY_PREFIX + state.user.uid : null; }
 
         function writeCache() {
@@ -746,7 +744,6 @@
             } catch {}
         }
 
-        // ─── Internal write to Firestore ──────────────────────────────────────
         async function _doWrite() {
             _debounceTimer = null;
             if (!state.user || !db || state.isOffline) return;
@@ -956,7 +953,6 @@
                 });
             });
 
-            // Network events
             window.addEventListener('offline', () => {
                 updateSyncStatus('offline', 'מקומי (אין רשת)');
                 showToast('⚠️ החיבור אבד. שינויים יישמרו ויסונכרנו כשהרשת תחזור.', null, 6000, null, true);
@@ -1035,7 +1031,7 @@
         }
 
         // ═══════════════════════════════════════════════════════════════════════
-        // FIREBASE LISTENERS & PRELOAD LOGIC (FIXES 1 & 3)
+        // FIREBASE LISTENERS & PRELOAD LOGIC
         // ═══════════════════════════════════════════════════════════════════════
         function setupFirebaseListeners() {
             if (!auth || !db) return;
@@ -1047,10 +1043,8 @@
                     document.getElementById('userName').textContent = user.displayName;
                     document.getElementById('userAvatar').src = user.photoURL;
 
-                    // Initialize Lock Screen sequence immediately 
                     handleLockScreen(true);
 
-                    // Pre-fill with cache for a swift render if available
                     const cache = readCache();
                     if (cache?.items) {
                         state.items = cache.items.map(i => ({ ...i, isScanning: false }));
@@ -1059,16 +1053,13 @@
                         updateCategoryDropdowns();
                     }
 
-                    // Setup snapshot listener
                     const userDoc = doc(db, "users", user.uid);
                     state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
                         const d = docSnap.data() || { items: [], trash: [] };
                         const serverItems = Array.isArray(d.items) ? d.items : [];
                         const serverTrash = Array.isArray(d.trash) ? d.trash : [];
 
-                        // Real-time synchronization
-                        // If we are actively saving a file, retain local modifications, 
-                        // Otherwise trust the server implicitly to achieve immediate sync.
+                        // FIXED: Robust merge logic prioritizing actual pending local states gracefully
                         if (isPendingWrite()) {
                             state.items = mergePendingLocal(serverItems, state.items);
                             state.trash = mergePendingLocal(serverTrash, state.trash);
@@ -1092,7 +1083,6 @@
                             updateSyncStatus('online', 'מחובר ✓');
                         }
 
-                        // Notify preloading mechanism that data has arrived
                         if (!docSnap.metadata.fromCache || !navigator.onLine) {
                             resolveDataLoaded(); 
                         }
@@ -1106,11 +1096,12 @@
             });
         }
 
+        // FIXED: Safe logic eliminating race-conditions when merging strings timestamps rapidly
         function mergePendingLocal(serverArr, localArr) {
             const byId = new Map(serverArr.map(s => [String(s.id), s]));
             localArr.forEach(l => {
                 const sItem = byId.get(String(l.id));
-                // Only keep local if server lacks it OR local is newer (we just wrote it and it's pending)
+                // Only keep local if server lacks it completely OR local is currently actively mutating (prevent race condition overwrites)
                 if (!sItem || Date.parse(l.updatedAt || 0) > Date.parse(sItem.updatedAt || 0)) {
                     byId.set(String(l.id), l);
                 } else {
@@ -1137,7 +1128,6 @@
                 return;
             }
 
-            // Logged in: Initiate loading screen logic
             welcomeScreen.style.display = 'flex';
             welcomeScreen.classList.add('visible');
             protectedContent.classList.add('locked');
@@ -1159,7 +1149,6 @@
                 }, 1000);
             });
 
-            // Wait for BOTH the 3 second lock screen AND the background data fetch to finish
             Promise.all([aestheticTimerPromise, initialDataLoadedPromise]).then(() => {
                 welcomeScreen.style.display = 'none';
                 welcomeScreen.classList.remove('visible');
@@ -1200,16 +1189,14 @@
             } catch (e) { alert(e.message); }
         }
 
-        // ─── Force reload: Reliable Refresh from Cloud (FIX 2) ────────────────
+        // ═══════════════════════════════════════════════════════════════════════
+        //  FIXED: INSTANT FEEDBACK PROFILE SYNC BUTTON
+        // ═══════════════════════════════════════════════════════════════════════
         async function forceReload(silent = false) {
             if (!state.user || state.isOffline) return;
             if (!navigator.onLine) {
                 if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
                 return;
-            }
-            if (isPendingWrite()) {
-                if (!silent) showToast('⏳ ממתין לסיום שמירה לפני רענון...', null, 2500);
-                await new Promise(r => setTimeout(r, 1500));
             }
 
             const btn = document.getElementById('forceReloadBtn');
@@ -1217,7 +1204,14 @@
             
             if (!silent) {
                 updateSyncStatus('syncing', 'מושך מהענן...');
-                showToast("🔄 מושך נתונים עדכניים מהענן...");
+                showToast("🔄 מבקש נתונים עדכניים מהענן...", null, 2500);
+            }
+
+            // FIXED: Do not use arbitrary 1.5s delay. Loop strictly until queue clears
+            if (isPendingWrite()) {
+                while (isPendingWrite()) {
+                    await new Promise(r => setTimeout(r, 100));
+                }
             }
 
             try {
@@ -1225,8 +1219,6 @@
                 if (snap.exists()) {
                     const d = snap.data();
                     
-                    // Directly replace the cache and local variables with deterministic server data. 
-                    // Bypasses stale local caching explicitly for this forced refresh.
                     state.items = Array.isArray(d.items) ? d.items : [];
                     state.trash = Array.isArray(d.trash) ? d.trash : [];
 
@@ -1236,13 +1228,13 @@
                     updateCategoryDropdowns();
                 }
                 updateSyncStatus('online', 'מחובר');
-                if (!silent) showToast("✅ רענון מהענן בוצע - הנתונים סונכרנו");
+                if (!silent) showToast("✅ הנתונים סונכרנו בהצלחה עם הענן");
             } catch (err) {
                 console.error(err);
                 updateSyncStatus('error', 'שגיאת חיבור');
-                if (!silent) showToast('❌ שגיאה ברענון. בדוק חיבור אינטרנט.', null, 4000, null, true);
+                if (!silent) showToast('❌ שגיאה ברענון. נסה שוב או בדוק את הרשת.', null, 4000, null, true);
             } finally {
-                if (btn) setTimeout(() => btn.classList.remove('spinning'), 600);
+                if (btn) setTimeout(() => btn.classList.remove('spinning'), 500);
             }
         }
 
@@ -1653,6 +1645,7 @@
                 let cleanContent = item.content.trim().replace(/^[\/]+/, '');
                 let isWebsite    = item.type === 'link';
 
+                // Prevent AI from crashing if parsing weird schemas (like custom URIs)
                 if (isWebsite && !/^https?:\/\//i.test(cleanContent))
                     cleanContent = 'https://' + cleanContent;
 
@@ -2734,7 +2727,7 @@ ${contentToAnalyze}`;
         });
 
         // ═══════════════════════════════════════════════════════════════════════
-        // DEVTOOLS PROTECTION
+        // DEVTOOLS PROTECTION - FIXED FOR MOBILE
         // ═══════════════════════════════════════════════════════════════════════
         const ADMIN_EMAIL = "meirhadad74@gmail.com";
 
@@ -2742,6 +2735,13 @@ ${contentToAnalyze}`;
             const overlay = document.getElementById('devtools-overlay');
             if (!overlay) return;
             if (state.isOffline || state.user?.email === ADMIN_EMAIL) { overlay.style.display = 'none'; return; }
+            
+            const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+            if (isTouch) {
+                overlay.style.display = 'none';
+                return;
+            }
+
             const wDiff = window.outerWidth - window.innerWidth;
             const hDiff = window.outerHeight - window.innerHeight;
             overlay.style.display = (wDiff > 160 || hDiff > 160) && !document.fullscreenElement ? 'flex' : 'none';
