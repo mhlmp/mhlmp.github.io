@@ -1239,20 +1239,14 @@
             const btn = document.getElementById('forceReloadBtn');
             if (btn) btn.classList.add('spinning');
             
-            if (!silent) showToast("🔄 שואב נתונים מעודכנים מהענן...", null, 2000);
+            if (!silent) showToast("🔄 בודק נתונים מול הענן...", null, 2000);
 
+            // מחכים שהתור המקומי יתרוקן
             while (isPendingWrite()) { await new Promise(r => setTimeout(r, 100)); }
 
-           try {
-                // התיקון העוצמתי לנייד: כיבוי והדלקה כפויה של שכבת הרשת של Firebase כדי לנקות Websocket מת!
-                await disableNetwork(db);
-                await enableNetwork(db);
-
-                // ✨ הפיניש הסופי: נותנים לאנטנה הסלולרית ולשרתים 800 מילישניות להתחבר מחדש
-                // לפני שאנחנו "דורשים" את הנתונים. זה מונע את קריסת שגיאת החיבור!
-                await new Promise(r => setTimeout(r, 800));
-
-                const snap = await getDocFromServer(doc(db, "users", state.user.uid));
+            try {
+                // מנסים למשוך נתונים בצורה חלקה. אם הסוקט חי - זה יקרה באלפית שנייה.
+                const snap = await getDocFromServer(doc(db, "users", state.user.uid));
                 if (snap.exists()) {
                     const d = snap.data();
                     
@@ -1268,10 +1262,16 @@
                 updateSyncStatus('online', 'מחובר ✓');
                 if (!silent) showToast("✅ הנתונים סונכרנו בהצלחה עם הענן");
             } catch (err) {
-                console.error('[Sync] Force Reload Error:', err);
-                // במקום שגיאה אדומה שמלחיצה ונועלת, מעבירים חזרה למצב מקומי שקט להמשך עבודה
-                updateSyncStatus('offline', 'מקומי');
-                if (!silent) showToast('⚠️ הרשת חלשה כרגע. המערכת תמשיך לעבוד מקומית ותסנכרן כשיתאפשר.', null, 4000, null, true);
+                console.error('[Sync] Reload Error (Socket probably dead):', err);
+                // אם המשיכה נכשלה (לרוב כי הפלאפון הרדים את הרשת), אנחנו מפעילים "החייאה" שקטה.
+                // ברגע שהרשת תתחבר שוב (תוך שנייה או שתיים), המאזין הרגיל (onSnapshot) ימשוך את המידע לבד!
+                try {
+                    await disableNetwork(db);
+                    await enableNetwork(db);
+                } catch(e) {}
+                
+                updateSyncStatus('syncing', 'מחדש חיבור...');
+                if (!silent) showToast('מחדש חיבור רשת ברקע... הנתונים יעודכנו אוטומטית', null, 3000);
             } finally {
                 if (btn) btn.classList.remove('spinning');
             }
