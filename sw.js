@@ -1,5 +1,5 @@
-// 1. שנה את מספר הגרסה בכל פעם שאתה מעלה עדכון ל-GitHub
-const CACHE_NAME = 'LinkManager-v2-AI-' + new Date().getTime();
+// 1. שנה את מספר הגרסה באופן ידני בכל פעם שאתה מעלה עדכון משמעותי ל-GitHub כדי לאלץ רענון קאש לכל המשתמשים.
+const CACHE_NAME = 'LinkManager-v4.0-SyncEngine';
 
 const urlsToCache = [
   './',
@@ -24,6 +24,7 @@ self.addEventListener('activate', event => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (cacheName !== CACHE_NAME) {
+            console.log('[Service Worker] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -36,13 +37,17 @@ self.addEventListener('activate', event => {
 // אסטרטגיית טעינה: Network First (קודם רשת, אם נכשל - זיכרון)
 self.addEventListener('fetch', event => {
   const url = event.request.url;
+  
+  // החרגת כל קריאות ה-API כדי שה-SW לא יתערב או ינסה לקאשש אותן
   if (url.includes('firestore.googleapis.com') || 
       url.includes('generativelanguage.googleapis.com') || 
       url.includes('api.groq.com') ||                      
       url.includes('openrouter.ai') ||                     
-      url.includes('api.allorigins.win') ||                
+      url.includes('api.allorigins.win') || 
+      url.includes('corsproxy.io') ||
+      url.includes('api.codetabs.com') ||
       url.includes('firebase')) {
-      return;
+      return; // נותן לבקשה לצאת לרשת כרגיל ללא מעורבות SW
   }
 
   event.respondWith(
@@ -57,6 +62,7 @@ self.addEventListener('fetch', event => {
       .catch(() => caches.match(event.request))
   );
 });
+
 // טיפול בלחיצה על התראות מערכת (Push Notifications)
 self.addEventListener('notificationclick', event => {
   event.notification.close(); // סוגר את ההתראה
