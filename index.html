@@ -646,12 +646,8 @@
             measurementId: "G-46D3WMVFK5"
         };
 
-        // FIXED: Excluded @\w+ syntax mapping natively so AI scanners don't fetch invalid http://@username routes
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
 
-        // ═══════════════════════════════════════════════════════════════════════
-        //  ⚙️ SYNC ENGINE v4.2 — Deterministic Multi-Device Sync
-        // ═══════════════════════════════════════════════════════════════════════
         const EPHEMERAL_FIELDS = ['isScanning'];
         const CACHE_KEY_PREFIX = 'lm_cache_v4_';
         const SCHEMA_VERSION   = 4;
@@ -819,9 +815,6 @@
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // FIREBASE INIT
-        // ═══════════════════════════════════════════════════════════════════════
         try {
             app  = initializeApp(firebaseConfig);
             auth = getAuth(app);
@@ -833,9 +826,6 @@
             });
         } catch (e) { console.error('[Firebase] Init Error:', e); }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // INIT
-        // ═══════════════════════════════════════════════════════════════════════
         document.addEventListener('DOMContentLoaded', () => {
             const offlineDataEl = document.getElementById('offline-data');
             const localCache = localStorage.getItem('linkManagerLocalData');
@@ -893,9 +883,6 @@
             }).catch(console.error);
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // EVENT LISTENERS
-        // ═══════════════════════════════════════════════════════════════════════
         function setupEventListeners() {
             document.querySelectorAll('.drop-trigger').forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -1030,9 +1017,6 @@
             });
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // FIREBASE LISTENERS & PRELOAD LOGIC
-        // ═══════════════════════════════════════════════════════════════════════
         function setupFirebaseListeners() {
             if (!auth || !db) return;
             onAuthStateChanged(auth, (user) => {
@@ -1059,7 +1043,6 @@
                         const serverItems = Array.isArray(d.items) ? d.items : [];
                         const serverTrash = Array.isArray(d.trash) ? d.trash : [];
 
-                        // FIXED: Robust merge logic prioritizing actual pending local states gracefully
                         if (isPendingWrite()) {
                             state.items = mergePendingLocal(serverItems, state.items);
                             state.trash = mergePendingLocal(serverTrash, state.trash);
@@ -1077,18 +1060,20 @@
                         renderList();
                         updateCategoryDropdowns();
 
+                        // FIX: Release the lockout immediately on ANY successful snapshot event
+                        resolveDataLoaded();
+
                         if (!navigator.onLine || docSnap.metadata.fromCache) {
                             updateSyncStatus('offline', 'מקומי');
                         } else {
                             updateSyncStatus('online', 'מחובר ✓');
                         }
 
-                        if (!docSnap.metadata.fromCache || !navigator.onLine) {
-                            resolveDataLoaded(); 
-                        }
                     }, (err) => {
                         console.error('[Sync] onSnapshot error:', err);
                         updateSyncStatus('error', 'שגיאת חיבור');
+                        // FIX: Release the lockout even if sync errors out to fallback to local cache safely
+                        resolveDataLoaded();
                     });
                 } else {
                     handleLockScreen(false);
@@ -1096,12 +1081,10 @@
             });
         }
 
-        // FIXED: Safe logic eliminating race-conditions when merging strings timestamps rapidly
         function mergePendingLocal(serverArr, localArr) {
             const byId = new Map(serverArr.map(s => [String(s.id), s]));
             localArr.forEach(l => {
                 const sItem = byId.get(String(l.id));
-                // Only keep local if server lacks it completely OR local is currently actively mutating (prevent race condition overwrites)
                 if (!sItem || Date.parse(l.updatedAt || 0) > Date.parse(sItem.updatedAt || 0)) {
                     byId.set(String(l.id), l);
                 } else {
@@ -1149,7 +1132,13 @@
                 }, 1000);
             });
 
-            Promise.all([aestheticTimerPromise, initialDataLoadedPromise]).then(() => {
+            // FIX: Absolute Failsafe - never lock the screen for more than 4.5 seconds under ANY condition
+            const safeDataPromise = Promise.race([
+                initialDataLoadedPromise,
+                new Promise(resolve => setTimeout(resolve, 4500))
+            ]);
+
+            Promise.all([aestheticTimerPromise, safeDataPromise]).then(() => {
                 welcomeScreen.style.display = 'none';
                 welcomeScreen.classList.remove('visible');
                 protectedContent.classList.remove('locked');
@@ -1189,9 +1178,6 @@
             } catch (e) { alert(e.message); }
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        //  FIXED: INSTANT FEEDBACK PROFILE SYNC BUTTON
-        // ═══════════════════════════════════════════════════════════════════════
         async function forceReload(silent = false) {
             if (!state.user || state.isOffline) return;
             if (!navigator.onLine) {
@@ -1207,7 +1193,6 @@
                 showToast("🔄 מבקש נתונים עדכניים מהענן...", null, 2500);
             }
 
-            // FIXED: Do not use arbitrary 1.5s delay. Loop strictly until queue clears
             if (isPendingWrite()) {
                 while (isPendingWrite()) {
                     await new Promise(r => setTimeout(r, 100));
@@ -1238,9 +1223,6 @@
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // RENDER
-        // ═══════════════════════════════════════════════════════════════════════
         function renderList() {
             if (!state.user) return;
             const container = document.getElementById('listContainer');
@@ -1482,9 +1464,6 @@
             return div;
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // ADD ITEM
-        // ═══════════════════════════════════════════════════════════════════════
         function handleAdd(e) {
             e.preventDefault();
             const content = document.getElementById('itemContent').value.trim();
@@ -1536,9 +1515,6 @@
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // AI ENGINE
-        // ═══════════════════════════════════════════════════════════════════════
         window.saveAiSettings = function () {
             const settings = {
                 provider: document.getElementById('aiProviderSelect').value,
@@ -1645,7 +1621,6 @@
                 let cleanContent = item.content.trim().replace(/^[\/]+/, '');
                 let isWebsite    = item.type === 'link';
 
-                // Prevent AI from crashing if parsing weird schemas (like custom URIs)
                 if (isWebsite && !/^https?:\/\//i.test(cleanContent))
                     cleanContent = 'https://' + cleanContent;
 
@@ -1999,9 +1974,6 @@ ${contentToAnalyze}`;
             });
         });
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // ITEM ACTIONS
-        // ═══════════════════════════════════════════════════════════════════════
         function moveToTrash(id) {
             const idx = state.items.findIndex(i => i.id === id);
             if (idx === -1) return;
@@ -2114,9 +2086,6 @@ ${contentToAnalyze}`;
             showToast('📋 הועתק ללוח');
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // FILTERS & TOGGLES
-        // ═══════════════════════════════════════════════════════════════════════
         function toggleDuplicates() {
             state.showDuplicates = !state.showDuplicates;
             if (!state.showDuplicates) state.showOnlyDead = false;
@@ -2149,9 +2118,6 @@ ${contentToAnalyze}`;
             renderList();
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // IMPORT / EXPORT
-        // ═══════════════════════════════════════════════════════════════════════
         function importJson(e) {
             const f = e.target.files[0];
             if (!f) return;
@@ -2319,9 +2285,6 @@ ${contentToAnalyze}`;
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // HELPERS
-        // ═══════════════════════════════════════════════════════════════════════
         function escapeHtml(text) {
             if (!text) return '';
             const str = String(text);
@@ -2371,9 +2334,6 @@ ${contentToAnalyze}`;
             if (btn) btn.textContent = isDark ? '☀️' : '🌙';
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // TRASH UI
-        // ═══════════════════════════════════════════════════════════════════════
         function openTrashModal() {
             const list = document.getElementById('trashList');
             list.innerHTML = '';
@@ -2456,9 +2416,6 @@ ${contentToAnalyze}`;
             showToast('סל המחזור רוקן', () => { state.trash = origTrash; pushToCloud(true); openTrashModal(); });
         });
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // SCROLL TO TOP
-        // ═══════════════════════════════════════════════════════════════════════
         function setupScrollToTop() {
             const btn = document.getElementById('scrollTopBtn');
             if (!btn) return;
@@ -2479,9 +2436,6 @@ ${contentToAnalyze}`;
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // TOAST SYSTEM
-        // ═══════════════════════════════════════════════════════════════════════
         function showToast(msg, undoCallback = null, duration = 8000, id = null, isWarning = false) {
             const container = document.getElementById('toast-container');
             if (!container) return null;
@@ -2533,9 +2487,6 @@ ${contentToAnalyze}`;
             setTimeout(() => { if (toast.parentElement) toast.remove(); }, 300);
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // AI FLOATING MENU
-        // ═══════════════════════════════════════════════════════════════════════
         window.openAiFloatingMenu = function (id, e) {
             e.preventDefault(); e.stopPropagation();
             window.activeAiScanId = id;
@@ -2579,9 +2530,6 @@ ${contentToAnalyze}`;
             });
         });
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // MULTI-SELECT
-        // ═══════════════════════════════════════════════════════════════════════
         function enterSelectionMode(firstId) {
             state.isSelectionMode = true;
             state.selectedIds.add(firstId);
@@ -2726,9 +2674,6 @@ ${contentToAnalyze}`;
             });
         });
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // DEVTOOLS PROTECTION - FIXED FOR MOBILE
-        // ═══════════════════════════════════════════════════════════════════════
         const ADMIN_EMAIL = "meirhadad74@gmail.com";
 
         setInterval(() => {
@@ -2758,9 +2703,6 @@ ${contentToAnalyze}`;
                 e.preventDefault();
         });
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // SAFETY: flush pending writes before tab closes
-        // ═══════════════════════════════════════════════════════════════════════
         window.addEventListener('beforeunload', () => {
             writeCache();
             if (_debounceTimer) {
