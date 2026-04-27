@@ -364,7 +364,7 @@
         </div>
       <div class="bulk-actions">
             <button class="bulk-btn" id="bulkAiBtn" style="background: rgba(139, 92, 246, 0.2); border-color: #8b5cf6; color: #ddd6fe;">🤖 סרוק נבחרים</button>
-            <button class="bulk-btn" id="bulkClearAiBtn" style="background: rgba(245, 158, 11, 0.2); border-color: var(--accent-gold); color: #fcd34d;">🧹AI נקה ניתוח</button>
+            <button class="bulk-btn" id="bulkClearAiBtn" style="background: rgba(245, 158, 11, 0.2); border-color: var(--accent-gold); color: #fcd34d;">🧹נקה ניתוח AI</button>
             <button class="bulk-btn" id="bulkMoveBtn">📂 העבר</button>
             <button class="bulk-btn delete" id="bulkDeleteBtn">🗑️ מחק</button>
             <button class="bulk-btn" id="cancelBulkBtn">✖ ביטול</button>
@@ -1207,12 +1207,16 @@
 
             while (isPendingWrite()) { await new Promise(r => setTimeout(r, 100)); }
 
-            try {
-                // התיקון העוצמתי לנייד: כיבוי והדלקה כפויה של שכבת הרשת של Firebase כדי לנקות Websocket מת!
-                await disableNetwork(db);
-                await enableNetwork(db);
+           try {
+                // התיקון העוצמתי לנייד: כיבוי והדלקה כפויה של שכבת הרשת של Firebase כדי לנקות Websocket מת!
+                await disableNetwork(db);
+                await enableNetwork(db);
 
-                const snap = await getDocFromServer(doc(db, "users", state.user.uid));
+                // ✨ הפיניש הסופי: נותנים לאנטנה הסלולרית ולשרתים 800 מילישניות להתחבר מחדש
+                // לפני שאנחנו "דורשים" את הנתונים. זה מונע את קריסת שגיאת החיבור!
+                await new Promise(r => setTimeout(r, 800));
+
+                const snap = await getDocFromServer(doc(db, "users", state.user.uid));
                 if (snap.exists()) {
                     const d = snap.data();
                     
