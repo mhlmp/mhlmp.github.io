@@ -629,7 +629,7 @@
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
       import {
             getFirestore, doc, setDoc, getDoc, getDocFromServer,
-            onSnapshot, serverTimestamp, enableNetwork, disableNetwork,
+            onSnapshot, serverTimestamp,
             initializeFirestore, persistentLocalCache, persistentMultipleTabManager
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
@@ -962,37 +962,23 @@
 
           window.addEventListener('offline', () => {
                 updateSyncStatus('offline', 'מקומי (אין רשת)');
-                showToast('⚠️ החיבור אבד. שינויים יישמרו ויסונכרנו כשהרשת תחזור.', null, 6000, null, true);
+                showToast('⚠️ הרשת התנתקה. שינויים נשמרים מקומית.', null, 4000, null, true);
             });
 
             window.addEventListener('online', () => {
-                updateSyncStatus('syncing', 'מתחבר מחדש...');
-                showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 4000);
-                setTimeout(() => {
-                    _flushIfDirty();
-                    if (state.user && !state.isOffline) {
-                        forceReload(true);
-                    }
-                }, 1500);
+                updateSyncStatus('syncing', 'מחדש קשר...');
+                setTimeout(() => { _flushIfDirty(); }, 1000);
             });
 
-            let _lastVisibilitySync = 0;
-            const visibilitySync = () => {
-                if (!state.user || state.isOffline || !navigator.onLine) return;
-                if (isPendingWrite()) return; 
-                const now = Date.now();
-                if (now - _lastVisibilitySync < 6000) return;
-                _lastVisibilitySync = now;
-                
-                // הסרנו את כיבוי/הדלקת הרשת המאולץ כדי לתת ל-Firebase להסתנכרן באופן מיידי 
-                // מבלי לקרוע את צינור התקשורת!
-                forceReload(true);
-            };
+            // כשהמשתמש חוזר לאפליקציה ממסך נעול - פשוט דוחפים שינויים אם יש
             document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') visibilitySync();
+                if (document.visibilityState === 'visible' && state.user && navigator.onLine) {
+                    _flushIfDirty();
+                }
             });
-            window.addEventListener('focus', visibilitySync);
-
+            window.addEventListener('focus', () => {
+                if (state.user && navigator.onLine) _flushIfDirty();
+            });
             document.getElementById('editItemForm')?.addEventListener('submit', handleEditSubmit);
             document.getElementById('editAiForm')?.addEventListener('submit', handleEditAiSubmit);
             document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
@@ -1060,7 +1046,7 @@
                         updateCategoryDropdowns();
                     }
 
-                   const userDoc = doc(db, "users", user.uid);
+                  const userDoc = doc(db, "users", user.uid);
                     state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
                         const d = docSnap.data() || { items: [], trash: [] };
                         const serverItems = Array.isArray(d.items) ? d.items : [];
@@ -1068,11 +1054,20 @@
 
                         const systemIsPending = isPendingWrite() || docSnap.metadata.hasPendingWrites;
 
-                        // התיקון הקריטי: אנחנו תמיד ממזגים (merge) ולא דורסים עיוורת! 
-                        // זה מבטיח שאם הצמדת פריט (נעץ) ומיד רעננת - הוא לא ייעלם מהמסך בגלל שרת איטי.
-                        state.items = mergePendingLocal(serverItems, state.items, systemIsPending);
-                        state.trash = mergePendingLocal(serverTrash, state.trash, systemIsPending);
-
+                        if (systemIsPending) {
+                            // המכשיר *הזה* כרגע באמצע שמירה - מגינים על הנתונים המקומיים
+                            state.items = mergePendingLocal(serverItems, state.items, true);
+                            state.trash = mergePendingLocal(serverTrash, state.trash, true);
+                        } else {
+                            // המכשיר במנוחה (למשל הפלאפון צופה בזמן שהמחשב שומר) - השרת הוא הבוס! 
+                            // זה עוקף את בעיית הפרשי הזמנים ומציג את הנעץ באלפית שנייה.
+                            state.items = serverItems.map(si => {
+                                const localMatch = state.items.find(li => String(li.id) === String(si.id));
+                                if (localMatch && localMatch.isScanning) si.isScanning = true;
+                                return si;
+                            });
+                            state.trash = serverTrash;
+                        }
                         // שמירת הגדרות ה-AI והמפתחות מהענן ישירות למכשיר
                         if (d.aiSettings) localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
                         
@@ -1227,7 +1222,7 @@
             } catch (e) { alert(e.message); }
         }
 
-     async function forceReload(silent = false) {
+    async function forceReload(silent = false) {
             if (!state.user || state.isOffline || !db) return;
             if (!navigator.onLine) {
                 if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
@@ -1237,17 +1232,15 @@
             const btn = document.getElementById('forceReloadBtn');
             if (btn) btn.classList.add('spinning');
             
-            if (!silent) showToast("🔄 שואב נתונים מעודכנים מהענן...", null, 2000);
+            if (!silent) showToast("🔄 מסנכרן...", null, 2000);
 
-            // מוודאים שאין שמירות מקומיות שתלויות באוויר כדי לא למחוק אותן בטעות
             while (isPendingWrite()) { await new Promise(r => setTimeout(r, 100)); }
 
             try {
-                // משיכה כפויה ומיידית ישירות מהשרת (עוקף קאש מקומי)
+                // משיכה ישירה, חלקה, וטבעית - ללא שום התערבות אגרסיבית ברשת!
                 const snap = await getDocFromServer(doc(db, "users", state.user.uid));
                 if (snap.exists()) {
                     const d = snap.data();
-                    
                     state.items = Array.isArray(d.items) ? d.items : [];
                     state.trash = Array.isArray(d.trash) ? d.trash : [];
 
@@ -1258,13 +1251,11 @@
                     updateCategoryDropdowns();
                 }
                 updateSyncStatus('online', 'מחובר ✓');
-                if (!silent) showToast("✅ הנתונים סונכרנו בהצלחה מול הענן");
+                if (!silent) showToast("✅ מסונכרן");
             } catch (err) {
                 console.error('[Sync] Force Reload Error:', err);
-                // במקרה שהרשת חלשה או מתעוררת משינה, לא נתקעים! חוזרים מיד לסטטוס מקומי.
-                // Firebase יעדכן את האתר אוטומטית ברגע שהרשת שלו תתייצב.
                 updateSyncStatus('offline', 'מקומי');
-                if (!silent) showToast('⚠️ הרשת חלשה כרגע. הנתונים יעודכנו אוטומטית ברקע ברגע שהקליטה תתייצב.', null, 4000, null, true);
+                if (!silent) showToast('⚠️ רשת חלשה. הנתונים יסונכרנו אוטומטית כשהקליטה תחזור.', null, 4000, null, true);
             } finally {
                 if (btn) btn.classList.remove('spinning');
             }
