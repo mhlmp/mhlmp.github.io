@@ -627,9 +627,10 @@
             getAuth, signInWithPopup, GoogleAuthProvider, signOut,
             onAuthStateChanged, setPersistence, browserLocalPersistence
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import {
+      import {
             getFirestore, doc, setDoc, getDoc, getDocFromServer,
-            onSnapshot, enableIndexedDbPersistence, serverTimestamp
+            onSnapshot, serverTimestamp, enableNetwork, disableNetwork,
+            initializeFirestore, persistentLocalCache, persistentMultipleTabManager
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -812,14 +813,13 @@
             }
         }
 
-        try {
+       try {
             app  = initializeApp(firebaseConfig);
             auth = getAuth(app);
             setPersistence(auth, browserLocalPersistence);
-            db   = getFirestore(app);
-            enableIndexedDbPersistence(db).catch(err => {
-                if (err.code !== 'failed-precondition' && err.code !== 'unimplemented')
-                    console.warn('[Firestore] Persistence:', err.code);
+            // מנוע מקומי מודרני (v10) - מונע התנגשויות נעילה וקריסות בדפדפנים בנייד
+            db = initializeFirestore(app, {
+                localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
             });
         } catch (e) { console.error('[Firebase] Init Error:', e); }
 
@@ -936,20 +936,22 @@
                 });
             });
 
-            window.addEventListener('offline', () => {
+           window.addEventListener('offline', () => {
                 updateSyncStatus('offline', 'מקומי (אין רשת)');
                 showToast('⚠️ החיבור אבד. שינויים יישמרו ויסונכרנו כשהרשת תחזור.', null, 6000, null, true);
+                if (db) disableNetwork(db).catch(() => {}); // עוזר ל-Firebase להבין שהוא נותק
             });
 
             window.addEventListener('online', () => {
                 updateSyncStatus('syncing', 'מתחבר מחדש...');
                 showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 4000);
+                if (db) enableNetwork(db).catch(() => {}); // מאלץ התחברות מחדש
                 setTimeout(() => {
                     _flushIfDirty();
                     if (state.user && !state.isOffline) {
-                        setTimeout(() => forceReload(true), 1500);
+                        forceReload(true);
                     }
-                }, 600);
+                }, 1500);
             });
 
             let _lastVisibilitySync = 0;
@@ -959,6 +961,9 @@
                 const now = Date.now();
                 if (now - _lastVisibilitySync < 6000) return;
                 _lastVisibilitySync = now;
+                
+                // אתחול כפוי לרשת כשחוזרים לאפליקציה מחלון אחר או מנעילת מסך
+                if (db) enableNetwork(db).catch(() => {});
                 forceReload(true);
             };
             document.addEventListener('visibilitychange', () => {
@@ -1188,8 +1193,8 @@
             } catch (e) { alert(e.message); }
         }
 
-       async function forceReload(silent = false) {
-            if (!state.user || state.isOffline) return;
+      async function forceReload(silent = false) {
+            if (!state.user || state.isOffline || !db) return;
             if (!navigator.onLine) {
                 if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
                 return;
@@ -1200,11 +1205,13 @@
             
             if (!silent) showToast("🔄 שואב נתונים מעודכנים מהענן...", null, 2000);
 
-            // מחכה שהתור המקומי יתרוקן לגמרי
             while (isPendingWrite()) { await new Promise(r => setTimeout(r, 100)); }
 
             try {
-                // עוקף קאש ומביא מידע ישירות מהשרת (Force fetch)
+                // התיקון העוצמתי לנייד: כיבוי והדלקה כפויה של שכבת הרשת של Firebase כדי לנקות Websocket מת!
+                await disableNetwork(db);
+                await enableNetwork(db);
+
                 const snap = await getDocFromServer(doc(db, "users", state.user.uid));
                 if (snap.exists()) {
                     const d = snap.data();
@@ -1212,7 +1219,6 @@
                     state.items = Array.isArray(d.items) ? d.items : [];
                     state.trash = Array.isArray(d.trash) ? d.trash : [];
 
-                    // סנכרון כפוי למפתחות ה-API
                     if (d.aiSettings) localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
                     
                     writeCache();
@@ -1222,9 +1228,10 @@
                 updateSyncStatus('online', 'מחובר ✓');
                 if (!silent) showToast("✅ הנתונים סונכרנו בהצלחה עם הענן");
             } catch (err) {
-                console.error(err);
-                updateSyncStatus('error', 'שגיאת חיבור');
-                if (!silent) showToast('❌ שגיאה ברענון. נסה שוב או בדוק את הרשת.', null, 4000, null, true);
+                console.error('[Sync] Force Reload Error:', err);
+                // במקום שגיאה אדומה שמלחיצה ונועלת, מעבירים חזרה למצב מקומי שקט להמשך עבודה
+                updateSyncStatus('offline', 'מקומי');
+                if (!silent) showToast('⚠️ הרשת חלשה כרגע. המערכת תמשיך לעבוד מקומית ותסנכרן כשיתאפשר.', null, 4000, null, true);
             } finally {
                 if (btn) btn.classList.remove('spinning');
             }
