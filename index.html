@@ -362,8 +362,9 @@
             <input type="checkbox" id="selectAllCheckbox" style="transform: scale(1.4); cursor: pointer;">
             <span id="selectedCount" style="font-weight: bold; color: white;">0 נבחרו</span>
         </div>
-       <div class="bulk-actions">
+      <div class="bulk-actions">
             <button class="bulk-btn" id="bulkAiBtn" style="background: rgba(139, 92, 246, 0.2); border-color: #8b5cf6; color: #ddd6fe;">🤖 סרוק נבחרים</button>
+            <button class="bulk-btn" id="bulkClearAiBtn" style="background: rgba(245, 158, 11, 0.2); border-color: var(--accent-gold); color: #fcd34d;">🧹 נקה ניתוח</button>
             <button class="bulk-btn" id="bulkMoveBtn">📂 העבר</button>
             <button class="bulk-btn delete" id="bulkDeleteBtn">🗑️ מחק</button>
             <button class="bulk-btn" id="cancelBulkBtn">✖ ביטול</button>
@@ -459,11 +460,8 @@
                     <div id="txtMenu" class="dropdown-content">
                         <button id="exportTxtBtn">📤 ייצוא רשימה ל-TXT</button>
                         <div class="dropdown-divider"></div>
-                        <label for="smartImportInput">🔄 <b>ייבוא חכם (מיזוג)</b></label>
+                       <label for="smartImportInput">🔄 <b>ייבוא חכם (מיזוג)</b></label>
                         <input type="file" id="smartImportInput" accept=".txt">
-                        <div class="dropdown-divider"></div>
-                        <label for="wipeDataInput" style="color: var(--accent-red);">⚠️ <b>מחק הכל (קובץ ריק)</b></label>
-                        <input type="file" id="wipeDataInput" accept=".txt">
                     </div>
                 </div>
                 <div class="dropdown">
@@ -481,9 +479,7 @@
                         <button id="wakeLockBtn" style="color: var(--primary-color);">💡 מצב מסך דולק (לסריקה ארוכה)</button>
                         <div class="dropdown-divider"></div>
                         <button id="bulkAiScanBtn">🤖 סרוק את כל המאגר</button>
-                        <button id="cancelBulkAiBtn" style="display:none; color: var(--accent-red);">🛑 עצור סריקה</button>
-                        <div class="dropdown-divider"></div>
-                        <button id="clearAiDataBtn" style="color: var(--accent-gold);">🧹 נקה ניתוחי AI</button>
+                       <button id="cancelBulkAiBtn" style="display:none; color: var(--accent-red);">🛑 עצור סריקה</button>
                     </div>
                 </div>
                 <button id="trashBtn" class="action-btn btn-trash-view" title="סל מחזור" style="flex-grow:0; width:42px; font-size:1.1rem;">🗑️</button>
@@ -671,6 +667,7 @@
         let _pendingAfterWrite = false;
         let _offlineDirty     = false;
         let _localMutationCounter = 0;
+        let _lastSyncTimestamp = 0; // מונע קפיצות זמן
 
         let resolveDataLoaded;
         const initialDataLoadedPromise = new Promise(resolve => resolveDataLoaded = resolve);
@@ -929,14 +926,13 @@
 
             document.getElementById('forceReloadBtn')?.addEventListener('click', () => forceReload(false));
 
-            ['importJsonInput', 'smartImportInput', 'wipeDataInput'].forEach(id => {
+            ['importJsonInput', 'smartImportInput'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
                 el.addEventListener('click', (e) => { e.target.value = null; });
                 el.addEventListener('change', (e) => {
                     if (id === 'importJsonInput') importJson(e);
                     else if (id === 'smartImportInput') smartImport(e);
-                    else if (id === 'wipeDataInput') handleWipeData(e);
                 });
             });
 
@@ -1037,42 +1033,45 @@
                         updateCategoryDropdowns();
                     }
 
-                    const userDoc = doc(db, "users", user.uid);
+                   const userDoc = doc(db, "users", user.uid);
                     state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
                         const d = docSnap.data() || { items: [], trash: [] };
                         const serverItems = Array.isArray(d.items) ? d.items : [];
                         const serverTrash = Array.isArray(d.trash) ? d.trash : [];
 
-                        if (isPendingWrite()) {
+                        const systemIsPending = isPendingWrite() || docSnap.metadata.hasPendingWrites;
+
+                        if (systemIsPending) {
                             state.items = mergePendingLocal(serverItems, state.items);
                             state.trash = mergePendingLocal(serverTrash, state.trash);
                         } else {
                             state.items = serverItems.map(si => {
-                                const localMatch = state.items.find(li => li.id === si.id);
+                                const localMatch = state.items.find(li => String(li.id) === String(si.id));
                                 if (localMatch && localMatch.isScanning) si.isScanning = true;
                                 return si;
                             });
                             state.trash = serverTrash;
                         }
 
+                        // שמירת הגדרות ה-AI והמפתחות מהענן ישירות למכשיר
                         if (d.aiSettings) localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
+                        
                         writeCache();
                         renderList();
                         updateCategoryDropdowns();
 
-                        // FIX: Release the lockout immediately on ANY successful snapshot event
                         resolveDataLoaded();
 
                         if (!navigator.onLine || docSnap.metadata.fromCache) {
                             updateSyncStatus('offline', 'מקומי');
                         } else {
                             updateSyncStatus('online', 'מחובר ✓');
+                            _lastSyncTimestamp = Date.now();
                         }
 
                     }, (err) => {
                         console.error('[Sync] onSnapshot error:', err);
                         updateSyncStatus('error', 'שגיאת חיבור');
-                        // FIX: Release the lockout even if sync errors out to fallback to local cache safely
                         resolveDataLoaded();
                     });
                 } else {
@@ -1081,17 +1080,28 @@
             });
         }
 
-        function mergePendingLocal(serverArr, localArr) {
-            const byId = new Map(serverArr.map(s => [String(s.id), s]));
-            localArr.forEach(l => {
-                const sItem = byId.get(String(l.id));
-                if (!sItem || Date.parse(l.updatedAt || 0) > Date.parse(sItem.updatedAt || 0)) {
-                    byId.set(String(l.id), l);
+       function mergePendingLocal(serverArr, localArr) {
+            const serverMap = new Map(serverArr.map(s => [String(s.id), s]));
+            const merged = [];
+
+            localArr.forEach(localItem => {
+                const serverItem = serverMap.get(String(localItem.id));
+                
+                if (!serverItem || Date.parse(localItem.updatedAt || 0) > Date.parse(serverItem.updatedAt || 0)) {
+                    merged.push(localItem); // מקומי מנצח
                 } else {
-                    EPHEMERAL_FIELDS.forEach(f => { if(l[f]) sItem[f] = l[f]; });
+                    // שרת מנצח, שומרים על סטטוסים זמניים
+                    const mergedItem = { ...serverItem };
+                    EPHEMERAL_FIELDS.forEach(field => { 
+                        if (localItem[field] !== undefined) mergedItem[field] = localItem[field]; 
+                    });
+                    merged.push(mergedItem);
                 }
+                serverMap.delete(String(localItem.id));
             });
-            return Array.from(byId.values());
+
+            serverMap.forEach(serverItem => merged.push(serverItem));
+            return merged.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
         }
 
         function handleLockScreen(isLoggedIn) {
@@ -1178,7 +1188,7 @@
             } catch (e) { alert(e.message); }
         }
 
-        async function forceReload(silent = false) {
+       async function forceReload(silent = false) {
             if (!state.user || state.isOffline) return;
             if (!navigator.onLine) {
                 if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
@@ -1188,18 +1198,13 @@
             const btn = document.getElementById('forceReloadBtn');
             if (btn) btn.classList.add('spinning');
             
-            if (!silent) {
-                updateSyncStatus('syncing', 'מושך מהענן...');
-                showToast("🔄 מבקש נתונים עדכניים מהענן...", null, 2500);
-            }
+            if (!silent) showToast("🔄 שואב נתונים מעודכנים מהענן...", null, 2000);
 
-            if (isPendingWrite()) {
-                while (isPendingWrite()) {
-                    await new Promise(r => setTimeout(r, 100));
-                }
-            }
+            // מחכה שהתור המקומי יתרוקן לגמרי
+            while (isPendingWrite()) { await new Promise(r => setTimeout(r, 100)); }
 
             try {
+                // עוקף קאש ומביא מידע ישירות מהשרת (Force fetch)
                 const snap = await getDocFromServer(doc(db, "users", state.user.uid));
                 if (snap.exists()) {
                     const d = snap.data();
@@ -1207,19 +1212,21 @@
                     state.items = Array.isArray(d.items) ? d.items : [];
                     state.trash = Array.isArray(d.trash) ? d.trash : [];
 
+                    // סנכרון כפוי למפתחות ה-API
                     if (d.aiSettings) localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
+                    
                     writeCache();
                     renderList();
                     updateCategoryDropdowns();
                 }
-                updateSyncStatus('online', 'מחובר');
+                updateSyncStatus('online', 'מחובר ✓');
                 if (!silent) showToast("✅ הנתונים סונכרנו בהצלחה עם הענן");
             } catch (err) {
                 console.error(err);
                 updateSyncStatus('error', 'שגיאת חיבור');
                 if (!silent) showToast('❌ שגיאה ברענון. נסה שוב או בדוק את הרשת.', null, 4000, null, true);
             } finally {
-                if (btn) setTimeout(() => btn.classList.remove('spinning'), 500);
+                if (btn) btn.classList.remove('spinning');
             }
         }
 
@@ -1947,31 +1954,26 @@ ${contentToAnalyze}`;
             if (window.activeAiRequestController) window.activeAiRequestController.abort();
         });
 
-        document.getElementById('clearAiDataBtn')?.addEventListener('click', () => {
-            if (!confirm('🧹 האם למחוק את כל נתוני הניתוח של ה-AI?')) return;
-            if (!confirm('⚠️ אישור כפול נדרש! פעולה זו אינה הפיכה (אלא דרך Undo).\n\nהאם אתה בטוח?')) return;
+      document.getElementById('bulkClearAiBtn')?.addEventListener('click', () => {
+            if (state.selectedIds.size === 0) return;
+            if (!confirm(`🧹 האם למחוק את נתוני ה-AI עבור ${state.selectedIds.size} הפריטים הנבחרים?`)) return;
 
-            const previousAiStates = state.items.map(i => ({ id: i.id, aiSummary: i.aiSummary, siteStatus: i.siteStatus, aiTags: i.aiTags, aiModel: i.aiModel }));
             const stamp = nowIso();
-            state.items.forEach(i => { delete i.aiSummary; delete i.siteStatus; delete i.aiTags; delete i.isScanning; delete i.aiModel; i.updatedAt = stamp; });
-            renderList();
-            closeAllMenus();
-            pushToCloud(true);
-
-            showToast('נתוני ה-AI נוקו', () => {
-                previousAiStates.forEach(prev => {
-                    const ci = state.items.find(i => i.id === prev.id);
-                    if (ci) {
-                        if (prev.aiSummary  !== undefined) ci.aiSummary  = prev.aiSummary;
-                        if (prev.siteStatus !== undefined) ci.siteStatus = prev.siteStatus;
-                        if (prev.aiTags     !== undefined) ci.aiTags     = prev.aiTags;
-                        if (prev.aiModel    !== undefined) ci.aiModel    = prev.aiModel;
-                        ci.updatedAt = nowIso();
-                    }
-                });
+            let updated = 0;
+            state.items.forEach(i => {
+                if (state.selectedIds.has(i.id)) {
+                    delete i.aiSummary; delete i.siteStatus; delete i.aiTags; delete i.isScanning; delete i.aiModel;
+                    i.updatedAt = stamp;
+                    updated++;
+                }
+            });
+            
+            if (updated > 0) {
+                exitSelectionMode();
                 renderList();
                 pushToCloud(true);
-            });
+                showToast(`✅ נתוני AI נוקו עבור ${updated} פריטים`);
+            }
         });
 
         function moveToTrash(id) {
@@ -2210,27 +2212,7 @@ ${contentToAnalyze}`;
             };
             r.readAsText(f);
         }
-
-        function handleWipeData(e) {
-            const f = e.target.files[0];
-            if (!f) return;
-            const r = new FileReader();
-            r.onload = (ev) => {
-                if (ev.target.result.trim() === '') {
-                    if (confirm('הקובץ ריק! האם אתה בטוח שברצונך למחוק את כל הנתונים?')) {
-                        const backup = JSON.parse(JSON.stringify(state.items));
-                        state.items = [];
-                        updateCategoryDropdowns(); renderList(); pushToCloud(true);
-                        showToast('⚠️ כל הנתונים נמחקו', () => {
-                            state.items = backup; updateCategoryDropdowns(); renderList(); pushToCloud(true);
-                        });
-                        closeAllMenus();
-                    }
-                } else { alert('פעולת המחיקה בוטלה: הקובץ אינו ריק!'); }
-            };
-            r.readAsText(f);
-        }
-
+       
         function exportJson() {
             const cleanItems = state.items.map(item => { const c = { ...item }; EPHEMERAL_FIELDS.forEach(f => delete c[f]); return c; });
             downloadFile('backup.json', JSON.stringify({ items: cleanItems, trash: state.trash, schema: SCHEMA_VERSION }, null, 2), 'application/json');
