@@ -823,7 +823,29 @@
             });
         } catch (e) { console.error('[Firebase] Init Error:', e); }
 
-        document.addEventListener('DOMContentLoaded', () => {
+       document.addEventListener('DOMContentLoaded', () => {
+            // טעינת מצב הממשק האחרון (פילטרים, מיון) כדי שהאתר יזכור היכן עצרת
+            try {
+                const savedUi = JSON.parse(localStorage.getItem('mh_ui_settings') || '{}');
+                if (savedUi.showDuplicates !== undefined) state.showDuplicates = savedUi.showDuplicates;
+                if (savedUi.showOnlyDead !== undefined) state.showOnlyDead = savedUi.showOnlyDead;
+                
+                const so = document.getElementById('sortOrder');
+                if (so && savedUi.sortOrder) so.value = savedUi.sortOrder;
+                
+                const cf = document.getElementById('categoryFilter');
+                if (cf && savedUi.categoryFilter) cf.value = savedUi.categoryFilter;
+
+                if (!state.showDuplicates) {
+                    const btn = document.getElementById('toggleDuplicatesBtn');
+                    if(btn) { btn.style.background = 'rgba(245,158,11,0.2)'; btn.style.borderColor = 'var(--accent-gold)'; }
+                }
+                if (state.showOnlyDead) {
+                    const btn = document.getElementById('toggleDeadBtn');
+                    if(btn) btn.classList.add('dead-active');
+                }
+            } catch(e) {}
+
             const offlineDataEl = document.getElementById('offline-data');
             const localCache = localStorage.getItem('linkManagerLocalData');
             
@@ -897,17 +919,19 @@
             window.addEventListener('click', () => closeAllMenus());
             window.addEventListener('resize', closeAllMenus);
 
-            document.getElementById('searchInput')?.addEventListener('input', () =>
+           document.getElementById('searchInput')?.addEventListener('input', () =>
                 window.requestAnimationFrame(renderList)
             );
-            document.getElementById('categoryFilter')?.addEventListener('change', renderList);
+            
+            document.getElementById('categoryFilter')?.addEventListener('change', () => {
+                saveUiSettings();
+                renderList();
+            });
 
             const sortSelect = document.getElementById('sortOrder');
             if (sortSelect) {
-                const savedSort = localStorage.getItem('lastSortOrder');
-                if (savedSort) { sortSelect.value = savedSort; setTimeout(renderList, 0); }
-                sortSelect.addEventListener('change', (e) => {
-                    localStorage.setItem('lastSortOrder', e.target.value);
+                sortSelect.addEventListener('change', () => {
+                    saveUiSettings();
                     renderList();
                 });
             }
@@ -1046,17 +1070,10 @@
 
                         const systemIsPending = isPendingWrite() || docSnap.metadata.hasPendingWrites;
 
-                        if (systemIsPending) {
-                            state.items = mergePendingLocal(serverItems, state.items);
-                            state.trash = mergePendingLocal(serverTrash, state.trash);
-                        } else {
-                            state.items = serverItems.map(si => {
-                                const localMatch = state.items.find(li => String(li.id) === String(si.id));
-                                if (localMatch && localMatch.isScanning) si.isScanning = true;
-                                return si;
-                            });
-                            state.trash = serverTrash;
-                        }
+                        // התיקון הקריטי: אנחנו תמיד ממזגים (merge) ולא דורסים עיוורת! 
+                        // זה מבטיח שאם הצמדת פריט (נעץ) ומיד רעננת - הוא לא ייעלם מהמסך בגלל שרת איטי.
+                        state.items = mergePendingLocal(serverItems, state.items, systemIsPending);
+                        state.trash = mergePendingLocal(serverTrash, state.trash, systemIsPending);
 
                         // שמירת הגדרות ה-AI והמפתחות מהענן ישירות למכשיר
                         if (d.aiSettings) localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
@@ -1085,28 +1102,47 @@
             });
         }
 
-       function mergePendingLocal(serverArr, localArr) {
+     // ליבת ההגנה: מונעת מהשרת לדרוס שינויים מקומיים (כמו הצמדה) שטרם נשמרו בענן או שהקאש שלהם טרי יותר
+        function mergePendingLocal(serverArr, localArr, isPending) {
             const serverMap = new Map(serverArr.map(s => [String(s.id), s]));
             const merged = [];
 
             localArr.forEach(localItem => {
                 const serverItem = serverMap.get(String(localItem.id));
                 
-                if (!serverItem || Date.parse(localItem.updatedAt || 0) > Date.parse(serverItem.updatedAt || 0)) {
-                    merged.push(localItem); // מקומי מנצח
+                if (serverItem) {
+                    // הפריט קיים בשני המקומות - משווים זמנים בצורה בטוחה ואמינה
+                    const localTime = new Date(localItem.updatedAt || 0).getTime();
+                    const serverTime = new Date(serverItem.updatedAt || 0).getTime();
+                    
+                    if (localTime > serverTime) {
+                        merged.push(localItem); // השינוי המקומי (למשל נעץ) חדש יותר - הוא מנצח
+                    } else {
+                        const mergedItem = { ...serverItem };
+                        EPHEMERAL_FIELDS.forEach(field => { 
+                            if (localItem[field] !== undefined) mergedItem[field] = localItem[field]; 
+                        });
+                        merged.push(mergedItem);
+                    }
+                    serverMap.delete(String(localItem.id));
                 } else {
-                    // שרת מנצח, שומרים על סטטוסים זמניים
-                    const mergedItem = { ...serverItem };
-                    EPHEMERAL_FIELDS.forEach(field => { 
-                        if (localItem[field] !== undefined) mergedItem[field] = localItem[field]; 
-                    });
-                    merged.push(mergedItem);
+                    // הפריט קיים רק מקומית. נשמור אותו רק אם יש שמירה פעילה ברקע, כדי לא להקים לתחייה פריטים שנמחקו
+                    if (isPending) merged.push(localItem);
                 }
-                serverMap.delete(String(localItem.id));
             });
 
             serverMap.forEach(serverItem => merged.push(serverItem));
             return merged.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        }
+
+        // פונקציית עזר לשמירת מצב הממשק (פילטרים, מיון, תצוגות)
+        function saveUiSettings() {
+            localStorage.setItem('mh_ui_settings', JSON.stringify({
+                showDuplicates: state.showDuplicates,
+                showOnlyDead: state.showOnlyDead,
+                sortOrder: document.getElementById('sortOrder')?.value || 'date-new',
+                categoryFilter: document.getElementById('categoryFilter')?.value || ''
+            }));
         }
 
         function handleLockScreen(isLoggedIn) {
@@ -2112,6 +2148,7 @@ ${contentToAnalyze}`;
                 btn.style.background  = '';
                 btn.style.borderColor = '';
             }
+            saveUiSettings();
             renderList();
         }
 
@@ -2128,6 +2165,7 @@ ${contentToAnalyze}`;
                 btn.classList.remove('dead-active');
                 showToast('הוסר פילטר');
             }
+            saveUiSettings();
             renderList();
         }
 
