@@ -629,7 +629,7 @@
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
       import {
             getFirestore, doc, setDoc, getDoc, getDocFromServer,
-            onSnapshot, serverTimestamp,
+            onSnapshot, serverTimestamp, enableNetwork, disableNetwork,
             initializeFirestore, persistentLocalCache, persistentMultipleTabManager
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
@@ -960,25 +960,41 @@
                 });
             });
 
-          window.addEventListener('offline', () => {
+           window.addEventListener('offline', () => {
                 updateSyncStatus('offline', 'מקומי (אין רשת)');
-                showToast('⚠️ הרשת התנתקה. שינויים נשמרים מקומית.', null, 4000, null, true);
+                showToast('⚠️ החיבור אבד. שינויים יישמרו ויסונכרנו כשהרשת תחזור.', null, 6000, null, true);
+                if (db) disableNetwork(db).catch(() => {}); // עוזר ל-Firebase להבין שהוא נותק
             });
 
             window.addEventListener('online', () => {
-                updateSyncStatus('syncing', 'מחדש קשר...');
-                setTimeout(() => { _flushIfDirty(); }, 1000);
+                updateSyncStatus('syncing', 'מתחבר מחדש...');
+                showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 4000);
+                if (db) enableNetwork(db).catch(() => {}); // מאלץ התחברות מחדש
+                setTimeout(() => {
+                    _flushIfDirty();
+                    if (state.user && !state.isOffline) {
+                        forceReload(true);
+                    }
+                }, 1500);
             });
 
-            // כשהמשתמש חוזר לאפליקציה ממסך נעול - פשוט דוחפים שינויים אם יש
+            let _lastVisibilitySync = 0;
+            const visibilitySync = () => {
+                if (!state.user || state.isOffline || !navigator.onLine) return;
+                if (isPendingWrite()) return; 
+                const now = Date.now();
+                if (now - _lastVisibilitySync < 6000) return;
+                _lastVisibilitySync = now;
+                
+                // אתחול כפוי לרשת כשחוזרים לאפליקציה מחלון אחר או מנעילת מסך
+                if (db) enableNetwork(db).catch(() => {});
+                forceReload(true);
+            };
             document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible' && state.user && navigator.onLine) {
-                    _flushIfDirty();
-                }
+                if (document.visibilityState === 'visible') visibilitySync();
             });
-            window.addEventListener('focus', () => {
-                if (state.user && navigator.onLine) _flushIfDirty();
-            });
+            window.addEventListener('focus', visibilitySync);
+
             document.getElementById('editItemForm')?.addEventListener('submit', handleEditSubmit);
             document.getElementById('editAiForm')?.addEventListener('submit', handleEditAiSubmit);
             document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
@@ -1046,7 +1062,7 @@
                         updateCategoryDropdowns();
                     }
 
-                  const userDoc = doc(db, "users", user.uid);
+                   const userDoc = doc(db, "users", user.uid);
                     state.unsubscribe = onSnapshot(userDoc, { includeMetadataChanges: true }, (docSnap) => {
                         const d = docSnap.data() || { items: [], trash: [] };
                         const serverItems = Array.isArray(d.items) ? d.items : [];
@@ -1054,20 +1070,11 @@
 
                         const systemIsPending = isPendingWrite() || docSnap.metadata.hasPendingWrites;
 
-                        if (systemIsPending) {
-                            // המכשיר *הזה* כרגע באמצע שמירה - מגינים על הנתונים המקומיים
-                            state.items = mergePendingLocal(serverItems, state.items, true);
-                            state.trash = mergePendingLocal(serverTrash, state.trash, true);
-                        } else {
-                            // המכשיר במנוחה (למשל הפלאפון צופה בזמן שהמחשב שומר) - השרת הוא הבוס! 
-                            // זה עוקף את בעיית הפרשי הזמנים ומציג את הנעץ באלפית שנייה.
-                            state.items = serverItems.map(si => {
-                                const localMatch = state.items.find(li => String(li.id) === String(si.id));
-                                if (localMatch && localMatch.isScanning) si.isScanning = true;
-                                return si;
-                            });
-                            state.trash = serverTrash;
-                        }
+                        // התיקון הקריטי: אנחנו תמיד ממזגים (merge) ולא דורסים עיוורת! 
+                        // זה מבטיח שאם הצמדת פריט (נעץ) ומיד רעננת - הוא לא ייעלם מהמסך בגלל שרת איטי.
+                        state.items = mergePendingLocal(serverItems, state.items, systemIsPending);
+                        state.trash = mergePendingLocal(serverTrash, state.trash, systemIsPending);
+
                         // שמירת הגדרות ה-AI והמפתחות מהענן ישירות למכשיר
                         if (d.aiSettings) localStorage.setItem('aiSettingsPro', JSON.stringify(d.aiSettings));
                         
@@ -1222,7 +1229,7 @@
             } catch (e) { alert(e.message); }
         }
 
-    async function forceReload(silent = false) {
+      async function forceReload(silent = false) {
             if (!state.user || state.isOffline || !db) return;
             if (!navigator.onLine) {
                 if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
@@ -1232,15 +1239,17 @@
             const btn = document.getElementById('forceReloadBtn');
             if (btn) btn.classList.add('spinning');
             
-            if (!silent) showToast("🔄 מסנכרן...", null, 2000);
+            if (!silent) showToast("🔄 בודק נתונים מול הענן...", null, 2000);
 
+            // מחכים שהתור המקומי יתרוקן
             while (isPendingWrite()) { await new Promise(r => setTimeout(r, 100)); }
 
             try {
-                // משיכה ישירה, חלקה, וטבעית - ללא שום התערבות אגרסיבית ברשת!
+                // מנסים למשוך נתונים בצורה חלקה. אם הסוקט חי - זה יקרה באלפית שנייה.
                 const snap = await getDocFromServer(doc(db, "users", state.user.uid));
                 if (snap.exists()) {
                     const d = snap.data();
+                    
                     state.items = Array.isArray(d.items) ? d.items : [];
                     state.trash = Array.isArray(d.trash) ? d.trash : [];
 
@@ -1251,11 +1260,18 @@
                     updateCategoryDropdowns();
                 }
                 updateSyncStatus('online', 'מחובר ✓');
-                if (!silent) showToast("✅ מסונכרן");
+                if (!silent) showToast("✅ הנתונים סונכרנו בהצלחה עם הענן");
             } catch (err) {
-                console.error('[Sync] Force Reload Error:', err);
-                updateSyncStatus('offline', 'מקומי');
-                if (!silent) showToast('⚠️ רשת חלשה. הנתונים יסונכרנו אוטומטית כשהקליטה תחזור.', null, 4000, null, true);
+                console.error('[Sync] Reload Error (Socket probably dead):', err);
+                // אם המשיכה נכשלה (לרוב כי הפלאפון הרדים את הרשת), אנחנו מפעילים "החייאה" שקטה.
+                // ברגע שהרשת תתחבר שוב (תוך שנייה או שתיים), המאזין הרגיל (onSnapshot) ימשוך את המידע לבד!
+                try {
+                    await disableNetwork(db);
+                    await enableNetwork(db);
+                } catch(e) {}
+                
+                updateSyncStatus('syncing', 'מחדש חיבור...');
+                if (!silent) showToast('מחדש חיבור רשת ברקע... הנתונים יעודכנו אוטומטית', null, 3000);
             } finally {
                 if (btn) btn.classList.remove('spinning');
             }
