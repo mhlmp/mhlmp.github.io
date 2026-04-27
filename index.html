@@ -960,16 +960,14 @@
                 });
             });
 
-           window.addEventListener('offline', () => {
+          window.addEventListener('offline', () => {
                 updateSyncStatus('offline', 'מקומי (אין רשת)');
                 showToast('⚠️ החיבור אבד. שינויים יישמרו ויסונכרנו כשהרשת תחזור.', null, 6000, null, true);
-                if (db) disableNetwork(db).catch(() => {}); // עוזר ל-Firebase להבין שהוא נותק
             });
 
             window.addEventListener('online', () => {
                 updateSyncStatus('syncing', 'מתחבר מחדש...');
                 showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 4000);
-                if (db) enableNetwork(db).catch(() => {}); // מאלץ התחברות מחדש
                 setTimeout(() => {
                     _flushIfDirty();
                     if (state.user && !state.isOffline) {
@@ -986,8 +984,8 @@
                 if (now - _lastVisibilitySync < 6000) return;
                 _lastVisibilitySync = now;
                 
-                // אתחול כפוי לרשת כשחוזרים לאפליקציה מחלון אחר או מנעילת מסך
-                if (db) enableNetwork(db).catch(() => {});
+                // הסרנו את כיבוי/הדלקת הרשת המאולץ כדי לתת ל-Firebase להסתנכרן באופן מיידי 
+                // מבלי לקרוע את צינור התקשורת!
                 forceReload(true);
             };
             document.addEventListener('visibilitychange', () => {
@@ -1229,7 +1227,7 @@
             } catch (e) { alert(e.message); }
         }
 
-      async function forceReload(silent = false) {
+     async function forceReload(silent = false) {
             if (!state.user || state.isOffline || !db) return;
             if (!navigator.onLine) {
                 if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
@@ -1239,13 +1237,13 @@
             const btn = document.getElementById('forceReloadBtn');
             if (btn) btn.classList.add('spinning');
             
-            if (!silent) showToast("🔄 בודק נתונים מול הענן...", null, 2000);
+            if (!silent) showToast("🔄 שואב נתונים מעודכנים מהענן...", null, 2000);
 
-            // מחכים שהתור המקומי יתרוקן
+            // מוודאים שאין שמירות מקומיות שתלויות באוויר כדי לא למחוק אותן בטעות
             while (isPendingWrite()) { await new Promise(r => setTimeout(r, 100)); }
 
             try {
-                // מנסים למשוך נתונים בצורה חלקה. אם הסוקט חי - זה יקרה באלפית שנייה.
+                // משיכה כפויה ומיידית ישירות מהשרת (עוקף קאש מקומי)
                 const snap = await getDocFromServer(doc(db, "users", state.user.uid));
                 if (snap.exists()) {
                     const d = snap.data();
@@ -1260,18 +1258,13 @@
                     updateCategoryDropdowns();
                 }
                 updateSyncStatus('online', 'מחובר ✓');
-                if (!silent) showToast("✅ הנתונים סונכרנו בהצלחה עם הענן");
+                if (!silent) showToast("✅ הנתונים סונכרנו בהצלחה מול הענן");
             } catch (err) {
-                console.error('[Sync] Reload Error (Socket probably dead):', err);
-                // אם המשיכה נכשלה (לרוב כי הפלאפון הרדים את הרשת), אנחנו מפעילים "החייאה" שקטה.
-                // ברגע שהרשת תתחבר שוב (תוך שנייה או שתיים), המאזין הרגיל (onSnapshot) ימשוך את המידע לבד!
-                try {
-                    await disableNetwork(db);
-                    await enableNetwork(db);
-                } catch(e) {}
-                
-                updateSyncStatus('syncing', 'מחדש חיבור...');
-                if (!silent) showToast('מחדש חיבור רשת ברקע... הנתונים יעודכנו אוטומטית', null, 3000);
+                console.error('[Sync] Force Reload Error:', err);
+                // במקרה שהרשת חלשה או מתעוררת משינה, לא נתקעים! חוזרים מיד לסטטוס מקומי.
+                // Firebase יעדכן את האתר אוטומטית ברגע שהרשת שלו תתייצב.
+                updateSyncStatus('offline', 'מקומי');
+                if (!silent) showToast('⚠️ הרשת חלשה כרגע. הנתונים יעודכנו אוטומטית ברקע ברגע שהקליטה תתייצב.', null, 4000, null, true);
             } finally {
                 if (btn) btn.classList.remove('spinning');
             }
