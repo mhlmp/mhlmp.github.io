@@ -1870,7 +1870,7 @@ ${contentToAnalyze}`;
             }
         });
 
-       async function moveToTrash(id) {
+      async function moveToTrash(id) {
             const item = state.items.find(i => i.id === id);
             if (!item) return;
 
@@ -1889,23 +1889,35 @@ ${contentToAnalyze}`;
                 
                 updateSyncStatus('online', 'מחובר ✓');
                 
-                // הוספת מנגנון UNDO למחיקה
+                // הוספת מנגנון UNDO למחיקה עם הגנה מפני שגיאות
+                const toastId = 'trash-undo-' + id;
                 showToast('🗑️ הועבר לסל המחזור', async () => {
+                    removeToast(toastId); // מנקה את ההודעה הישנה
                     updateSyncStatus('syncing', 'משחזר...');
-                    const undoBatch = writeBatch(db);
-                    const cleanItem = { ...item };
-                    delete cleanItem.deletedAt;
-                    cleanItem.updatedAt = nowIso();
-                    
-                    undoBatch.set(itemRef, cleanItem);
-                    undoBatch.delete(trashRef);
-                    await undoBatch.commit();
-                    
-                    updateSyncStatus('online', 'מחובר ✓');
-                    showToast('↩️ המחיקה בוטלה, הפריט חזר לרשימה!');
-                });
-            } catch (e) { console.error('Trash error:', e); }
+                    try {
+                        const undoBatch = writeBatch(db);
+                        const cleanItem = { ...item };
+                        delete cleanItem.deletedAt;
+                        cleanItem.updatedAt = nowIso();
+                        
+                        undoBatch.set(itemRef, cleanItem);
+                        undoBatch.delete(trashRef);
+                        await undoBatch.commit();
+                        
+                        updateSyncStatus('online', 'מחובר ✓');
+                        showToast('↩️ המחיקה בוטלה, הפריט חזר לרשימה!');
+                    } catch (undoErr) {
+                        console.error('Undo Trash error:', undoErr);
+                        showToast('⚠️ שגיאה בביטול המחיקה', null, 3000, null, true);
+                    }
+                }, 8000, toastId); // קוצב זמן ל-8 שניות ומזהה ייחודי
+            } catch (e) { 
+                console.error('Trash error:', e); 
+                updateSyncStatus('error', 'שגיאת רשת');
+                showToast('⚠️ שגיאה בהעברה לסל המחזור', null, 3000, null, true);
+            }
         }
+        
         async function togglePin(id) {
             const item = state.items.find(i => i.id === id);
             if (!item) return;
