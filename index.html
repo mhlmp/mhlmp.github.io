@@ -1943,9 +1943,10 @@ ${contentToAnalyze}`;
                     const strategy = confirm('ייבוא קובץ יעלה את כל הפריטים לענן כמסמכים נפרדים.\nהאם להמשיך?');
                     
                     if (strategy && state.user) {
-                        showToast('מעלה לענן, אנא המתן... (זה עשוי לקחת כמה שניות)', null, 0, 'upload-toast', false);
+                        showToast('מעלה לענן במנות... (זה עשוי לקחת כמה שניות)', null, 0, 'upload-toast', false);
                         
                         let count = 0;
+                        // חלוקה למנות של 450 כדי לעקוף את מגבלת האבטחה של Firebase
                         const CHUNK_SIZE = 450;
                         
                         for (let i = 0; i < importedItems.length; i += CHUNK_SIZE) {
@@ -1955,7 +1956,8 @@ ${contentToAnalyze}`;
                             chunk.forEach(importItem => {
                                 importItem.updatedAt = nowIso();
                                 const ref = doc(db, 'users', state.user.uid, 'items', importItem.id.toString());
-                                batch.set(ref, importItem);
+                                // merge: true מוודא שאנחנו לא דורסים נתונים אחרים בטעות אם המסמך כבר קיים
+                                batch.set(ref, importItem, { merge: true });
                                 count++;
                             });
                             
@@ -1964,6 +1966,14 @@ ${contentToAnalyze}`;
                         
                         removeToast('upload-toast');
                         showToast(`✅ ${count} פריטים הועלו בהצלחה לענן!`);
+                        
+                        // פעולה שמאלצת את כל המכשירים (כמו הטלפון שלך) להסתנכרן מיד לאחר סיום ההעלאה
+                        if(navigator.onLine) {
+                            try {
+                                await disableNetwork(db);
+                                await enableNetwork(db);
+                            } catch(e) {}
+                        }
                     }
                     closeAllMenus();
                 } catch (ex) { alert('שגיאה בקובץ או בהעלאה: ' + ex.message); }
