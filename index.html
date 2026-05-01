@@ -954,17 +954,28 @@
                         resolveDataLoaded();
                     });
 
-                    const trashRef = collection(db, 'users', user.uid, 'trash');
+                   const trashRef = collection(db, 'users', user.uid, 'trash');
                     state.unsubTrash = onSnapshot(trashRef, (snapshot) => {
+                        let trashChanged = false;
                         snapshot.docChanges().forEach((change) => {
                             const data = change.doc.data();
                             if (change.type === "added") {
-                                if (!state.trash.find(i => i.id === data.id)) state.trash.push(data);
+                                if (!state.trash.find(i => i.id === data.id)) { state.trash.push(data); trashChanged = true; }
                             }
-                            if (change.type === "removed") state.trash = state.trash.filter(i => i.id !== data.id);
+                            if (change.type === "modified") {
+                                const idx = state.trash.findIndex(i => i.id === data.id);
+                                if (idx > -1) { state.trash[idx] = data; trashChanged = true; }
+                            }
+                            if (change.type === "removed") {
+                                state.trash = state.trash.filter(i => i.id !== data.id);
+                                trashChanged = true;
+                            }
                         });
+                        // עדכון לייב של סל המחזור אם הוא פתוח כרגע
+                        if (trashChanged && document.getElementById('trashModal').classList.contains('open')) {
+                            openTrashModal();
+                        }
                     });
-
                 } else {
                     handleLockScreen(false);
                     if (state.unsubItems) { state.unsubItems(); state.unsubItems = null; }
@@ -1970,7 +1981,7 @@ ${contentToAnalyze}`;
             renderList();
         }
 
-        async function importJson(e) {
+       async function importJson(e) {
             const f = e.target.files[0];
             if (!f) return;
             const r = new FileReader();
@@ -1978,39 +1989,47 @@ ${contentToAnalyze}`;
                 try {
                     const d = JSON.parse(ev.target.result);
                     const importedItems = Array.isArray(d) ? d : (d.items || []);
-                    const strategy = confirm('ייבוא קובץ יעלה את כל הפריטים לענן כמסמכים נפרדים.\nהאם להמשיך?');
+                    const importedTrash = Array.isArray(d) ? [] : (d.trash || []);
+                    const strategy = confirm('ייבוא קובץ יעלה את כל הפריטים (וסל המחזור) לענן.\nהאם להמשיך?');
                     
                     if (strategy && state.user) {
                         showToast('מעלה לענן במנות... (זה עשוי לקחת כמה שניות)', null, 0, 'upload-toast', false);
                         
-                        let count = 0;
-                        // חלוקה למנות של 450 כדי לעקוף את מגבלת האבטחה של Firebase
+                        let countItems = 0;
+                        let countTrash = 0;
                         const CHUNK_SIZE = 450;
                         
+                        // העלאת הקישורים
                         for (let i = 0; i < importedItems.length; i += CHUNK_SIZE) {
                             const chunk = importedItems.slice(i, i + CHUNK_SIZE);
                             const batch = writeBatch(db);
-                            
                             chunk.forEach(importItem => {
                                 importItem.updatedAt = nowIso();
                                 const ref = doc(db, 'users', state.user.uid, 'items', importItem.id.toString());
-                                // merge: true מוודא שאנחנו לא דורסים נתונים אחרים בטעות אם המסמך כבר קיים
                                 batch.set(ref, importItem, { merge: true });
-                                count++;
+                                countItems++;
                             });
-                            
+                            await batch.commit();
+                        }
+
+                        // העלאת סל המחזור
+                        for (let i = 0; i < importedTrash.length; i += CHUNK_SIZE) {
+                            const chunk = importedTrash.slice(i, i + CHUNK_SIZE);
+                            const batch = writeBatch(db);
+                            chunk.forEach(trashItem => {
+                                trashItem.updatedAt = nowIso();
+                                const ref = doc(db, 'users', state.user.uid, 'trash', trashItem.id.toString());
+                                batch.set(ref, trashItem, { merge: true });
+                                countTrash++;
+                            });
                             await batch.commit();
                         }
                         
                         removeToast('upload-toast');
-                        showToast(`✅ ${count} פריטים הועלו בהצלחה לענן!`);
+                        showToast(`✅ הועלו ${countItems} קישורים ו-${countTrash} פריטים לפח!`);
                         
-                        // פעולה שמאלצת את כל המכשירים (כמו הטלפון שלך) להסתנכרן מיד לאחר סיום ההעלאה
                         if(navigator.onLine) {
-                            try {
-                                await disableNetwork(db);
-                                await enableNetwork(db);
-                            } catch(e) {}
+                            try { await disableNetwork(db); await enableNetwork(db); } catch(e) {}
                         }
                     }
                     closeAllMenus();
@@ -2018,7 +2037,6 @@ ${contentToAnalyze}`;
             };
             r.readAsText(f);
         }
-
         async function smartImport(e) {
             const f = e.target.files[0];
             if (!f) return;
@@ -2575,9 +2593,9 @@ ${contentToAnalyze}`;
                 const chunk = selectedArr.slice(i, i + CHUNK_SIZE);
                 const batch = writeBatch(db);
                 
-                chunk.forEach(id => {
+               chunk.forEach(id => {
                     const ref = doc(db, 'users', state.user.uid, 'items', id.toString());
-                    batch.update(ref, { category: catName, updatedAt: stamp });
+                    batch.set(ref, { category: catName, updatedAt: stamp }, { merge: true });
                     count++;
                 });
                 await batch.commit();
