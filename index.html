@@ -45,7 +45,6 @@
         }
 
         * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-
         html, body { overflow-x: hidden; max-width: 100vw; }
         
         body {
@@ -249,4 +248,733 @@
         .toast-item.leaving { opacity: 0; transform: translateY(-18px) scale(0.9); transition: all 0.28s ease-in; }
         .toast-content { padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; line-height: 1.4; width: 100%; box-sizing: border-box; }
         .toast-msg { flex-grow: 1; word-break: break-word; }
-        .toast-undo-btn { background: rgba(255,255,255,0.1); border: 1px solid var(--accent-gold); color: var(--accent-gold); padding: 5px 12px; border-radius: 6
+        .toast-undo-btn { background: rgba(255,255,255,0.1); border: 1px solid var(--accent-gold); color: var(--accent-gold); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.82rem; transition: 0.2s; white-space: nowrap; flex-shrink: 0; }
+        .toast-undo-btn:hover { background: var(--accent-gold); color: #000; }
+        .toast-progress { height: 3px; background: var(--accent-green); width: 100%; transform-origin: right; transform: scaleX(1); }
+        .toast-progress.animating { animation: countdown linear forwards; }
+
+        #scrollTopBtn {
+            position: fixed; bottom: 28px; right: 20px;
+            width: 46px; height: 46px; border-radius: 50%;
+            background: var(--primary-color); color: white;
+            border: none; font-size: 20px; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.35); z-index: 9600;
+            opacity: 0; visibility: hidden;
+            transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex; align-items: center; justify-content: center;
+        }
+        #scrollTopBtn.show { opacity: 1; visibility: visible; }
+
+        .btn-reload {
+            padding: 4px 9px; margin-right: 4px; cursor: pointer;
+            border: 1px solid var(--glass-border); border-radius: 6px;
+            background: transparent; font-size: 13px; color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+        .btn-reload:hover { background: rgba(127,127,127,0.15); color: var(--primary-color); }
+        .btn-reload.spinning { animation: spin 0.7s linear infinite; pointer-events: none; }
+
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+        .card-checkbox { display: none; position: absolute; top: 10px; right: 10px; transform: scale(1.3); accent-color: var(--primary-color); pointer-events: none; z-index: 10; }
+        body.selection-mode-active .card-checkbox { display: block; }
+        body.selection-mode-active .card.selected { border: 2px solid var(--primary-color); background: rgba(96, 165, 250, 0.12); }
+        body.selection-mode-active .card-actions { display: none; }
+        body.selection-mode-active .card { cursor: pointer; }
+        body.selection-mode-active .card-link { pointer-events: none; }
+        
+        #bulkActionBar {
+            position: fixed; top: 0; left: 0; right: 0;
+            background: rgba(15, 23, 42, 0.97); backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--glass-border);
+            padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;
+            z-index: 8500; transform: translateY(-100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        #bulkActionBar.visible { transform: translateY(0); }
+        .bulk-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+        .bulk-btn { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); padding: 7px 14px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 0.85rem; transition: 0.2s; }
+        .bulk-btn:hover { background: rgba(255,255,255,0.2); }
+        .bulk-btn.delete { background: rgba(239, 68, 68, 0.2); border-color: var(--accent-red); color: #fca5a5; }
+        .bulk-btn.delete:hover { background: var(--accent-red); color: white; }
+
+        #loading-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-gradient); display: none; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 99999;
+            transition: opacity 0.4s ease; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+        }
+        .spinner { border: 4px solid rgba(127, 127, 127, 0.2); border-top: 4px solid var(--primary-color); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        .loading-title { color: var(--text-primary); margin: 0 0 10px 0; font-size: 1.5rem; text-align: center; }
+        .loading-text { color: var(--text-secondary); font-size: 1rem; margin: 0; text-align: center; direction: rtl; }
+
+        .ai-box { background: rgba(127,127,127,0.05); border: 1px solid var(--glass-border); padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 13px; line-height: 1.5; }
+        .ai-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-weight: bold; border-bottom: 1px solid rgba(127,127,127,0.1); padding-bottom: 5px; }
+        .ai-status-active { color: var(--accent-green); }
+        .ai-status-parked { color: var(--accent-gold); }
+        .ai-status-dead { color: var(--accent-red); }
+        .ai-status-text { color: var(--primary-color); }
+        .spinner-small { width: 14px; height: 14px; border: 2px solid transparent; border-top-color: var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-left: 5px; }
+
+        #aiFloatingMenu {
+            position: fixed; display: none; z-index: 9800;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.5); border: 1px solid var(--glass-border);
+            background: var(--glass-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border-radius: var(--radius); min-width: 220px; padding: 8px 0;
+        }
+        #aiFloatingMenu button {
+            text-align: right; width: 100%; background: none; border: none;
+            padding: 11px 15px; color: var(--text-primary); cursor: pointer; transition: 0.15s; font-size: 14px;
+        }
+        #aiFloatingMenu button:hover { background: rgba(127,127,127,0.1); color: var(--primary-color); }
+
+        .edit-modal-wrap {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+            z-index: 8500; display: none; justify-content: center; align-items: center;
+            backdrop-filter: blur(5px); padding: 15px;
+        }
+        .edit-modal-box {
+            background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border);
+            padding: 20px; width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto;
+        }
+        .edit-modal-box h3 { margin-top: 0; color: var(--text-primary); }
+        .edit-modal-form { display: flex; flex-direction: column; gap: 11px; }
+        .edit-modal-input {
+            padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border);
+            background: rgba(127,127,127,0.1); color: var(--text-primary);
+            width: 100%; box-sizing: border-box; font-size: 14px;
+        }
+        .edit-modal-label { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: -7px; }
+        .edit-modal-btns { display: flex; gap: 10px; margin-top: 8px; }
+        .edit-modal-btns button { flex: 1; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; }
+        .btn-save { background: var(--accent-green); color: white; border: none; }
+        .btn-cancel { background: rgba(127,127,127,0.2); color: var(--text-primary); border: 1px solid var(--glass-border); }
+    </style>
+</head>
+<body class="dark-mode">
+    <div id="bulkActionBar">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="selectAllCheckbox" style="transform: scale(1.4); cursor: pointer;">
+            <span id="selectedCount" style="font-weight: bold; color: white;">0 נבחרו</span>
+        </div>
+        <div class="bulk-actions">
+            <button class="bulk-btn" id="bulkAiBtn" style="background: rgba(139, 92, 246, 0.2); border-color: #8b5cf6; color: #ddd6fe;">🤖 סרוק נבחרים</button>
+            <button class="bulk-btn" id="bulkClearAiBtn" style="background: rgba(245, 158, 11, 0.2); border-color: var(--accent-gold); color: #fcd34d;">🧹נקה ניתוח AI</button>
+            <button class="bulk-btn" id="bulkMoveBtn">📂 העבר</button>
+            <button class="bulk-btn delete" id="bulkDeleteBtn">🗑️ מחק</button>
+            <button class="bulk-btn" id="cancelBulkBtn">✖ ביטול</button>
+        </div>
+    </div>
+
+    <div id="loading-screen">
+        <div class="spinner"></div>
+        <h3 class="loading-title">מתחבר לענן וטוען נתונים...</h3>
+        <p class="loading-text">מוודא שהכל מעודכן ומאובטח, זה ייקח רק רגע.</p>
+    </div>
+
+    <header>
+        <h1>MH Link Manager Pro</h1>
+        <button id="installAppBtn">⬇️ התקן אפליקציה</button>
+        <div id="itemCount">ממתין להתחברות...</div>
+    </header>
+
+    <div id="userSection" class="glass-panel">
+        <div id="loggedOutView" style="display:flex; width:100%; justify-content:center;">
+            <button id="googleLoginBtn" class="btn-login">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" alt="G">
+                התחבר עם Google
+            </button>
+        </div>
+        <div id="loggedInView" style="display:none; width:100%; justify-content:space-between; align-items:center;">
+            <div class="user-info">
+                <img id="userAvatar" src="" class="user-avatar" alt="Avatar">
+                <div>
+                    <div id="userName" class="user-name">שם משתמש</div>
+                    <div class="cloud-status">
+                        <span class="status-dot online" id="syncDot"></span>
+                        <span id="syncLabel">מחובר</span>
+                        <button id="forceReloadBtn" class="btn-reload" title="רענן נתונים מהענן">🔄</button>
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end;">
+                <button id="switchAccountBtn" class="btn-action-sm">🔄 החלף</button>
+                <button id="logoutBtn" class="btn-action-sm">יציאה</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="welcomeScreen" style="display:none;" class="visible">
+        <div class="timer-ring">
+            <svg viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="45"></circle>
+                <circle class="progress" cx="50" cy="50" r="45"></circle>
+            </svg>
+            <div class="timer-icon">🔒</div>
+        </div>
+        <div style="margin-bottom: 25px; padding: 16px; background: linear-gradient(135deg, rgba(217, 48, 37, 0.15), rgba(217, 48, 37, 0.05)); border: 1px solid rgba(217, 48, 37, 0.4); border-radius: 12px; font-size: 0.85rem; color: #fca5a5; max-width: 400px; width: 90%; line-height: 1.5; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: right; backdrop-filter: blur(5px);">
+            <span style="display:flex; align-items:center; gap:8px; font-size:1rem; margin-bottom:6px; color: #f87171;">⚠️ <b>הבהרה משפטית</b></span>
+            כל שימוש במערכת ובכלים המוצעים בה הוא על אחריות המשתמש בלבד. האתר אינו נושא בשום אחריות לכל נזק, אובדן מידע, או כל תוצאה אחרת שתנבע מהשימוש בו.
+        </div>
+        <h2 style="margin-bottom: 10px;">ברוכים הבאים לאתר שלי,<br><span style="color: var(--primary-color);">MH Link Manager Pro</span></h2>
+        <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 5px;">כדי לשמור על פרטיותך, הקישורים נטענים מהענן בלבד.</p>
+        <p style="color: var(--text-secondary); font-size: 0.95rem;">בעת יציאה (Logout) הכל נמחק מהמכשיר לחלוטין.</p>
+    </div>
+
+    <div id="protectedContent" class="auth-required locked">
+        <div id="controlsArea" class="glass-panel">
+            <div class="search-container">
+                <input type="search" id="searchInput" placeholder="🔍 חפש קישור, תיאור או #מספר...">
+            </div>
+            <div class="filters-container">
+                <select id="categoryFilter"><option value="">📂 כל הקטגוריות</option></select>
+                <select id="sortOrder">
+                    <option value="date-new" selected>📅 חדש לישן</option>
+                    <option value="name">🔤 שם (א-ת)</option>
+                    <option value="index-asc">🔢 מספר (עולה)</option>
+                    <option value="index-desc">🔢 מספר (יורד)</option>
+                </select>
+            </div>
+            <div class="actions-container">
+                <div class="dropdown">
+                    <button class="action-btn btn-json drop-trigger" data-target="jsonMenu">📂 JSON ▼</button>
+                    <div id="jsonMenu" class="dropdown-content">
+                        <label for="importJsonInput">📥 ייבוא קובץ JSON</label>
+                        <input type="file" id="importJsonInput" accept=".json">
+                        <div class="dropdown-divider"></div>
+                        <button id="exportJsonBtn">📤 ייצוא לקובץ JSON</button>
+                    </div>
+                </div>
+                <div class="dropdown">
+                    <button class="action-btn btn-txt drop-trigger" data-target="txtMenu">📄 טקסט ▼</button>
+                    <div id="txtMenu" class="dropdown-content">
+                        <button id="exportTxtBtn">📤 ייצוא רשימה ל-TXT</button>
+                        <div class="dropdown-divider"></div>
+                        <label for="smartImportInput">🔄 <b>ייבוא חכם (מיזוג)</b></label>
+                        <input type="file" id="smartImportInput" accept=".txt">
+                    </div>
+                </div>
+                <div class="dropdown">
+                    <button class="action-btn btn-site drop-trigger" data-target="siteMenu">💾 אתר ▼</button>
+                    <div id="siteMenu" class="dropdown-content">
+                        <button id="downloadHtmlBtn">🌐 שמור אתר מלא (HTML)</button>
+                        <button id="downloadSourceBtn">💻 הורד קוד מקור (TXT)</button>
+                    </div>
+                </div>
+                <div class="dropdown">
+                    <button class="action-btn drop-trigger" data-target="aiMenu" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9);">✨ AI ▼</button>
+                    <div id="aiMenu" class="dropdown-content">
+                        <button id="openAiSettingsBtn">⚙️ הגדרות AI ומפתחות</button>
+                        <div class="dropdown-divider"></div>
+                        <button id="wakeLockBtn" style="color: var(--primary-color);">💡 מצב מסך דולק (לסריקה ארוכה)</button>
+                        <div class="dropdown-divider"></div>
+                        <button id="bulkAiScanBtn">🤖 סרוק את כל המאגר</button>
+                        <button id="cancelBulkAiBtn" style="display:none; color: var(--accent-red);">🛑 עצור סריקה</button>
+                    </div>
+                </div>
+                <button id="trashBtn" class="action-btn btn-trash-view" title="סל מחזור" style="flex-grow:0; width:42px; font-size:1.1rem;">🗑️</button>
+                <button id="toggleDeadBtn" class="action-btn btn-toggle" title="הצג רק אתרים לא זמינים">🔴</button>
+                <button id="toggleDuplicatesBtn" class="action-btn btn-toggle" title="הצג כפילויות">👥</button>
+                <button id="toggleDarkModeBtn" class="action-btn btn-toggle" title="מצב לילה">☀️</button>
+            </div>
+        </div>
+
+        <details class="glass-panel">
+            <summary>▼ הוספת פריט חדש ידנית ▼</summary>
+            <form id="addItemForm">
+                <textarea id="itemContent" rows="2" required placeholder="הדבק כאן קישור או פקודה..."></textarea>
+                <input type="text" id="itemDescription" placeholder="תיאור הפריט">
+                <input type="text" id="itemCategory" list="categoriesDatalist" placeholder="קטגוריה">
+                <datalist id="categoriesDatalist"></datalist>
+                <input type="text" id="itemNote" placeholder="הערה אישית (אופציונלי)">
+                <button type="submit">הוסף למאגר</button>
+            </form>
+        </details>
+
+        <div id="listContainer"></div>
+    </div>
+
+    <div id="trashModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 style="margin:0;">🗑️ סל מחזור</h3>
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <button id="restoreAllBtn" style="background: rgba(0,166,81,0.1); color: #86efac; border: 1px solid var(--accent-green); padding: 5px 10px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; white-space:nowrap;">♻️ שחזר הכל</button>
+                    <button id="emptyTrashBtn" style="background: rgba(239,68,68,0.1); color: #fca5a5; border: 1px solid var(--accent-red); padding: 5px 10px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; white-space:nowrap;">🧹 רוקן הכל</button>
+                    <button id="closeTrashModalBtn" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--text-primary);">✖</button>
+                </div>
+            </div>
+            <div id="trashList" class="modal-body"></div>
+        </div>
+    </div>
+
+    <div id="editModal" class="edit-modal-wrap">
+        <div class="edit-modal-box">
+            <h3>✏️ עריכת פריט</h3>
+            <form id="editItemForm" class="edit-modal-form">
+                <input type="hidden" id="editItemId">
+                <textarea id="editItemContent" rows="2" required placeholder="תוכן..." class="edit-modal-input"></textarea>
+                <input type="text" id="editItemDescription" placeholder="תיאור הפריט" class="edit-modal-input">
+                <input type="text" id="editItemCategory" list="categoriesDatalist" placeholder="קטגוריה" class="edit-modal-input">
+                <input type="text" id="editItemNote" placeholder="הערה אישית" class="edit-modal-input">
+                <div class="edit-modal-btns">
+                    <button type="submit" class="btn-save">שמור שינויים</button>
+                    <button type="button" class="btn-cancel" onclick="document.getElementById('editModal').style.display='none'">ביטול</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="editAiModal" class="edit-modal-wrap">
+        <div class="edit-modal-box">
+            <h3>🤖✏️ עריכת פיענוח AI</h3>
+            <form id="editAiForm" class="edit-modal-form">
+                <input type="hidden" id="editAiItemId">
+                <span class="edit-modal-label">סטטוס רשת:</span>
+                <select id="editAiStatus" class="edit-modal-input">
+                    <option value="active">🟢 פעיל (Active)</option>
+                    <option value="parked">🟠 חניה/דומיין (Parked)</option>
+                    <option value="dead">🔴 לא זמין (Dead)</option>
+                    <option value="text">📄 טקסט (Text)</option>
+                </select>
+                <span class="edit-modal-label">סיכום האתר:</span>
+                <textarea id="editAiSummary" rows="3" required class="edit-modal-input"></textarea>
+                <span class="edit-modal-label">תגיות (מופרדות ברווח):</span>
+                <input type="text" id="editAiTags" class="edit-modal-input" placeholder="#תגית1 #תגית2">
+                <div class="edit-modal-btns">
+                    <button type="submit" class="btn-save">שמור</button>
+                    <button type="button" class="btn-cancel" onclick="document.getElementById('editAiModal').style.display='none'">ביטול</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="aiSettingsModal" class="edit-modal-wrap">
+        <div class="edit-modal-box" style="max-width:430px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h3 style="margin:0;">⚙️ הגדרות מנוע AI</h3>
+                <button type="button" onclick="document.getElementById('aiSettingsModal').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:1.3rem;color:var(--text-primary);">✖</button>
+            </div>
+            <div class="edit-modal-form">
+                <span class="edit-modal-label">מנוע מועדף לסריקה:</span>
+                <select id="aiProviderSelect" class="edit-modal-input">
+                    <option value="gemini">Google Gemini (מומלץ)</option>
+                    <option value="groq">Groq (Llama 3 - הכי מהיר)</option>
+                    <option value="openrouter">OpenRouter (חינמי חלופי)</option>
+                </select>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span class="edit-modal-label" style="margin:0;">מפתחות Gemini:</span>
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--primary-color); font-size:12px;">🔗 קבל מפתח</a>
+                </div>
+                <input type="password" id="keyGemini1" placeholder="מפתח ראשי..." class="edit-modal-input" style="margin-bottom:4px;">
+                <input type="password" id="keyGemini2" placeholder="מפתח גיבוי 2..." class="edit-modal-input" style="margin-bottom:4px;">
+                <input type="password" id="keyGemini3" placeholder="מפתח גיבוי 3..." class="edit-modal-input">
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                    <span class="edit-modal-label" style="margin:0;">מפתחות Groq:</span>
+                    <a href="https://console.groq.com/keys" target="_blank" style="color:var(--primary-color); font-size:12px;">🔗 קבל מפתח</a>
+                </div>
+                <input type="password" id="keyGroq1" placeholder="מפתח ראשי..." class="edit-modal-input" style="margin-bottom:4px;">
+                <input type="password" id="keyGroq2" placeholder="מפתח גיבוי 2..." class="edit-modal-input" style="margin-bottom:4px;">
+                <input type="password" id="keyGroq3" placeholder="מפתח גיבוי 3..." class="edit-modal-input">
+
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                    <span class="edit-modal-label" style="margin:0;">מפתחות OpenRouter:</span>
+                    <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--primary-color); font-size:12px;">🔗 קבל מפתח</a>
+                </div>
+                <input type="password" id="keyOpenRouter1" placeholder="מפתח ראשי..." class="edit-modal-input" style="margin-bottom:4px;">
+                <input type="password" id="keyOpenRouter2" placeholder="מפתח גיבוי 2..." class="edit-modal-input" style="margin-bottom:4px;">
+                <input type="password" id="keyOpenRouter3" placeholder="מפתח גיבוי 3..." class="edit-modal-input">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <input type="checkbox" id="autoScanNew" style="transform: scale(1.2);">
+                    <label for="autoScanNew" style="font-size:14px;">סרוק אוטומטית פריטים חדשים</label>
+                </div>
+                <button onclick="saveAiSettings()" style="width:100%; padding:12px; background:var(--primary-color); color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:15px;">שמור הגדרות</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+    <button id="scrollTopBtn" title="גלול למעלה">☝️</button>
+
+    <div id="aiFloatingMenu">
+        <div style="padding: 8px 15px; font-size: 11px; opacity: 0.7; font-weight: bold; border-bottom: 1px solid var(--glass-border);">בחר מנוע פענוח:</div>
+        <div style="padding: 10px 15px; border-bottom: 1px solid rgba(127,127,127,0.1); display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="aiUrlOnlyCheckbox" style="transform: scale(1.3); cursor: pointer; accent-color: var(--primary-color);">
+            <label for="aiUrlOnlyCheckbox" style="font-size: 13px; cursor: pointer; color: var(--text-primary); user-select: none;">
+                נתח לפי כתובת בלבד<br>
+                <span style="font-size: 10px; opacity: 0.7;">(עוקף אימות אבטחה)</span>
+            </label>
+        </div>
+        <button class="ai-provider-btn" data-provider="gemini">🔹 Google Gemini</button>
+        <button class="ai-provider-btn" data-provider="groq">⚡ Groq (Llama)</button>
+        <button class="ai-provider-btn" data-provider="openrouter">🌐 OpenRouter</button>
+    </div>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import {
+            getAuth, signInWithPopup, GoogleAuthProvider, signOut,
+            onAuthStateChanged, setPersistence, browserLocalPersistence
+        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import {
+            getFirestore, doc, setDoc, getDoc, getDocFromServer,
+            onSnapshot, serverTimestamp, enableNetwork, disableNetwork,
+            initializeFirestore, persistentLocalCache, persistentMultipleTabManager
+        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDwofGCJUWkdLGWyXK7_UBAbbC39FXnAmI",
+            authDomain: "linkmeir-dada4.firebaseapp.com",
+            projectId: "linkmeir-dada4",
+            storageBucket: "linkmeir-dada4.firebasestorage.app",
+            messagingSenderId: "933486826829",
+            appId: "1:933486826829:web:6e61498d88a55623c65304",
+            measurementId: "G-46D3WMVFK5"
+        };
+
+        const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
+        const EPHEMERAL_FIELDS = ['isScanning'];
+        const CACHE_KEY_PREFIX = 'lm_cache_v5_';
+        const SCHEMA_VERSION = 5;
+
+        let app, auth, db;
+        let deferredPrompt;
+        let wakeLock = null;
+        
+        let state = {
+            items: [], trash: [], user: null, unsubscribe: null,
+            showDuplicates: true, showOnlyDead: false,
+            isOffline: false,
+            selectedIds: new Set(), isSelectionMode: false,
+            filteredItems: []
+        };
+        let abortAiScan = false;
+
+        // ═══════════════════════════════════════════
+        // מנוע סנכרון חדש - הלב של התיקון
+        // ═══════════════════════════════════════════
+        
+        let _debounceTimer     = null;
+        let _writeInProgress   = false;
+        let _pendingAfterWrite = false;
+        let _offlineDirty      = false;
+        let _localMutationCounter = 0;
+        let _snapshotGeneration  = 0;   // מונה דור - מזהה כל שינוי סנפשוט
+        let _writeGeneration     = 0;   // מונה כתיבה - מזהה כל כתיבה ששלחנו
+
+        // מעקב אחרי פריטים ששונו מקומית וטרם נשמרו בענן
+        // מונע מהשרת לדרוס שינויים שרק עשינו
+        const _recentLocalChanges = new Map(); // id -> timestamp
+
+        let resolveDataLoaded;
+        const initialDataLoadedPromise = new Promise(resolve => resolveDataLoaded = resolve);
+
+        function nowIso() { return new Date().toISOString(); }
+
+        // ממיר כל סוג חותמת זמן למילישניות - קריטי להשוואה נכונה
+        function toTimestamp(val) {
+            if (!val) return 0;
+            if (typeof val === 'number') return val;
+            if (typeof val === 'string') {
+                const d = new Date(val);
+                return isNaN(d.getTime()) ? 0 : d.getTime();
+            }
+            // Firestore Timestamp object: { seconds, nanoseconds } או עם שיטת toDate
+            if (typeof val === 'object') {
+                if (typeof val.toDate === 'function') return val.toDate().getTime();
+                if (val.seconds !== undefined) return val.seconds * 1000 + (val.nanoseconds || 0) / 1e6;
+            }
+            return 0;
+        }
+
+        // רישום שינוי מקומי - חובה בכל מוטציה!
+        function trackLocalChange(id) {
+            _recentLocalChanges.set(String(id), Date.now());
+        }
+
+        // ניקוי רשומות ישנות (מעל 45 שניות)
+        setInterval(() => {
+            const cutoff = Date.now() - 45000;
+            for (const [id, ts] of _recentLocalChanges) {
+                if (ts < cutoff) _recentLocalChanges.delete(id);
+            }
+        }, 15000);
+
+        function isPendingWrite() {
+            return _writeInProgress || _debounceTimer !== null;
+        }
+
+        // ═══════════════════════════════════════════
+        // BroadcastChannel - סנכרון בין טאבים
+        // ═══════════════════════════════════════════
+        let _bc = null;
+        try {
+            _bc = new BroadcastChannel('mh-link-sync-v5');
+            _bc.onmessage = ({ data }) => {
+                if (data?.type !== 'WRITTEN' || data?.uid !== state.user?.uid) return;
+                if (data.mutationId === _localMutationCounter) return;
+                try {
+                    const c = readCache();
+                    if (c?.items) {
+                        c.items.forEach(s => {
+                            const l = state.items.find(i => String(i.id) === String(s.id));
+                            if (l?.isScanning) s.isScanning = true;
+                        });
+                        state.items = c.items;
+                        state.trash = c.trash || [];
+                        renderList(); updateCategoryDropdowns();
+                    }
+                } catch {}
+            };
+        } catch {}
+
+        // ═══════════════════════════════════════════
+        // מטמון מקומי (localStorage)
+        // ═══════════════════════════════════════════
+        function cacheKey() { return state.user ? CACHE_KEY_PREFIX + state.user.uid : null; }
+
+        function writeCache() {
+            const k = cacheKey();
+            if (!k) return;
+            try {
+                const cleanItems = state.items.map(i => {
+                    const c = { ...i }; EPHEMERAL_FIELDS.forEach(f => delete c[f]); return c;
+                });
+                localStorage.setItem(k, JSON.stringify({
+                    schema: SCHEMA_VERSION,
+                    items: cleanItems,
+                    trash: state.trash,
+                    cachedAt: Date.now()
+                }));
+            } catch (e) { console.warn('[Cache] write failed:', e); }
+        }
+
+        function readCache() {
+            const k = cacheKey();
+            if (!k) return null;
+            try {
+                const raw = localStorage.getItem(k);
+                if (!raw) return null;
+                return JSON.parse(raw);
+            } catch { return null; }
+        }
+
+        function clearCache() {
+            const k = cacheKey();
+            if (k) localStorage.removeItem(k);
+            try {
+                Object.keys(localStorage)
+                    .filter(key => key.startsWith('linkManager_cache_') || key.startsWith('mh_cache_') || key.startsWith('lm_cache_'))
+                    .forEach(key => localStorage.removeItem(key));
+            } catch {}
+        }
+
+        // ═══════════════════════════════════════════
+        // פונקציית מיזוג חכמה - התיקון המרכזי!
+        // ═══════════════════════════════════════════
+        // הגיון: נתוני שרת הם האמת, אלא אם כן שינינו מקומית
+        // והשינוי עדיין לא נשמר. זה מבטיח ששינויים ממכשיר
+        // אחר יופיעו מיד, ושינויים מקומיים לא יידרסו.
+        function smartMerge(serverArr, localArr) {
+            const serverMap = new Map(serverArr.map(s => [String(s.id), s]));
+            const result = [];
+            const processedIds = new Set();
+
+            for (const serverItem of serverArr) {
+                const id = String(serverItem.id);
+                processedIds.add(id);
+
+                const localItem = localArr.find(i => String(i.id) === id);
+                const isRecentLocal = _recentLocalChanges.has(id);
+
+                if (isRecentLocal && localItem) {
+                    // שינינו את הפריט הזה לאחרונה - בודקים אם השרת חדש יותר
+                    const localTime  = toTimestamp(localItem.updatedAt);
+                    const serverTime = toTimestamp(serverItem.updatedAt);
+
+                    if (localTime > serverTime) {
+                        // השינוי המקומי חדש יותר - שומרים אותו
+                        const merged = { ...localItem };
+                        // אבל לוקחים שדות שאולי השרת מכיל ואצלנו חסרים
+                        for (const key of Object.keys(serverItem)) {
+                            if (merged[key] === undefined && !EPHEMERAL_FIELDS.includes(key)) {
+                                merged[key] = serverItem[key];
+                            }
+                        }
+                        result.push(merged);
+                    } else {
+                        // השרת חדש יותר (ממכשיר אחר שעדכן אחרינו) - מקבלים את השרת
+                        const merged = { ...serverItem };
+                        EPHEMERAL_FIELDS.forEach(f => {
+                            if (localItem[f] !== undefined) merged[f] = localItem[f];
+                        });
+                        result.push(merged);
+                        _recentLocalChanges.delete(id); // השרת עדכן - אפשר למחוק
+                    }
+                } else {
+                    // לא שינינו מקומית - השרת הוא האמת
+                    const merged = { ...serverItem };
+                    if (localItem) {
+                        EPHEMERAL_FIELDS.forEach(f => {
+                            if (localItem[f] !== undefined) merged[f] = localItem[f];
+                        });
+                    }
+                    result.push(merged);
+                }
+            }
+
+            // פריטים שקיימים רק מקומית - שומרים רק אם שינינו אותם לאחרונה
+            // (כלומר, יצרנו אותם והם טרם נשמרו בענן)
+            for (const localItem of localArr) {
+                const id = String(localItem.id);
+                if (!processedIds.has(id) && _recentLocalChanges.has(id)) {
+                    result.push(localItem);
+                }
+                // אם אין ב-_recentLocalChanges ואין בשרת - זה אומר שנמחק
+                // ממכשיר אחר, ואנחנו מכבדים את המחיקה
+            }
+
+            return result;
+        }
+
+        // ═══════════════════════════════════════════
+        // כתיבה לענן
+        // ═══════════════════════════════════════════
+        async function _doWrite() {
+            _debounceTimer = null;
+            if (!state.user || !db || state.isOffline) return;
+            if (!navigator.onLine) {
+                _offlineDirty = true;
+                writeCache();
+                updateSyncStatus('offline', 'אין רשת');
+                return;
+            }
+            if (_writeInProgress) { _pendingAfterWrite = true; return; }
+
+            _writeInProgress = true;
+            const myMutationId = ++_localMutationCounter;
+            const myGeneration = ++_writeGeneration;
+            updateSyncStatus('syncing', 'שומר...');
+
+            try {
+                const items = state.items.map(item => {
+                    const c = JSON.parse(JSON.stringify(item));
+                    EPHEMERAL_FIELDS.forEach(f => delete c[f]);
+                    if (!c.updatedAt) c.updatedAt = nowIso();
+                    if (!c.createdAt) c.createdAt = c.date || c.updatedAt;
+                    return c;
+                });
+
+                await setDoc(doc(db, 'users', state.user.uid), {
+                    schema: SCHEMA_VERSION,
+                    items,
+                    trash: state.trash,
+                    aiSettings: getAiSettings(),
+                    lastUpdated: serverTimestamp(),
+                    lastUpdatedClient: nowIso()
+                }, { merge: true });
+
+                writeCache();
+                try { _bc?.postMessage({ type: 'WRITTEN', uid: state.user.uid, mutationId: myMutationId }); } catch {}
+
+                // אם הכתיבה הצליחה, מחכים קצת ואז מנקים את _recentLocalChanges
+                // נותנים 3 שניות ל-onSnapshot להגיע עם האישור מהשרת
+                setTimeout(() => {
+                    // מנקים רק רשומות שנכתבו לפני הכתיבה הזו
+                    const writeTime = Date.now();
+                    for (const [id, ts] of _recentLocalChanges) {
+                        if (ts < writeTime - 2000) _recentLocalChanges.delete(id);
+                    }
+                }, 3000);
+
+                updateSyncStatus('online', 'מחובר ✓');
+            } catch (err) {
+                console.error('[Sync] write error:', err);
+                updateSyncStatus('error', 'שגיאת שמירה');
+                showToast('⚠️ שגיאה בשמירה — מנסה שוב בעוד 5 שניות', null, 4000, null, true);
+                setTimeout(() => pushToCloud(true), 5000);
+            } finally {
+                _writeInProgress = false;
+                if (_pendingAfterWrite) {
+                    _pendingAfterWrite = false;
+                    setTimeout(_doWrite, 200);
+                }
+            }
+        }
+
+        function pushToCloud(immediate = false) {
+            writeCache();
+
+            if (state.isOffline) {
+                const data = JSON.stringify({ items: state.items, trash: state.trash });
+                localStorage.setItem('linkManagerLocalData', data);
+                const el = document.getElementById('offline-data');
+                if (el) el.textContent = data;
+                updateCategoryDropdowns(); renderList();
+                showToast('נשמר מקומית ✓');
+                return;
+            }
+            if (!state.user) return;
+
+            if (_writeInProgress) { _pendingAfterWrite = true; return; }
+            clearTimeout(_debounceTimer);
+            _debounceTimer = setTimeout(_doWrite, immediate ? 60 : 500);
+        }
+
+        function _flushIfDirty() {
+            if (_offlineDirty && navigator.onLine && state.user && !state.isOffline) {
+                _offlineDirty = false;
+                _doWrite();
+            }
+        }
+
+        // ═══════════════════════════════════════════
+        // אתחול Firebase
+        // ═══════════════════════════════════════════
+        try {
+            app  = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            setPersistence(auth, browserLocalPersistence);
+            db = initializeFirestore(app, {
+                localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+            });
+        } catch (e) { console.error('[Firebase] Init Error:', e); }
+
+        // ═══════════════════════════════════════════
+        // DOMContentLoaded - אתחול האפליקציה
+        // ═══════════════════════════════════════════
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                const savedUi = JSON.parse(localStorage.getItem('mh_ui_settings') || '{}');
+                if (savedUi.showDuplicates !== undefined) state.showDuplicates = savedUi.showDuplicates;
+                if (savedUi.showOnlyDead !== undefined) state.showOnlyDead = savedUi.showOnlyDead;
+                const so = document.getElementById('sortOrder');
+                if (so && savedUi.sortOrder) so.value = savedUi.sortOrder;
+                const cf = document.getElementById('categoryFilter');
+                if (cf && savedUi.categoryFilter) cf.value = savedUi.categoryFilter;
+                if (!state.showDuplicates) {
+                    const btn = document.getElementById('toggleDuplicatesBtn');
+                    if(btn) { btn.style.background = 'rgba(245,158,11,0.2)'; btn.style.borderColor = 'var(--accent-gold)'; }
+                }
+                if (state.showOnlyDead) {
+                    const btn = document.getElementById('toggleDeadBtn');
+                    if(btn) btn.classList.add('dead-active');
+                }
+            } catch(e) {}
+
+            const offlineDataEl = document.getElementById('offline-data');
+            const localCache = localStorage.getItem('linkManagerLocalData');
+            if (localCache || (offlineDataEl && offlineDataEl.textContent.trim())) {
+                try {
+                    const parsed = JSON.parse(localCache || offlineDataEl.textContent);
+                    if (localCache) localStorage.setItem('linkManagerLocalData', localCache);
+                    else localStorage.setItem('linkManagerLocalData', offlineDataEl.textContent);
+                    state.items = parsed.items || [];
+                    state.trash = parsed.trash || [];
+                    state.isOffline = true;
+                    state.user = { displayName: 'גיבוי מקומי', photoURL: 'icon.png', uid: 'offline' };
+                    document.getElementById('userName').textContent = 'מצב לא-מקוון (קוב�
