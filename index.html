@@ -10,8 +10,10 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="icon.png">
+   <link rel="apple-touch-icon" href="icon.png">
     <link rel="icon" type="image/png" href="icon.png">
+    <!-- פקודה לדפדפן להוריד את התמונה כמה שיותר מהר, כי היא חיונית לכותרת -->
+    <link rel="preload" href="icon.png" as="image">
     
     <script id="offline-data" type="application/json"></script>
     
@@ -418,9 +420,9 @@
 
    <header>
         <h1 style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 10px;">
-            <img src="icon.png" alt="Logo" class="header-logo">
+            <img src="icon.png" alt="Logo" class="header-logo" decoding="async" loading="eager">
             <span style="background: linear-gradient(135deg, #60a5fa, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">MH Link Manager Pro</span>
-            <img src="icon.png" alt="Logo" class="header-logo" style="transform: scaleX(-1);"> <!-- לוגו שני הופך צד לאסתטיקה -->
+            <img src="icon.png" alt="Logo" class="header-logo" style="transform: scaleX(-1);" decoding="async" loading="eager">
         </h1>
         <button id="installAppBtn">⬇️ התקן אפליקציה</button>
         <div id="itemCount">ממתין להתחברות...</div>
@@ -915,10 +917,12 @@
                     document.getElementById('userAvatar').src = user.photoURL;
                     handleLockScreen(true);
 
-                    const userDocRef = doc(db, "users", user.uid);
+                   const userDocRef = doc(db, "users", user.uid);
                     getDoc(userDocRef).then(snap => {
                         if(snap.exists() && snap.data().aiSettings) {
-                            localStorage.setItem('aiSettingsPro', JSON.stringify(snap.data().aiSettings));
+                            const cloudSettings = snap.data().aiSettings;
+                            localStorage.setItem('aiSettingsPro', JSON.stringify(cloudSettings));
+                            state.aiSettings = cloudSettings; // שומרים ב-state כדי שיהיה זמין מיד
                         }
                     });
 
@@ -1385,7 +1389,7 @@
             }
         }
 
-        window.saveAiSettings = async function () {
+       window.saveAiSettings = async function () {
             const settings = {
                 provider: document.getElementById('aiProviderSelect').value,
                 autoScan: document.getElementById('autoScanNew').checked,
@@ -1395,16 +1399,28 @@
                     openrouter: [document.getElementById('keyOpenRouter1').value.trim(), document.getElementById('keyOpenRouter2').value.trim(), document.getElementById('keyOpenRouter3').value.trim()].filter(Boolean)
                 }
             };
-            localStorage.setItem('aiSettingsPro', JSON.stringify(settings));
+            localStorage.setItem('aiSettingsPro', JSON.stringify(settings)); // גיבוי מקומי
             if (state.user) {
-                await setDoc(doc(db, 'users', state.user.uid), { aiSettings: settings }, { merge: true });
+                try {
+                     updateSyncStatus('syncing', 'שומר מפתחות...');
+                     await setDoc(doc(db, 'users', state.user.uid), { aiSettings: settings }, { merge: true });
+                     updateSyncStatus('online', 'מחובר ✓');
+                } catch(e) {
+                     console.error("שגיאה בשמירת הגדרות AI בענן", e);
+                     showToast('⚠️ הגדרות נשמרו מקומית בלבד', null, 3000, null, true);
+                }
             }
+            // עדכון המשתנה ב-state שיהיה זמין לכל הקריאות
+            state.aiSettings = settings;
             document.getElementById('aiSettingsModal').style.display = 'none';
-            showToast('✅ הגדרות AI נשמרו');
+            showToast('✅ הגדרות מנועי AI עובדכנו ונשמרו בענן!');
         };
 
         function getAiSettings() {
             const def = { provider: 'gemini', autoScan: true, keys: { gemini: [], groq: [], openrouter: [] } };
+            // קודם כל ננסה לקחת מהזכרון שנטען מהענן
+            if (state.aiSettings && state.aiSettings.keys) return state.aiSettings;
+            
             try {
                 const saved = JSON.parse(localStorage.getItem('aiSettingsPro'));
                 if (!saved) return def;
