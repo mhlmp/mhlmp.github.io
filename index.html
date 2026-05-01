@@ -1910,11 +1910,14 @@ ${contentToAnalyze}`;
             document.getElementById('editModal').style.display   = 'flex';
         }
 
-        async function handleEditSubmit(e) {
+       async function handleEditSubmit(e) {
             e.preventDefault();
             const idValue = document.getElementById('editItemId').value;
             const item    = state.items.find(i => String(i.id) === idValue);
             if (!item) return;
+            
+            // צילום מצב: שומרים עותק מדויק של הפריט לפני העריכה
+            const originalItemSnapshot = JSON.parse(JSON.stringify(item));
             
             const c = document.getElementById('editItemContent').value.trim();
             item.content     = c;
@@ -1926,7 +1929,17 @@ ${contentToAnalyze}`;
             
             document.getElementById('editModal').style.display = 'none';
             await saveItemToCloud(item);
-            showToast('✅ עודכן בהצלחה');
+            
+            // מציגים הודעה עם אפשרות לביטול (Undo)
+            showToast('✅ עודכן בהצלחה', async () => {
+                const currentItem = state.items.find(i => i.id === originalItemSnapshot.id);
+                if (currentItem) {
+                    Object.assign(currentItem, originalItemSnapshot); // משחזרים למצב המקורי
+                    currentItem.updatedAt = nowIso(); // מעדכנים תאריך כדי שהענן יקבל את השינוי
+                    await saveItemToCloud(currentItem);
+                    showToast('↩️ העריכה בוטלה בהצלחה');
+                }
+            });
         }
 
         window.openEditAiModal = function (item) {
@@ -1944,6 +1957,9 @@ ${contentToAnalyze}`;
             const item    = state.items.find(i => String(i.id) === idValue);
             if (!item) return;
             
+            // צילום מצב: שומרים עותק מדויק של הפריט לפני העריכה
+            const originalItemSnapshot = JSON.parse(JSON.stringify(item));
+            
             item.siteStatus = document.getElementById('editAiStatus').value;
             item.aiSummary  = document.getElementById('editAiSummary').value.trim();
             const tagsRaw   = document.getElementById('editAiTags').value;
@@ -1952,7 +1968,17 @@ ${contentToAnalyze}`;
             
             document.getElementById('editAiModal').style.display = 'none';
             await saveItemToCloud(item);
-            showToast('✅ פיענוח AI עודכן');
+            
+            // מציגים הודעה עם אפשרות לביטול (Undo)
+            showToast('✅ פיענוח AI עודכן', async () => {
+                const currentItem = state.items.find(i => i.id === originalItemSnapshot.id);
+                if (currentItem) {
+                    Object.assign(currentItem, originalItemSnapshot); // משחזרים למצב המקורי
+                    currentItem.updatedAt = nowIso();
+                    await saveItemToCloud(currentItem);
+                    showToast('↩️ עריכת ה-AI בוטלה בהצלחה');
+                }
+            });
         }
 
         async function shareItem(item) {
