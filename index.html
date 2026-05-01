@@ -1870,7 +1870,7 @@ ${contentToAnalyze}`;
             }
         });
 
-        async function moveToTrash(id) {
+       async function moveToTrash(id) {
             const item = state.items.find(i => i.id === id);
             if (!item) return;
 
@@ -1888,17 +1888,44 @@ ${contentToAnalyze}`;
                 await batch.commit();
                 
                 updateSyncStatus('online', 'מחובר ✓');
-                showToast('הועבר לסל המחזור');
+                
+                // הוספת מנגנון UNDO למחיקה
+                showToast('🗑️ הועבר לסל המחזור', async () => {
+                    updateSyncStatus('syncing', 'משחזר...');
+                    const undoBatch = writeBatch(db);
+                    const cleanItem = { ...item };
+                    delete cleanItem.deletedAt;
+                    cleanItem.updatedAt = nowIso();
+                    
+                    undoBatch.set(itemRef, cleanItem);
+                    undoBatch.delete(trashRef);
+                    await undoBatch.commit();
+                    
+                    updateSyncStatus('online', 'מחובר ✓');
+                    showToast('↩️ המחיקה בוטלה, הפריט חזר לרשימה!');
+                });
             } catch (e) { console.error('Trash error:', e); }
         }
-
         async function togglePin(id) {
             const item = state.items.find(i => i.id === id);
             if (!item) return;
+            
             item.isPinned = !item.isPinned;
             item.updatedAt = nowIso();
             await saveItemToCloud(item);
-            showToast(item.isPinned ? '📌 ננעץ' : '📌 שוחרר');
+            
+            const msg = item.isPinned ? '📌 ננעץ' : '📌 שוחרר';
+            
+            // הוספת מנגנון UNDO לנעיצה/שחרור
+            showToast(msg, async () => {
+                const currentItem = state.items.find(i => i.id === id);
+                if (currentItem) {
+                    currentItem.isPinned = !currentItem.isPinned; // הופכים חזרה
+                    currentItem.updatedAt = nowIso();
+                    await saveItemToCloud(currentItem);
+                    showToast('↩️ הפעולה בוטלה');
+                }
+            }, 4000);
         }
 
         function editItem(item) {
