@@ -917,14 +917,17 @@
                     document.getElementById('userAvatar').src = user.photoURL;
                     handleLockScreen(true);
 
-                   const userDocRef = doc(db, "users", user.uid);
+                  const userDocRef = doc(db, "users", user.uid);
                     getDoc(userDocRef).then(snap => {
                         if(snap.exists() && snap.data().aiSettings) {
                             const cloudSettings = snap.data().aiSettings;
                             localStorage.setItem('aiSettingsPro', JSON.stringify(cloudSettings));
-                            state.aiSettings = cloudSettings; // שומרים ב-state כדי שיהיה זמין מיד
                         }
                     });
+
+                    // נוודא שאין מאזין פתוח קודם כדי למנוע כפילויות ברענון
+                    if (state.unsubItems) state.unsubItems();
+                    if (state.unsubTrash) state.unsubTrash();
 
                     const itemsRef = collection(db, 'users', user.uid, 'items');
                     state.unsubItems = onSnapshot(itemsRef, (snapshot) => {
@@ -1416,11 +1419,8 @@
             showToast('✅ הגדרות מנועי AI עובדכנו ונשמרו בענן!');
         };
 
-        function getAiSettings() {
+      function getAiSettings() {
             const def = { provider: 'gemini', autoScan: true, keys: { gemini: [], groq: [], openrouter: [] } };
-            // קודם כל ננסה לקחת מהזכרון שנטען מהענן
-            if (state.aiSettings && state.aiSettings.keys) return state.aiSettings;
-            
             try {
                 const saved = JSON.parse(localStorage.getItem('aiSettingsPro'));
                 if (!saved) return def;
