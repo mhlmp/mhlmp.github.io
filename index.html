@@ -1450,346 +1450,323 @@
             closeAllMenus();
         });
 
-        function isQuotaError(msg) {
-            const l = (msg || '').toLowerCase();
-            return l.includes('quota') || l.includes('resource_exhausted') ||
-                l.includes('rate_limit') || l.includes('rate limit') ||
-                l.includes('exceeded') || l.includes('too many requests') || l.includes('429');
-        }
+       function isQuotaError(msg) {
+            const l = (msg || '').toLowerCase();
+            return l.includes('quota') || l.includes('resource_exhausted') ||
+                l.includes('rate_limit') || l.includes('rate limit') ||
+                l.includes('exceeded') || l.includes('too many requests') || 
+                l.includes('429') || l.includes('401') || l.includes('403') ||
+                l.includes('unauthorized') || l.includes('api key') || l.includes('billing');
+        }
 
-        window.activeAiRequestController = null;
+        window.activeAiRequestController = null;
 
-        window.scanSingleItem = async function (id, overrideProvider = null, forceUrlOnly = false) {
-            if (!navigator.onLine) {
-                showToast('❌ לא ניתן לבצע סריקת AI ללא אינטרנט.', null, 4000, null, true);
-                const ci = state.items.find(i => i.id === id);
-                if (ci) { ci.isScanning = false; renderList(); }
-                return;
-            }
+        window.scanSingleItem = async function (id, overrideProvider = null, forceUrlOnly = false) {
+            if (!navigator.onLine) {
+                showToast('❌ לא ניתן לבצע סריקת AI ללא אינטרנט.', null, 4000, null, true);
+                const ci = state.items.find(i => i.id === id);
+                if (ci) { ci.isScanning = false; renderList(); }
+                return;
+            }
 
-            const item = state.items.find(i => i.id === id);
-            if (!item) return;
+            const item = state.items.find(i => i.id === id);
+            if (!item) return;
 
-           const settings       = getAiSettings();
-            const preferred      = overrideProvider || settings.provider || 'gemini';
-            const allProviders   = [preferred, 'gemini', 'groq', 'openrouter'].filter((p, i, a) => p && a.indexOf(p) === i);
-            const fallbackChain  = [];
+            const settings       = getAiSettings();
+            const preferred      = overrideProvider || settings.provider || 'gemini';
+            const allProviders   = [preferred, 'gemini', 'groq', 'openrouter'].filter((p, i, a) => p && a.indexOf(p) === i);
+            const fallbackChain  = [];
 
-            allProviders.forEach(p => {
-                const pKeys = Array.isArray(settings.keys[p]) ? settings.keys[p] : (settings.keys[p] ? [settings.keys[p]] : []);
-                pKeys.filter(k => k && k.trim()).forEach((k, idx) => {
-                    fallbackChain.push({ provider: p, key: k, keyIndex: idx + 1 });
-                });
-            });
+            allProviders.forEach(p => {
+                const pKeys = Array.isArray(settings.keys[p]) ? settings.keys[p] : (settings.keys[p] ? [settings.keys[p]] : []);
+                pKeys.filter(k => k && k.trim()).forEach((k, idx) => {
+                    fallbackChain.push({ provider: p, key: k, keyIndex: idx + 1 });
+                });
+            });
 
-            if (fallbackChain.length === 0)
-                return alert('עליך להזין לפחות מפתח API אחד בהגדרות ה-AI.');
+            if (fallbackChain.length === 0)
+                return alert('עליך להזין לפחות מפתח API אחד בהגדרות ה-AI.');
 
-            item.isScanning = true;
-            renderList();
+            item.isScanning = true;
+            renderList();
 
-            const fetchWithTimeout = async (url, options = {}, time = 30000) => {
-                const ctrl = new AbortController();
-                window.activeAiRequestController = ctrl;
-                const tid = setTimeout(() => ctrl.abort(), time);
-                try {
-                    const res = await fetch(url, { ...options, signal: ctrl.signal });
-                    clearTimeout(tid);
-                    window.activeAiRequestController = null;
-                    return res;
-                } catch (err) {
-                    clearTimeout(tid);
-                    window.activeAiRequestController = null;
-                    throw err;
-                }
-            };
+            const fetchWithTimeout = async (url, options = {}, time = 30000) => {
+                const ctrl = new AbortController();
+                window.activeAiRequestController = ctrl;
+                const tid = setTimeout(() => ctrl.abort(), time);
+                try {
+                    const res = await fetch(url, { ...options, signal: ctrl.signal });
+                    clearTimeout(tid);
+                    window.activeAiRequestController = null;
+                    return res;
+                } catch (err) {
+                    clearTimeout(tid);
+                    window.activeAiRequestController = null;
+                    throw err;
+                }
+            };
 
-            try {
-                let cleanContent = item.content.trim().replace(/^[\/]+/, '');
-                let isWebsite    = item.type === 'link';
+            try {
+                let cleanContent = item.content.trim().replace(/^[\/]+/, '');
+                let isWebsite    = item.type === 'link';
 
-                if (isWebsite && !/^https?:\/\//i.test(cleanContent))
-                    cleanContent = 'https://' + cleanContent;
+                if (isWebsite && !/^https?:\/\//i.test(cleanContent))
+                    cleanContent = 'https://' + cleanContent;
 
-                let contentToAnalyze = cleanContent;
+                let contentToAnalyze = cleanContent;
 
-                if (isWebsite && forceUrlOnly) {
-                    contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: User bypassed page scanning. Analyze based on URL and description only.`;
-                } else if (isWebsite) {
-                    const proxies = [
-                        u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-                        u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
-                        u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`
-                    ];
+                if (isWebsite && forceUrlOnly) {
+                    contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: User bypassed page scanning. Analyze based on URL and description only.`;
+                } else if (isWebsite) {
+                    const proxies = [
+                        u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+                        u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+                        u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`
+                    ];
 
-                    let scrapedOk = false;
-                    try {
-                        const proxyPromises = proxies.map(async (proxyFn) => {
-                            const proxyUrl = proxyFn(cleanContent);
-                            const res = await fetchWithTimeout(proxyUrl, {}, 5000);
-                            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                            let htmlText;
-                            if (proxyUrl.includes('allorigins')) {
-                                const data = await res.json();
-                                if (!data.contents || (data.status?.http_code >= 400)) throw new Error('allorigins empty');
-                                htmlText = data.contents;
-                            } else {
-                                htmlText = await res.text();
-                            }
-                            const parser = new DOMParser();
-                            const doc2 = parser.parseFromString(htmlText, 'text/html');
-                            doc2.querySelectorAll('script,style,nav,footer,noscript,iframe,header').forEach(el => el.remove());
-                            const bodyText = (doc2.body?.innerText || '').replace(/\s+/g, ' ').trim();
-                            if (bodyText.length < 30) throw new Error('empty body');
-                            const lb = bodyText.toLowerCase();
-                            if (lb.includes('just a moment') || lb.includes('enable javascript and cookies') ||
-                                lb.includes('checking your browser') || lb.includes('verify you are human') ||
-                                (lb.includes('cloudflare') && lb.includes('ray id'))) throw new Error('cloudflare_blocked');
-                            return bodyText.substring(0, 3500);
-                        });
-                        contentToAnalyze = await Promise.any(proxyPromises);
-                        scrapedOk = true;
-                    } catch (_) { scrapedOk = false; }
+                    let scrapedOk = false;
+                    try {
+                        const proxyPromises = proxies.map(async (proxyFn) => {
+                            const proxyUrl = proxyFn(cleanContent);
+                            const res = await fetchWithTimeout(proxyUrl, {}, 5000);
+                            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                            let htmlText;
+                            if (proxyUrl.includes('allorigins')) {
+                                const data = await res.json();
+                                if (!data.contents || (data.status?.http_code >= 400)) throw new Error('allorigins empty');
+                                htmlText = data.contents;
+                            } else {
+                                htmlText = await res.text();
+                            }
+                            const parser = new DOMParser();
+                            const doc2 = parser.parseFromString(htmlText, 'text/html');
+                            doc2.querySelectorAll('script,style,nav,footer,noscript,iframe,header').forEach(el => el.remove());
+                            const bodyText = (doc2.body?.innerText || '').replace(/\s+/g, ' ').trim();
+                            if (bodyText.length < 30) throw new Error('empty body');
+                            const lb = bodyText.toLowerCase();
+                            if (lb.includes('just a moment') || lb.includes('enable javascript and cookies') ||
+                                lb.includes('checking your browser') || lb.includes('verify you are human') ||
+                                (lb.includes('cloudflare') && lb.includes('ray id'))) throw new Error('cloudflare_blocked');
+                            return bodyText.substring(0, 3500);
+                        });
+                        contentToAnalyze = await Promise.any(proxyPromises);
+                        scrapedOk = true;
+                    } catch (_) { scrapedOk = false; }
 
-                    if (!scrapedOk)
-                        contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: Page blocked by anti-bot. Do NOT mark as "dead". Assume "active". Analyze based on URL and description only.`;
-                }
+                    if (!scrapedOk)
+                        contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: Page blocked by anti-bot. Do NOT mark as "dead". Assume "active". Analyze based on URL and description only.`;
+                }
 
-                const isTelegramUrl = /(?:t\.me|telegram\.me)\//i.test(cleanContent);
-                if (isTelegramUrl && !forceUrlOnly) {
-                    const lc = contentToAnalyze.toLowerCase();
-                    const isInviteLink = /t\.me\/\+/i.test(cleanContent);
-                    const EXPLICIT_DEAD_SIGNALS = [
-                        'this link is no longer valid','this link has expired','invite link is invalid',
-                        'this channel cannot be displayed','this group cannot be displayed',
-                        'no such user','user not found','channel not found',
-                        'this content is not available','page not found','404'
-                    ];
-                    const hasExplicitDead = EXPLICIT_DEAD_SIGNALS.some(s => lc.includes(s));
-                    const hasActiveSignal = /\d[\d\s,.]+\s*(?:member|subscriber|participant)/i.test(contentToAnalyze);
-                    const isGenericGroupDead = (lc.includes('you are invited to a group chat') || lc.includes('join group')) && !hasActiveSignal;
-                    let isGenericUserDead = false;
-                    if (lc.includes('if you have telegram, you can contact')) {
-                        const stripped = lc.replace(/if you have telegram,? you can contact/g,'').replace(/right away\.?/g,'').replace(/send message/g,'').replace(/download/g,'').replace(/telegram/g,'').replace(/@[a-z0-9_]+/gi,'').replace(/[^a-zא-ת0-9]/gi,'').trim();
-                        if (stripped.length < 5) isGenericUserDead = true;
-                    }
-                    if (hasExplicitDead || isGenericGroupDead || isGenericUserDead) {
-                        const ci = state.items.find(i => i.id === id);
-                        if (ci) {
-                            ci.aiSummary   = isInviteLink || isGenericGroupDead ? 'קישור הזמנה לטלגרם לא תקין — פג תוקפו, הקבוצה נמחקה, או שהלינק בוטל.' : 'קישור טלגרם לא פעיל — הערוץ, הבוט או המשתמש אינם קיימים.';
-                            ci.siteStatus  = 'dead';
-                            ci.aiTags      = ['#Telegram', '#dead', '#לא_זמין'];
-                            ci.updatedAt   = nowIso();
-                            ci.isScanning  = false;
-                            await saveItemToCloud(ci);
-                        }
-                        return;
-                    }
-                }
+                const isTelegramUrl = /(?:t\.me|telegram\.me)\//i.test(cleanContent);
+                if (isTelegramUrl && !forceUrlOnly) {
+                    const lc = contentToAnalyze.toLowerCase();
+                    const isInviteLink = /t\.me\/\+/i.test(cleanContent);
+                    const EXPLICIT_DEAD_SIGNALS = [
+                        'this link is no longer valid','this link has expired','invite link is invalid',
+                        'this channel cannot be displayed','this group cannot be displayed',
+                        'no such user','user not found','channel not found',
+                        'this content is not available','page not found','404'
+                    ];
+                    const hasExplicitDead = EXPLICIT_DEAD_SIGNALS.some(s => lc.includes(s));
+                    const hasActiveSignal = /\d[\d\s,.]+\s*(?:member|subscriber|participant)/i.test(contentToAnalyze);
+                    const isGenericGroupDead = (lc.includes('you are invited to a group chat') || lc.includes('join group')) && !hasActiveSignal;
+                    let isGenericUserDead = false;
+                    if (lc.includes('if you have telegram, you can contact')) {
+                        const stripped = lc.replace(/if you have telegram,? you can contact/g,'').replace(/right away\.?/g,'').replace(/send message/g,'').replace(/download/g,'').replace(/telegram/g,'').replace(/@[a-z0-9_]+/gi,'').replace(/[^a-zא-ת0-9]/gi,'').trim();
+                        if (stripped.length < 5) isGenericUserDead = true;
+                    }
+                    if (hasExplicitDead || isGenericGroupDead || isGenericUserDead) {
+                        const ci = state.items.find(i => i.id === id);
+                        if (ci) {
+                            ci.aiSummary   = isInviteLink || isGenericGroupDead ? 'קישור הזמנה לטלגרם לא תקין — פג תוקפו, הקבוצה נמחקה, או שהלינק בוטל.' : 'קישור טלגרם לא פעיל — הערוץ, הבוט או המשתמש אינם קיימים.';
+                            ci.siteStatus  = 'dead';
+                            ci.aiTags      = ['#Telegram', '#dead', '#לא_זמין'];
+                            ci.updatedAt   = nowIso();
+                            ci.isScanning  = false;
+                            await saveItemToCloud(ci);
+                        }
+                        return;
+                    }
+                }
 
-                const promptType = isWebsite
-                    ? `Type: Website content.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: You MUST keep brand names, usernames, website names, software, and technical terms in their original ENGLISH within the Hebrew summary to maximize searchability.\n2. Determine status: "active", "parked", or "dead".\n   TELEGRAM RULES:\n   - If the page contains a specific group/bot name, a description, OR a member/subscriber count (e.g., "3 members"), you MUST set status to "active".\n   - Set "dead" ONLY if the page explicitly says "not found", "expired", "invalid", or if it is a completely empty "Join Group" page with NO details at all.\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for brands/tech terms).`
-                    : `Type: Text/Command.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: Keep all specific names, usernames, code, and technical terms in their original ENGLISH within the Hebrew summary.\n2. Status MUST be "text".\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for specific names/tech terms).`;
+                const promptType = isWebsite
+                    ? `Type: Website content.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: You MUST keep brand names, usernames, website names, software, and technical terms in their original ENGLISH within the Hebrew summary to maximize searchability.\n2. Determine status: "active", "parked", or "dead".\n   TELEGRAM RULES:\n   - If the page contains a specific group/bot name, a description, OR a member/subscriber count (e.g., "3 members"), you MUST set status to "active".\n   - Set "dead" ONLY if the page explicitly says "not found", "expired", "invalid", or if it is a completely empty "Join Group" page with NO details at all.\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for brands/tech terms).`
+                    : `Type: Text/Command.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: Keep all specific names, usernames, code, and technical terms in their original ENGLISH within the Hebrew summary.\n2. Status MUST be "text".\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for specific names/tech terms).`;
 
-                const systemPrompt = `You are a strict JSON-only API. Return ONLY valid JSON. No markdown formatting, no extra text.
-Required format: {"summary": "...", "status": "active|parked|dead|text", "tags": ["#tag1", "#tag2", "#tag3"]}
-${promptType}
+                const systemPrompt = `You are a strict JSON-only API. Return ONLY valid JSON. No markdown formatting, no extra text.\nRequired format: {"summary": "...", "status": "active|parked|dead|text", "tags": ["#tag1", "#tag2", "#tag3"]}\n${promptType}\n\nContent to analyze:\n${contentToAnalyze}`;
 
-Content to analyze:
-${contentToAnalyze}`;
+                let jsonString   = '';
+                let success      = false;
+                let lastError    = 'לא ניתן להגיע לאף ספק AI';
+                let usedModelName = '';
+                const fallbackToastId = 'ai-fallback-toast-' + id; // מזהה קבוע שמונע הצפת התראות
 
-               let jsonString   = '';
-                let success      = false;
-                let lastError    = 'לא ניתן להגיע לאף ספק AI';
-                let usedModelName = '';
+                for (let i = 0; i < fallbackChain.length; i++) {
+                    if (success) break;
+                    const { provider: currentProvider, key: activeKey, keyIndex } = fallbackChain[i];
+                    let fatalKeyError = false;
 
-                for (let i = 0; i < fallbackChain.length; i++) {
-                    if (success) break;
-                    const { provider: currentProvider, key: activeKey, keyIndex } = fallbackChain[i];
-                    let quotaExhausted = false;
+                    if (currentProvider === 'gemini') {
+                        const models = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+                        for (const model of models) {
+                            try {
+                                const res = await fetchWithTimeout(
+                                    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
+                                    { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt }] }], generationConfig: { response_mime_type: 'application/json', temperature: 0.1 } }) },
+                                    30000
+                                );
+                                
+                                const rd = await res.json().catch(() => ({}));
+                                if (!res.ok) throw { message: rd.error?.message || `HTTP ${res.status}`, status: res.status };
+                                if (rd.promptFeedback?.blockReason) throw new Error(`Safety Block: ${rd.promptFeedback.blockReason}`);
+                                if (!rd.candidates?.[0]?.content?.parts?.[0]) throw new Error('Invalid response structure (possible safety block)');
+                                
+                                const rawText = rd.candidates[0].content.parts[0].text;
+                                const jm = rawText.match(/\{[\s\S]*\}/);
+                                if (!jm) throw new Error('No valid JSON in response');
+                                
+                                jsonString = jm[0];
+                                JSON.parse(jsonString);
+                                success = true;
+                                usedModelName = `🔹 Gemini (${model.replace('gemini-', '')})`;
+                                break;
+                            } catch (err) {
+                                lastError = err.message || 'Unknown error';
+                                if (err.status === 401 || err.status === 429 || err.status === 403 || err.status === 400 || isQuotaError(lastError)) { 
+                                    fatalKeyError = true; break; 
+                                }
+                                console.warn(`Gemini [${model}]:`, lastError);
+                            }
+                        }
+                    }
 
-                    if (currentProvider === 'gemini') {
-                        let models = window.dynamicGeminiModels;
-                        if (!models) {
-                            try {
-                                const req = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models?key=${activeKey}`, {}, 10000);
-                                const data = await req.json();
-                                if (data.models) {
-                                    models = data.models.filter(m => m.supportedGenerationMethods?.includes('generateContent') && m.name.includes('gemini')).map(m => m.name.replace('models/', ''));
-                                    models.sort((a, b) => (a.includes('flash') ? -1 : 1));
-                                    window.dynamicGeminiModels = models;
-                                }
-                            } catch { models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b']; }
-                        }
-                        if (!models?.length) models = ['gemini-1.5-flash'];
+                    else if (currentProvider === 'groq') {
+                        const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+                        for (const model of models) {
+                            try {
+                                const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
+                                    method: 'POST',
+                                    headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ model, temperature: 0.1, messages: [{ role: 'user', content: systemPrompt }], response_format: { type: 'json_object' } })
+                                }, 30000);
+                                
+                                const rd = await res.json().catch(() => ({}));
+                                if (!res.ok) throw { message: rd.error?.message || `HTTP ${res.status}`, status: res.status };
+                                if (!rd.choices?.[0]?.message?.content) throw new Error('Invalid response structure');
+                                
+                                const rawText = rd.choices[0].message.content;
+                                const jm = rawText.match(/\{[\s\S]*\}/);
+                                if (!jm) throw new Error('No valid JSON');
+                                
+                                jsonString = jm[0];
+                                JSON.parse(jsonString);
+                                success = true;
+                                usedModelName = `⚡ Groq (${model.split('-').slice(0,2).join('-')})`;
+                                break;
+                            } catch (err) {
+                                lastError = err.message || 'Unknown error';
+                                if (err.status === 401 || err.status === 429 || err.status === 403 || err.status === 400 || isQuotaError(lastError)) { 
+                                    fatalKeyError = true; break; 
+                                }
+                                console.warn(`Groq [${model}]:`, lastError);
+                            }
+                        }
+                    }
 
-                        for (const model of models) {
-                            try {
-                                const res = await fetchWithTimeout(
-                                    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
-                                    { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt }] }], generationConfig: { response_mime_type: 'application/json', temperature: 0.1 } }) },
-                                    30000
-                                );
-                                const rd = await res.json();
-                                if (rd.error) throw new Error(rd.error.message);
-                                const rawText = rd.candidates[0].content.parts[0].text;
-                                const jm = rawText.match(/\{[\s\S]*\}/);
-                                if (!jm) throw new Error('No valid JSON in response');
-                                jsonString = jm[0];
-                                JSON.parse(jsonString);
-                                success = true;
-                                usedModelName = `🔹 Gemini (${model})`;
-                                window.dynamicGeminiModels = [model];
-                                break;
-                            } catch (err) {
-                                lastError = err.message;
-                                if (isQuotaError(err.message)) { 
-                                    quotaExhausted = true; 
-                                    window.dynamicGeminiModels = null; 
-                                    break;
-                                }
-                                console.warn(`Gemini [${model}]:`, err.message);
-                            }
-                        }
-                    }
+                    else if (currentProvider === 'openrouter') {
+                        const models = ['google/gemini-2.0-flash-lite-preview-02-05:free', 'meta-llama/llama-3.3-70b-instruct:free', 'qwen/qwen-2.5-coder-32b-instruct:free'];
+                        for (const model of models) {
+                            try {
+                                const res = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
+                                    method: 'POST',
+                                    headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': window.location.href },
+                                    body: JSON.stringify({ model, temperature: 0.1, messages: [{ role: 'user', content: systemPrompt }], response_format: { type: 'json_object' } })
+                                }, 30000);
+                                
+                                const rd = await res.json().catch(() => ({}));
+                                if (!res.ok) throw { message: rd.error?.message || `HTTP ${res.status}`, status: res.status };
+                                if (!rd.choices?.[0]?.message?.content) throw new Error('Invalid response structure');
+                                
+                                const rawText = rd.choices[0].message.content;
+                                const jm = rawText.match(/\{[\s\S]*\}/);
+                                if (!jm) throw new Error('No valid JSON');
+                                
+                                jsonString = jm[0];
+                                JSON.parse(jsonString);
+                                success = true;
+                                usedModelName = `🌐 OpenRouter (${model.split('/').pop().replace(':free','')})`;
+                                break;
+                            } catch (err) {
+                                lastError = err.message || 'Unknown error';
+                                if (err.status === 401 || err.status === 429 || err.status === 403 || err.status === 400 || isQuotaError(lastError)) { 
+                                    fatalKeyError = true; break; 
+                                }
+                                console.warn(`OpenRouter [${model}]:`, lastError);
+                            }
+                        }
+                    }
 
-                    else if (currentProvider === 'groq') {
-                        let models = window.dynamicGroqModels;
-                        if (!models) {
-                            try {
-                                const req = await fetchWithTimeout('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': `Bearer ${activeKey}` } }, 10000);
-                                const data = await req.json();
-                                if (data.data) { models = data.data.map(m => m.id).sort((a, b) => (a.includes('llama') ? -1 : 1)); window.dynamicGroqModels = models; }
-                            } catch { models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']; }
-                        }
-                        if (!models?.length) models = ['llama-3.3-70b-versatile'];
+                    if (!success) {
+                        const nextTarget = fallbackChain[i+1];
+                        if (nextTarget) {
+                            const pNames = { gemini: 'Gemini', groq: 'Groq', openrouter: 'OpenRouter' };
+                            const currName = pNames[currentProvider] || currentProvider;
+                            const nextName = pNames[nextTarget.provider] || nextTarget.provider;
+                            
+                            let nextMsg = currentProvider === nextTarget.provider
+                                ? `עובר למפתח ${nextTarget.keyIndex}...`
+                                : `עובר ל-${nextName} (מפתח ${nextTarget.keyIndex})...`;
 
-                        for (const model of models) {
-                            try {
-                                const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
-                                    method: 'POST',
-                                    headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ model, temperature: 0.1, messages: [{ role: 'user', content: systemPrompt }], response_format: { type: 'json_object' } })
-                                }, 30000);
-                                const rd = await res.json();
-                                if (rd.error) throw new Error(rd.error.message);
-                                const rawText = rd.choices[0].message.content;
-                                const jm = rawText.match(/\{[\s\S]*\}/);
-                                if (!jm) throw new Error('No valid JSON');
-                                jsonString = jm[0];
-                                JSON.parse(jsonString);
-                                success = true;
-                                usedModelName = `⚡ Groq (${model})`;
-                                window.dynamicGroqModels = [model];
-                                break;
-                            } catch (err) {
-                                lastError = err.message;
-                                if (isQuotaError(err.message)) { 
-                                    quotaExhausted = true; 
-                                    window.dynamicGroqModels = null; 
-                                    break;
-                                }
-                                console.warn(`Groq [${model}]:`, err.message);
-                            }
-                        }
-                    }
+                            if (fatalKeyError) {
+                                showToast(`⚠️ בעיית הרשאה/מכסה ב-${currName}. ${nextMsg}`, null, 3500, fallbackToastId, true);
+                            } else {
+                                const shortErr = lastError.length > 40 ? lastError.substring(0, 40) + '...' : lastError;
+                                showToast(`⚠️ שגיאה ב-${currName} (${shortErr}). ${nextMsg}`, null, 3500, fallbackToastId, true);
+                            }
+                        }
+                    }
+                }
 
-                    else if (currentProvider === 'openrouter') {
-                        const models = [
-                            'google/gemini-2.0-flash-lite-preview-02-05:free',
-                            'meta-llama/llama-3.3-70b-instruct:free',
-                            'qwen/qwen-2.5-coder-32b-instruct:free',
-                            'deepseek/deepseek-chat:free'
-                        ];
-                        for (const model of models) {
-                            try {
-                                const res = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
-                                    method: 'POST',
-                                    headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': window.location.href },
-                                    body: JSON.stringify({ model, temperature: 0.1, messages: [{ role: 'user', content: systemPrompt }], response_format: { type: 'json_object' } })
-                                }, 30000);
-                                const rd = await res.json();
-                                if (rd.error) throw new Error(rd.error.message);
-                                const rawText = rd.choices[0].message.content;
-                                const jm = rawText.match(/\{[\s\S]*\}/);
-                                if (!jm) throw new Error('No valid JSON');
-                                jsonString = jm[0];
-                                JSON.parse(jsonString);
-                                success = true;
-                                usedModelName = `🌐 OpenRouter (${model.split('/').pop()})`;
-                                break;
-                            } catch (err) {
-                                lastError = err.message;
-                                if (isQuotaError(err.message)) { 
-                                    quotaExhausted = true; 
-                                    break;
-                                }
-                                console.warn(`OpenRouter [${model}]:`, err.message);
-                            }
-                        }
-                    }
+                if (!success) throw new Error('כל המפתחות נכשלו: ' + lastError);
 
-                    if (!success) {
-                        const nextTarget = fallbackChain[i+1];
-                        if (nextTarget) {
-                            const pNames = { gemini: 'Gemini', groq: 'Groq', openrouter: 'OpenRouter' };
-                            const currName = pNames[currentProvider] || currentProvider;
-                            const nextName = pNames[nextTarget.provider] || nextTarget.provider;
-                            
-                            let nextMsg = currentProvider === nextTarget.provider
-                                ? `עובר למפתח ${nextTarget.keyIndex}...`
-                                : `עובר ל-${nextName} (מפתח ${nextTarget.keyIndex})...`;
+                jsonString = jsonString.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+                const jm2 = jsonString.match(/\{[\s\S]*\}/);
+                if (!jm2) throw new Error('לא נמצא JSON תקין');
+                const parsed = JSON.parse(jm2[0]);
 
-                            if (quotaExhausted) {
-                                showToast(`⚠️ המכסה הסתיימה ב-${currName} (מפתח ${keyIndex}). ${nextMsg}`, null, 3500, null, true);
-                            } else {
-                                showToast(`⚠️ שגיאה ב-${currName} (מפתח ${keyIndex}). ${nextMsg}`, null, 3500, null, true);
-                            }
-                        }
-                    }
-                }
+                if (isWebsite && /(?:t\.me|telegram\.me)\//i.test(cleanContent) && parsed.status === 'dead') {
+                    if (/\d[\d\s,.]+\s*(?:member|subscriber|participant|חברים|מנויים)/i.test(contentToAnalyze))
+                        parsed.status = 'active';
+                }
 
-                if (!success) throw new Error('כל הספקים נכשלו: ' + lastError);
+                const ci = state.items.find(i => i.id === id);
+                if (ci) {
+                    ci.aiSummary  = parsed.summary || 'לא התקבל סיכום.';
+                    ci.siteStatus = isWebsite ? (parsed.status || 'active') : 'text';
+                    ci.aiTags     = Array.isArray(parsed.tags) ? parsed.tags : [];
+                    ci.aiModel    = usedModelName;
+                    ci.updatedAt  = nowIso();
+                }
 
-                jsonString = jsonString.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-                const jm2 = jsonString.match(/\{[\s\S]*\}/);
-                if (!jm2) throw new Error('לא נמצא JSON תקין');
-                const parsed = JSON.parse(jm2[0]);
-
-                if (isWebsite && /(?:t\.me|telegram\.me)\//i.test(cleanContent) && parsed.status === 'dead') {
-                    if (/\d[\d\s,.]+\s*(?:member|subscriber|participant|חברים|מנויים)/i.test(contentToAnalyze))
-                        parsed.status = 'active';
-                }
-
-                const ci = state.items.find(i => i.id === id);
-                if (ci) {
-                    ci.aiSummary  = parsed.summary || 'לא התקבל סיכום.';
-                    ci.siteStatus = isWebsite ? (parsed.status || 'active') : 'text';
-                    ci.aiTags     = Array.isArray(parsed.tags) ? parsed.tags : [];
-                    ci.aiModel    = usedModelName;
-                    ci.updatedAt  = nowIso();
-                }
-
-            } catch (e) {
-                console.error('[AI] Error:', e);
-                const ci = state.items.find(i => i.id === id);
-                if (ci) {
-                    ci.siteStatus = ci.type === 'link' ? 'active' : 'text';
-                    ci.aiSummary  = (e.name === 'AbortError' || (e.message || '').includes('abort'))
-                        ? 'הסריקה בוטלה.' : 'שגיאה: ' + e.message;
-                    ci.aiTags     = [];
-                    ci.updatedAt  = nowIso();
-                }
-            } finally {
-                const ci = state.items.find(i => i.id === id);
-                if (ci) {
-                    ci.isScanning = false;
-                    await saveItemToCloud(ci);
-                }
-            }
-        };
-
+            } catch (e) {
+                console.error('[AI] Error:', e);
+                const ci = state.items.find(i => i.id === id);
+                if (ci) {
+                    ci.siteStatus = ci.type === 'link' ? 'active' : 'text';
+                    ci.aiSummary  = (e.name === 'AbortError' || (e.message || '').includes('abort'))
+                        ? 'הסריקה בוטלה.' : 'שגיאה: ' + e.message;
+                    ci.aiTags     = [];
+                    ci.updatedAt  = nowIso();
+                }
+            } finally {
+                const ci = state.items.find(i => i.id === id);
+                if (ci) {
+                    ci.isScanning = false;
+                    await saveItemToCloud(ci);
+                }
+            }
+        };
         document.getElementById('bulkAiScanBtn')?.addEventListener('click', async () => {
             if (!navigator.onLine) return showToast('❌ לא ניתן לבצע סריקת AI מרובה ללא רשת.', null, 4000, null, true);
             const settings = getAiSettings();
