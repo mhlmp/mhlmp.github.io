@@ -1450,13 +1450,11 @@
             closeAllMenus();
         });
 
-      function isQuotaError(msg) {
+        function isQuotaError(msg) {
             const l = (msg || '').toLowerCase();
             return l.includes('quota') || l.includes('resource_exhausted') ||
                 l.includes('rate_limit') || l.includes('rate limit') ||
-                l.includes('exceeded') || l.includes('too many requests') || 
-                l.includes('429') || l.includes('401') || l.includes('403') ||
-                l.includes('unauthorized') || l.includes('api key') || l.includes('billing');
+                l.includes('exceeded') || l.includes('too many requests') || l.includes('429');
         }
 
         window.activeAiRequestController = null;
@@ -1473,12 +1471,10 @@
             if (!item) return;
 
             const settings       = getAiSettings();
-            // הגדרת המודל הראשי שמתחילים ממנו, ואחריו הגיבויים לפי הסדר
-            const preferred      = overrideProvider || settings.provider || 'gemini';
-            const allProviders   = [preferred, 'gemini', 'groq', 'openrouter'].filter((p, i, a) => p && a.indexOf(p) === i);
+            const preferred      = overrideProvider || window.lastWorkingAiProvider || settings.provider;
+            const allProviders   = [preferred, 'gemini', 'groq', 'openrouter'].filter((p, i, a) => a.indexOf(p) === i);
             const fallbackChain  = [];
 
-            // בניית שרשרת המפתחות בדיוק לפי ההיגיון שביקשת
             allProviders.forEach(p => {
                 const pKeys = Array.isArray(settings.keys[p]) ? settings.keys[p] : (settings.keys[p] ? [settings.keys[p]] : []);
                 pKeys.filter(k => k && k.trim()).forEach((k, idx) => {
@@ -1595,21 +1591,38 @@
                     ? `Type: Website content.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: You MUST keep brand names, usernames, website names, software, and technical terms in their original ENGLISH within the Hebrew summary to maximize searchability.\n2. Determine status: "active", "parked", or "dead".\n   TELEGRAM RULES:\n   - If the page contains a specific group/bot name, a description, OR a member/subscriber count (e.g., "3 members"), you MUST set status to "active".\n   - Set "dead" ONLY if the page explicitly says "not found", "expired", "invalid", or if it is a completely empty "Join Group" page with NO details at all.\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for brands/tech terms).`
                     : `Type: Text/Command.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: Keep all specific names, usernames, code, and technical terms in their original ENGLISH within the Hebrew summary.\n2. Status MUST be "text".\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for specific names/tech terms).`;
 
-                const systemPrompt = `You are a strict JSON-only API. Return ONLY valid JSON. No markdown formatting, no extra text.\nRequired format: {"summary": "...", "status": "active|parked|dead|text", "tags": ["#tag1", "#tag2", "#tag3"]}\n${promptType}\n\nContent to analyze:\n${contentToAnalyze}`;
+                const systemPrompt = `You are a strict JSON-only API. Return ONLY valid JSON. No markdown formatting, no extra text.
+Required format: {"summary": "...", "status": "active|parked|dead|text", "tags": ["#tag1", "#tag2", "#tag3"]}
+${promptType}
+
+Content to analyze:
+${contentToAnalyze}`;
 
                 let jsonString   = '';
                 let success      = false;
                 let lastError    = 'לא ניתן להגיע לאף ספק AI';
                 let usedModelName = '';
-                const fallbackToastId = 'ai-fallback-toast-' + id; // מזהה קבוע שמונע הצפת התראות
 
                 for (let i = 0; i < fallbackChain.length; i++) {
                     if (success) break;
                     const { provider: currentProvider, key: activeKey, keyIndex } = fallbackChain[i];
-                    let fatalKeyError = false;
+                    let quotaExhausted = false;
 
                     if (currentProvider === 'gemini') {
-                        const models = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+                        let models = window.dynamicGeminiModels;
+                        if (!models) {
+                            try {
+                                const req = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models?key=${activeKey}`, {}, 10000);
+                                const data = await req.json();
+                                if (data.models) {
+                                    models = data.models.filter(m => m.supportedGenerationMethods?.includes('generateContent') && m.name.includes('gemini')).map(m => m.name.replace('models/', ''));
+                                    models.sort((a, b) => (a.includes('flash') ? -1 : 1));
+                                    window.dynamicGeminiModels = models;
+                                }
+                            } catch { models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b']; }
+                        }
+                        if (!models?.length) models = ['gemini-1.5-flash'];
+
                         for (const model of models) {
                             try {
                                 const res = await fetchWithTimeout(
@@ -1618,34 +1631,43 @@
                                       body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt }] }], generationConfig: { response_mime_type: 'application/json', temperature: 0.1 } }) },
                                     30000
                                 );
-                                
-                                const rd = await res.json().catch(() => ({}));
-                                if (!res.ok) throw { message: rd.error?.message || `HTTP ${res.status}`, status: res.status };
-                                if (rd.promptFeedback?.blockReason) throw new Error(`Safety Block: ${rd.promptFeedback.blockReason}`);
-                                if (!rd.candidates?.[0]?.content?.parts?.[0]) throw new Error('Invalid response structure (possible safety block)');
-                                
+                                const rd = await res.json();
+                                if (rd.error) throw new Error(rd.error.message);
                                 const rawText = rd.candidates[0].content.parts[0].text;
                                 const jm = rawText.match(/\{[\s\S]*\}/);
                                 if (!jm) throw new Error('No valid JSON in response');
-                                
                                 jsonString = jm[0];
                                 JSON.parse(jsonString);
                                 success = true;
-                                usedModelName = `🔹 Gemini (${model.replace('gemini-', '')})`;
+                                usedModelName = `🔹 Gemini (${model})`;
+                                window.lastWorkingAiProvider = 'gemini';
+                                window.dynamicGeminiModels   = [model];
                                 break;
                             } catch (err) {
-                                lastError = err.message || 'Unknown error';
-                                // זיהוי חכם: אם זו בעיית מכסה או הרשאה, זה שורף את המפתח וקופץ הבאה. אם זו בעיה אחרת, מנסה מודל גיבוי
-                                if (err.status === 401 || err.status === 429 || err.status === 403 || isQuotaError(lastError)) { 
-                                    fatalKeyError = true; break; 
-                                }
-                                console.warn(`Gemini [${model}] failed:`, lastError);
+                                lastError = err.message;
+                                if (isQuotaError(err.message)) { quotaExhausted = true; window.dynamicGeminiModels = null; }
+                                console.warn(`Gemini [${model}]:`, err.message);
                             }
+                        }
+                        if (!success && quotaExhausted) {
+                            window.dynamicGeminiModels = null;
+                            const next = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider}...` : 'לא נותרו מפתחות.';
+                            showToast(`⚠️ נגמרו התוקנים ב-Gemini (מפתח ${keyIndex}). ${next}`, null, 5000, null, true);
+                            continue;
                         }
                     }
 
                     else if (currentProvider === 'groq') {
-                        const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+                        let models = window.dynamicGroqModels;
+                        if (!models) {
+                            try {
+                                const req = await fetchWithTimeout('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': `Bearer ${activeKey}` } }, 10000);
+                                const data = await req.json();
+                                if (data.data) { models = data.data.map(m => m.id).sort((a, b) => (a.includes('llama') ? -1 : 1)); window.dynamicGroqModels = models; }
+                            } catch { models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']; }
+                        }
+                        if (!models?.length) models = ['llama-3.3-70b-versatile'];
+
                         for (const model of models) {
                             try {
                                 const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
@@ -1653,88 +1675,73 @@
                                     headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ model, temperature: 0.1, messages: [{ role: 'user', content: systemPrompt }], response_format: { type: 'json_object' } })
                                 }, 30000);
-                                
-                                const rd = await res.json().catch(() => ({}));
-                                if (!res.ok) throw { message: rd.error?.message || `HTTP ${res.status}`, status: res.status };
-                                if (!rd.choices?.[0]?.message?.content) throw new Error('Invalid response structure');
-                                
+                                const rd = await res.json();
+                                if (rd.error) throw new Error(rd.error.message);
                                 const rawText = rd.choices[0].message.content;
                                 const jm = rawText.match(/\{[\s\S]*\}/);
                                 if (!jm) throw new Error('No valid JSON');
-                                
                                 jsonString = jm[0];
                                 JSON.parse(jsonString);
                                 success = true;
-                                usedModelName = `⚡ Groq (${model.split('-').slice(0,2).join('-')})`;
+                                usedModelName = `⚡ Groq (${model})`;
+                                window.lastWorkingAiProvider = 'groq';
+                                window.dynamicGroqModels     = [model];
                                 break;
                             } catch (err) {
-                                lastError = err.message || 'Unknown error';
-                                if (err.status === 401 || err.status === 429 || err.status === 403 || isQuotaError(lastError)) { 
-                                    fatalKeyError = true; break; 
-                                }
-                                console.warn(`Groq [${model}] failed:`, lastError);
+                                lastError = err.message;
+                                if (isQuotaError(err.message)) { quotaExhausted = true; window.dynamicGroqModels = null; }
+                                console.warn(`Groq [${model}]:`, err.message);
                             }
+                        }
+                        if (!success && quotaExhausted) {
+                            window.dynamicGroqModels = null;
+                            const next = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider}...` : 'לא נותרו מפתחות.';
+                            showToast(`⚠️ נגמרו התוקנים ב-Groq (מפתח ${keyIndex}). ${next}`, null, 5000, null, true);
+                            continue;
                         }
                     }
 
                     else if (currentProvider === 'openrouter') {
-                        const models = ['google/gemini-2.0-flash-lite-preview-02-05:free', 'meta-llama/llama-3.3-70b-instruct:free', 'qwen/qwen-2.5-coder-32b-instruct:free'];
+                        const models = [
+                            'google/gemini-2.0-flash-lite-preview-02-05:free',
+                            'meta-llama/llama-3.3-70b-instruct:free',
+                            'qwen/qwen-2.5-coder-32b-instruct:free',
+                            'deepseek/deepseek-chat:free'
+                        ];
+                        let quotaExhaustedOR = false;
                         for (const model of models) {
                             try {
                                 const res = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
                                     method: 'POST',
                                     headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': window.location.href },
-                                    body: JSON.stringify({ model, temperature: 0.1, messages: [{ role: 'user', content: systemPrompt }] })
+                                    body: JSON.stringify({ model, temperature: 0.1, messages: [{ role: 'user', content: systemPrompt }], response_format: { type: 'json_object' } })
                                 }, 30000);
-                                
-                                const rd = await res.json().catch(() => ({}));
-                                if (!res.ok) throw { message: rd.error?.message || `HTTP ${res.status}`, status: res.status };
-                                if (!rd.choices?.[0]?.message?.content) throw new Error('Invalid response structure');
-                                
+                                const rd = await res.json();
+                                if (rd.error) throw new Error(rd.error.message);
                                 const rawText = rd.choices[0].message.content;
                                 const jm = rawText.match(/\{[\s\S]*\}/);
                                 if (!jm) throw new Error('No valid JSON');
-                                
                                 jsonString = jm[0];
                                 JSON.parse(jsonString);
                                 success = true;
-                                usedModelName = `🌐 OpenRouter (${model.split('/').pop().replace(':free','')})`;
+                                usedModelName = `🌐 OpenRouter (${model.split('/').pop()})`;
+                                window.lastWorkingAiProvider = 'openrouter';
                                 break;
                             } catch (err) {
-                                lastError = err.message || 'Unknown error';
-                                if (err.status === 401 || err.status === 429 || err.status === 403 || isQuotaError(lastError)) { 
-                                    fatalKeyError = true; break; 
-                                }
-                                console.warn(`OpenRouter [${model}] failed:`, lastError);
+                                lastError = err.message;
+                                if (isQuotaError(err.message)) quotaExhaustedOR = true;
+                                console.warn(`OpenRouter [${model}]:`, err.message);
                             }
                         }
-                    }
-
-                    // מנהל את קפיצות המפתחות בממשק, כך שהמשתמש רואה בדיוק מה קורה
-                    if (!success) {
-                        const nextTarget = fallbackChain[i+1];
-                        if (nextTarget) {
-                            const pNames = { gemini: 'Gemini', groq: 'Groq', openrouter: 'OpenRouter' };
-                            const currName = pNames[currentProvider] || currentProvider;
-                            const nextName = pNames[nextTarget.provider] || nextTarget.provider;
-                            
-                            let nextMsg = currentProvider === nextTarget.provider
-                                ? `עובר למפתח ${nextTarget.keyIndex}...`
-                                : `עובר ל-${nextName} (מפתח ${nextTarget.keyIndex})...`;
-
-                            if (fatalKeyError) {
-                                showToast(`⚠️ בעיית הרשאה/מכסה ב-${currName}. ${nextMsg}`, null, 3500, fallbackToastId, true);
-                            } else {
-                                const shortErr = lastError.length > 40 ? lastError.substring(0, 40) + '...' : lastError;
-                                showToast(`⚠️ שגיאה ב-${currName} (${shortErr}). ${nextMsg}`, null, 3500, fallbackToastId, true);
-                            }
-                            // דיליי קטן כדי שההודעות לא ידרסו אחת את השנייה באלפית שנייה
-                            await new Promise(r => setTimeout(r, 600));
+                        if (!success && quotaExhaustedOR) {
+                            const next = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider}...` : 'לא נותרו מפתחות.';
+                            showToast(`⚠️ נגמרו התוקנים ב-OpenRouter (מפתח ${keyIndex}). ${next}`, null, 5000, null, true);
+                            continue;
                         }
                     }
                 }
 
-                if (!success) throw new Error('כל המפתחות נכשלו: ' + lastError);
+                if (!success) throw new Error('כל הספקים נכשלו: ' + lastError);
 
                 jsonString = jsonString.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
                 const jm2 = jsonString.match(/\{[\s\S]*\}/);
@@ -1773,6 +1780,7 @@
                 }
             }
         };
+
         document.getElementById('bulkAiScanBtn')?.addEventListener('click', async () => {
             if (!navigator.onLine) return showToast('❌ לא ניתן לבצע סריקת AI מרובה ללא רשת.', null, 4000, null, true);
             const settings = getAiSettings();
