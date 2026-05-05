@@ -503,6 +503,10 @@
                     <button class="action-btn btn-txt drop-trigger" data-target="txtMenu">📄 טקסט ▼</button>
                     <div id="txtMenu" class="dropdown-content">
                         <button id="exportTxtBtn">📤 ייצוא רשימה ל-TXT</button>
+                        <label id="excludePrivateLabel" style="display: none; padding: 12px 18px; cursor: pointer; font-size: 14px; color: var(--accent-gold); text-align: right;">
+                            <input type="checkbox" id="excludePrivateCheckbox" style="transform: scale(1.1); margin-left: 8px; cursor: pointer;">
+                            החרג קטגוריה "פרטי"
+                        </label>
                         <div class="dropdown-divider"></div>
                        <label for="smartImportInput">🔄 <b>ייבוא חכם (מיזוג)</b></label>
                         <input type="file" id="smartImportInput" accept=".txt">
@@ -1014,7 +1018,7 @@
             }));
         }
 
-        function handleLockScreen(isLoggedIn) {
+       function handleLockScreen(isLoggedIn) {
             document.getElementById('loggedInView').style.display  = isLoggedIn ? 'flex' : 'none';
             document.getElementById('loggedOutView').style.display = isLoggedIn ? 'none' : 'flex';
             
@@ -1026,6 +1030,22 @@
                 welcomeScreen.style.display = 'flex';
                 welcomeScreen.classList.add('visible');
                 protectedContent.classList.add('locked');
+                document.getElementById('itemCount').textContent = 'ממתין להתחברות...';
+                if (progressCircle) { progressCircle.style.transition = 'none'; progressCircle.style.strokeDashoffset = '0'; }
+                return;
+            }
+
+            const isAdmin = state.user && (state.user.email === 'meirhadad74@gmail.com' || state.user.email === 'meirhadad75@gmail.com');
+            if (isAdmin) {
+                welcomeScreen.style.display = 'none';
+                welcomeScreen.classList.remove('visible');
+                protectedContent.classList.remove('locked');
+                return;
+            }
+
+            welcomeScreen.style.display = 'flex';
+            welcomeScreen.classList.add('visible');
+            protectedContent.classList.add('locked');
                 document.getElementById('itemCount').textContent = 'ממתין להתחברות...';
                 if (progressCircle) { progressCircle.style.transition = 'none'; progressCircle.style.strokeDashoffset = '0'; }
                 return;
@@ -1459,7 +1479,7 @@
 
         window.activeAiRequestController = null;
 
-        window.scanSingleItem = async function (id, overrideProvider = null, forceUrlOnly = false) {
+       window.scanSingleItem = async function (id, overrideProvider = null, forceUrlOnly = false, strictMode = false) {
             if (!navigator.onLine) {
                 showToast('❌ לא ניתן לבצע סריקת AI ללא אינטרנט.', null, 4000, null, true);
                 const ci = state.items.find(i => i.id === id);
@@ -1472,7 +1492,7 @@
 
             const settings       = getAiSettings();
             const preferred      = overrideProvider || window.lastWorkingAiProvider || settings.provider;
-            const allProviders   = [preferred, 'gemini', 'groq', 'openrouter'].filter((p, i, a) => a.indexOf(p) === i);
+            const allProviders   = (strictMode || overrideProvider) ? [preferred] : [preferred, 'gemini', 'groq', 'openrouter'].filter((p, i, a) => a.indexOf(p) === i);
             const fallbackChain  = [];
 
             allProviders.forEach(p => {
@@ -2207,8 +2227,11 @@ ${contentToAnalyze}`;
             closeAllMenus();
         }
 
-        function exportTxt() {
-            const data = state.items.map(i => {
+       function exportTxt() {
+            const excludePrivate = document.getElementById('excludePrivateCheckbox')?.checked;
+            const itemsToExport = excludePrivate ? state.items.filter(i => i.category !== 'פרטי') : state.items;
+
+            const data = itemsToExport.map(i => {
                 const safe = (str) => (str || '').replace(/\|/g, '-').replace(/\n/g, '[NEWLINE]');
                 return `${i.id} | ${safe(i.content)} | ${safe(i.description)} | ${safe(i.category || 'כללי')} | ${safe(i.note)} | ${safe(i.aiSummary)} | ${safe(i.siteStatus || 'active')} | ${(i.aiTags || []).join(',')}`;
             }).join('\n');
@@ -2269,10 +2292,16 @@ ${contentToAnalyze}`;
             if (aiMenu) aiMenu.style.display = 'none';
         }
 
-        function updateCategoryDropdowns() {
+       function updateCategoryDropdowns() {
             const cats    = new Set(state.items.map(i => i.category || 'כללי').filter(Boolean));
             const select  = document.getElementById('categoryFilter');
             const datalist = document.getElementById('categoriesDatalist');
+            
+            const excludeLabel = document.getElementById('excludePrivateLabel');
+            if (excludeLabel) {
+                excludeLabel.style.display = cats.has('פרטי') ? 'block' : 'none';
+            }
+
             if (!select || !datalist) return;
             const currentVal = select.value;
             let html = '<option value="">📂 כל הקטגוריות</option>';
@@ -2512,14 +2541,19 @@ ${contentToAnalyze}`;
             localStorage.setItem('aiQuickSettings', JSON.stringify(qs));
         });
 
-        document.querySelectorAll('.ai-provider-btn').forEach(btn => {
+       document.querySelectorAll('.ai-provider-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const selectedProvider = btn.getAttribute('data-provider');
                 const isUrlOnly = document.getElementById('aiUrlOnlyCheckbox')?.checked || false;
                 localStorage.setItem('aiQuickSettings', JSON.stringify({ provider: selectedProvider, urlOnly: isUrlOnly }));
                 document.getElementById('aiFloatingMenu').style.display = 'none';
-                showToast(`✅ הגדרות AI עודכנו. לחץ ✨ לסריקה.`);
+                
+                if (window.activeAiScanId) {
+                    scanSingleItem(window.activeAiScanId, selectedProvider, isUrlOnly, true);
+                } else {
+                    showToast(`✅ הגדרות AI עודכנו.`);
+                }
             });
         });
 
