@@ -499,15 +499,9 @@
                         <button id="exportJsonBtn">📤 ייצוא לקובץ JSON</button>
                     </div>
                 </div>
-               <div class="dropdown">
+                <div class="dropdown">
                     <button class="action-btn btn-txt drop-trigger" data-target="txtMenu">📄 טקסט ▼</button>
                     <div id="txtMenu" class="dropdown-content">
-                        <div id="excludePrivateContainer" style="display: none; padding: 8px 15px; border-bottom: 1px solid rgba(127,127,127,0.1);">
-                            <label style="display: flex; align-items: center; justify-content: flex-end; gap: 8px; cursor: pointer; color: var(--text-primary); font-size: 13px; padding: 0; margin: 0; width: 100%;">
-                                החרג "שלי - פרטי"
-                                <input type="checkbox" id="excludePrivateCheckbox" checked style="transform: scale(1.2); cursor: pointer; accent-color: var(--primary-color); margin: 0;">
-                            </label>
-                        </div>
                         <button id="exportTxtBtn">📤 ייצוא רשימה ל-TXT</button>
                         <div class="dropdown-divider"></div>
                        <label for="smartImportInput">🔄 <b>ייבוא חכם (מיזוג)</b></label>
@@ -1028,29 +1022,20 @@
             const protectedContent = document.getElementById('protectedContent');
             const progressCircle  = document.querySelector('.timer-ring .progress');
             
-           if (!isLoggedIn) {
-                    welcomeScreen.style.display = 'flex';
-                    welcomeScreen.classList.add('visible');
-                    protectedContent.classList.add('locked');
-                    document.getElementById('itemCount').textContent = 'ממתין להתחברות...';
-                    if (progressCircle) { progressCircle.style.transition = 'none'; progressCircle.style.strokeDashoffset = '0'; }
-                    return;
-                }
-
-                const userEmail = state.user?.email;
-                if (userEmail === "meirhadad74@gmail.com" || userEmail === "meirhadad75@gmail.com") {
-                    welcomeScreen.style.display = 'none';
-                    welcomeScreen.classList.remove('visible');
-                    protectedContent.classList.remove('locked');
-                    return;
-                }
-
+            if (!isLoggedIn) {
                 welcomeScreen.style.display = 'flex';
                 welcomeScreen.classList.add('visible');
                 protectedContent.classList.add('locked');
-                
-                let secondsLeft = 3;
+                document.getElementById('itemCount').textContent = 'ממתין להתחברות...';
+                if (progressCircle) { progressCircle.style.transition = 'none'; progressCircle.style.strokeDashoffset = '0'; }
+                return;
+            }
+
+            welcomeScreen.style.display = 'flex';
+            welcomeScreen.classList.add('visible');
+            protectedContent.classList.add('locked');
             
+            let secondsLeft = 3;
             if (progressCircle) {
                 progressCircle.style.transition = 'stroke-dashoffset 1s linear';
                 progressCircle.style.strokeDashoffset = '283';
@@ -1602,10 +1587,10 @@
                     }
                 }
 
-              const promptType = isWebsite
+                const promptType = isWebsite
                     ? `Type: Website content.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: You MUST keep brand names, usernames, website names, software, and technical terms in their original ENGLISH within the Hebrew summary to maximize searchability.\n2. Determine status: "active", "parked", or "dead".\n   TELEGRAM RULES:\n   - If the page contains a specific group/bot name, a description, OR a member/subscriber count (e.g., "3 members"), you MUST set status to "active".\n   - Set "dead" ONLY if the page explicitly says "not found", "expired", "invalid", or if it is a completely empty "Join Group" page with NO details at all.\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for brands/tech terms).`
                     : `Type: Text/Command.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: Keep all specific names, usernames, code, and technical terms in their original ENGLISH within the Hebrew summary.\n2. Status MUST be "text".\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for specific names/tech terms).`;
-                
+
                 const systemPrompt = `You are a strict JSON-only API. Return ONLY valid JSON. No markdown formatting, no extra text.
 Required format: {"summary": "...", "status": "active|parked|dead|text", "tags": ["#tag1", "#tag2", "#tag3"]}
 ${promptType}
@@ -1768,14 +1753,10 @@ ${contentToAnalyze}`;
                         parsed.status = 'active';
                 }
 
-              const ci = state.items.find(i => i.id === id);
+                const ci = state.items.find(i => i.id === id);
                 if (ci) {
                     ci.aiSummary  = parsed.summary || 'לא התקבל סיכום.';
-                    
-                    let finalStatus = parsed.status || 'active';
-                    if (isWebsite && finalStatus === 'text') finalStatus = 'active'; // Force website to not be text
-                    ci.siteStatus = isWebsite ? finalStatus : 'text';
-                    
+                    ci.siteStatus = isWebsite ? (parsed.status || 'active') : 'text';
                     ci.aiTags     = Array.isArray(parsed.tags) ? parsed.tags : [];
                     ci.aiModel    = usedModelName;
                     ci.updatedAt  = nowIso();
@@ -2226,13 +2207,8 @@ ${contentToAnalyze}`;
             closeAllMenus();
         }
 
-       function exportTxt() {
-            const excludeCheckbox = document.getElementById('excludePrivateCheckbox');
-            const shouldExclude = excludeCheckbox && excludeCheckbox.checked && excludeCheckbox.closest('#excludePrivateContainer').style.display !== 'none';
-            
-            const itemsToExport = shouldExclude ? state.items.filter(i => i.category !== 'שלי - פרטי') : state.items;
-
-            const data = itemsToExport.map(i => {
+        function exportTxt() {
+            const data = state.items.map(i => {
                 const safe = (str) => (str || '').replace(/\|/g, '-').replace(/\n/g, '[NEWLINE]');
                 return `${i.id} | ${safe(i.content)} | ${safe(i.description)} | ${safe(i.category || 'כללי')} | ${safe(i.note)} | ${safe(i.aiSummary)} | ${safe(i.siteStatus || 'active')} | ${(i.aiTags || []).join(',')}`;
             }).join('\n');
@@ -2293,16 +2269,10 @@ ${contentToAnalyze}`;
             if (aiMenu) aiMenu.style.display = 'none';
         }
 
-       function updateCategoryDropdowns() {
+        function updateCategoryDropdowns() {
             const cats    = new Set(state.items.map(i => i.category || 'כללי').filter(Boolean));
             const select  = document.getElementById('categoryFilter');
             const datalist = document.getElementById('categoriesDatalist');
-            
-            const excludeContainer = document.getElementById('excludePrivateContainer');
-            if (excludeContainer) {
-                excludeContainer.style.display = cats.has('שלי - פרטי') ? 'block' : 'none';
-            }
-           
             if (!select || !datalist) return;
             const currentVal = select.value;
             let html = '<option value="">📂 כל הקטגוריות</option>';
