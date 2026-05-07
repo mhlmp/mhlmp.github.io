@@ -503,6 +503,12 @@
                     <button class="action-btn btn-txt drop-trigger" data-target="txtMenu">📄 טקסט ▼</button>
                     <div id="txtMenu" class="dropdown-content">
                         <button id="exportTxtBtn">📤 ייצוא רשימה ל-TXT</button>
+                        <div id="excludePrivateWrapper" style="display:none; padding: 8px 18px; text-align: right; background: rgba(127,127,127,0.05);">
+                            <label style="display:flex; align-items:center; justify-content:flex-end; gap:8px; cursor:pointer; font-size:13px; padding:0; color:var(--text-primary);">
+                                החרג 'שלי - פרטי'
+                                <input type="checkbox" id="excludePrivateCb" style="cursor:pointer; transform:scale(1.2); accent-color:var(--primary-color);">
+                            </label>
+                        </div>
                         <div class="dropdown-divider"></div>
                        <label for="smartImportInput">🔄 <b>ייבוא חכם (מיזוג)</b></label>
                         <input type="file" id="smartImportInput" accept=".txt">
@@ -689,6 +695,9 @@
 
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
         const SCHEMA_VERSION = 5;
+
+        // הוספת האדמינים למעקף ואבטחה
+        const ADMIN_EMAILS = ["meirhadad74@gmail.com", "meirhadad75@gmail.com"];
 
         let app, auth, db;
         let deferredPrompt;
@@ -1028,6 +1037,14 @@
                 protectedContent.classList.add('locked');
                 document.getElementById('itemCount').textContent = 'ממתין להתחברות...';
                 if (progressCircle) { progressCircle.style.transition = 'none'; progressCircle.style.strokeDashoffset = '0'; }
+                return;
+            }
+
+            // פריצת דרך ודילוג על טיימר האזהרה למשתמשים המורשים
+            if (state.user && ADMIN_EMAILS.includes(state.user.email)) {
+                welcomeScreen.style.display = 'none';
+                welcomeScreen.classList.remove('visible');
+                protectedContent.classList.remove('locked');
                 return;
             }
 
@@ -1471,8 +1488,10 @@
             if (!item) return;
 
             const settings       = getAiSettings();
-            const preferred      = overrideProvider || window.lastWorkingAiProvider || settings.provider;
-            const allProviders   = [preferred, 'gemini', 'groq', 'openrouter'].filter((p, i, a) => a.indexOf(p) === i);
+            
+            // שינוי קריטי: המנוע הנבחר (מהגדרות או ממעקף) הוא היחיד שבו משתמשים. הסרנו את הנפילה לספקים אחרים.
+            const preferred      = overrideProvider || settings.provider;
+            const allProviders   = [preferred];
             const fallbackChain  = [];
 
             allProviders.forEach(p => {
@@ -1483,7 +1502,7 @@
             });
 
             if (fallbackChain.length === 0)
-                return alert('עליך להזין לפחות מפתח API אחד בהגדרות ה-AI.');
+                return alert('עליך להזין לפחות מפתח API אחד במנוע שבחרת תחת הגדרות ה-AI.');
 
             item.isScanning = true;
             renderList();
@@ -1600,7 +1619,7 @@ ${contentToAnalyze}`;
 
                 let jsonString   = '';
                 let success      = false;
-                let lastError    = 'לא ניתן להגיע לאף ספק AI';
+                let lastError    = 'לא ניתן להגיע לספק ה-AI הנבחר';
                 let usedModelName = '';
 
                 for (let i = 0; i < fallbackChain.length; i++) {
@@ -1651,7 +1670,7 @@ ${contentToAnalyze}`;
                         }
                         if (!success && quotaExhausted) {
                             window.dynamicGeminiModels = null;
-                            const next = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider}...` : 'לא נותרו מפתחות.';
+                            const next = fallbackChain[i+1] ? `עובר למפתח הבא...` : 'לא נותרו מפתחות.';
                             showToast(`⚠️ נגמרו התוקנים ב-Gemini (מפתח ${keyIndex}). ${next}`, null, 5000, null, true);
                             continue;
                         }
@@ -1695,7 +1714,7 @@ ${contentToAnalyze}`;
                         }
                         if (!success && quotaExhausted) {
                             window.dynamicGroqModels = null;
-                            const next = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider}...` : 'לא נותרו מפתחות.';
+                            const next = fallbackChain[i+1] ? `עובר למפתח הבא...` : 'לא נותרו מפתחות.';
                             showToast(`⚠️ נגמרו התוקנים ב-Groq (מפתח ${keyIndex}). ${next}`, null, 5000, null, true);
                             continue;
                         }
@@ -1734,14 +1753,14 @@ ${contentToAnalyze}`;
                             }
                         }
                         if (!success && quotaExhaustedOR) {
-                            const next = fallbackChain[i+1] ? `עובר ל-${fallbackChain[i+1].provider}...` : 'לא נותרו מפתחות.';
+                            const next = fallbackChain[i+1] ? `עובר למפתח הבא...` : 'לא נותרו מפתחות.';
                             showToast(`⚠️ נגמרו התוקנים ב-OpenRouter (מפתח ${keyIndex}). ${next}`, null, 5000, null, true);
                             continue;
                         }
                     }
                 }
 
-                if (!success) throw new Error('כל הספקים נכשלו: ' + lastError);
+                if (!success) throw new Error('ספק ה-AI נכשל: ' + lastError);
 
                 jsonString = jsonString.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
                 const jm2 = jsonString.match(/\{[\s\S]*\}/);
@@ -1967,6 +1986,7 @@ ${contentToAnalyze}`;
             item.updatedAt   = nowIso();
             
             document.getElementById('editModal').style.display = 'none';
+            renderList();
             await saveItemToCloud(item);
             
             // מציגים הודעה עם אפשרות לביטול (Undo)
@@ -1975,6 +1995,7 @@ ${contentToAnalyze}`;
                 if (currentItem) {
                     Object.assign(currentItem, originalItemSnapshot); // משחזרים למצב המקורי
                     currentItem.updatedAt = nowIso(); // מעדכנים תאריך כדי שהענן יקבל את השינוי
+                    renderList();
                     await saveItemToCloud(currentItem);
                     showToast('↩️ העריכה בוטלה בהצלחה');
                 }
@@ -2006,6 +2027,7 @@ ${contentToAnalyze}`;
             item.updatedAt  = nowIso();
             
             document.getElementById('editAiModal').style.display = 'none';
+            renderList();
             await saveItemToCloud(item);
             
             // מציגים הודעה עם אפשרות לביטול (Undo)
@@ -2014,6 +2036,7 @@ ${contentToAnalyze}`;
                 if (currentItem) {
                     Object.assign(currentItem, originalItemSnapshot); // משחזרים למצב המקורי
                     currentItem.updatedAt = nowIso();
+                    renderList();
                     await saveItemToCloud(currentItem);
                     showToast('↩️ עריכת ה-AI בוטלה בהצלחה');
                 }
@@ -2208,7 +2231,13 @@ ${contentToAnalyze}`;
         }
 
         function exportTxt() {
-            const data = state.items.map(i => {
+            const excludeCb = document.getElementById('excludePrivateCb');
+            const shouldExclude = excludeCb ? excludeCb.checked : false;
+
+            const data = state.items.filter(i => {
+                if (shouldExclude && i.category === 'שלי - פרטי') return false;
+                return true;
+            }).map(i => {
                 const safe = (str) => (str || '').replace(/\|/g, '-').replace(/\n/g, '[NEWLINE]');
                 return `${i.id} | ${safe(i.content)} | ${safe(i.description)} | ${safe(i.category || 'כללי')} | ${safe(i.note)} | ${safe(i.aiSummary)} | ${safe(i.siteStatus || 'active')} | ${(i.aiTags || []).join(',')}`;
             }).join('\n');
@@ -2273,6 +2302,13 @@ ${contentToAnalyze}`;
             const cats    = new Set(state.items.map(i => i.category || 'כללי').filter(Boolean));
             const select  = document.getElementById('categoryFilter');
             const datalist = document.getElementById('categoriesDatalist');
+            
+            // בדיקה אם להציג את אופציית החרגת הקטגוריה בתפריט TXT
+            const excludeWrapper = document.getElementById('excludePrivateWrapper');
+            if (excludeWrapper) {
+                excludeWrapper.style.display = cats.has('שלי - פרטי') ? 'block' : 'none';
+            }
+
             if (!select || !datalist) return;
             const currentVal = select.value;
             let html = '<option value="">📂 כל הקטגוריות</option>';
@@ -2691,12 +2727,10 @@ ${contentToAnalyze}`;
             showToast(`📂 ${count} פריטים הועברו ל-"${catName}"`);
         });
 
-        const ADMIN_EMAIL = "meirhadad74@gmail.com";
-
         setInterval(() => {
             const overlay = document.getElementById('devtools-overlay');
             if (!overlay) return;
-            if (state.isOffline || state.user?.email === ADMIN_EMAIL) { overlay.style.display = 'none'; return; }
+            if (state.isOffline || (state.user && ADMIN_EMAILS.includes(state.user.email))) { overlay.style.display = 'none'; return; }
             
             const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
             if (isTouch) {
@@ -2710,12 +2744,12 @@ ${contentToAnalyze}`;
         }, 2000);
 
         document.addEventListener('contextmenu', e => {
-            if (state.isOffline || state.user?.email === ADMIN_EMAIL) return;
+            if (state.isOffline || (state.user && ADMIN_EMAILS.includes(state.user.email))) return;
             if (!state.isSelectionMode && !e.target.closest('.card-actions')) e.preventDefault();
         });
 
         document.addEventListener('keydown', e => {
-            if (state.isOffline || state.user?.email === ADMIN_EMAIL) return;
+            if (state.isOffline || (state.user && ADMIN_EMAILS.includes(state.user.email))) return;
             if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I','J','C'].includes(e.key)) || (e.ctrlKey && e.key === 'u'))
                 e.preventDefault();
         });
