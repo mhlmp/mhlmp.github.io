@@ -1530,10 +1530,19 @@
                 if (isWebsite && !/^https?:\/\//i.test(cleanContent))
                     cleanContent = 'https://' + cleanContent;
 
-                let contentToAnalyze = cleanContent;
+               let contentToAnalyze = cleanContent;
 
                 if (isWebsite && forceUrlOnly) {
-                    contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: User bypassed page scanning. Analyze based on URL and description only.`;
+                    const domainMatch = cleanContent.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?]+)/im);
+                    const domain = domainMatch ? domainMatch[1] : cleanContent;
+                    
+                    contentToAnalyze = `[SYSTEM NOTE: URL-ONLY ANALYSIS MODE]
+Target URL: ${cleanContent}
+Domain Name: ${domain}
+User Description: ${item.description || 'No description provided'}
+Task: The user explicitly requested to analyze this item based ONLY on the URL and Domain Name, without scraping page content. 
+Use your internal knowledge base as a Senior Tech Expert to deduce and explain the purpose, features, and target audience of this specific website or service. 
+Provide a DETAILED, rich, and highly professional summary (2-3 sentences) in HEBREW. DO NOT give a short or lazy answer. Assume status is "active".`;
                 } else if (isWebsite) {
                     const proxies = [
                         u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
@@ -1617,12 +1626,12 @@
                     }
                 }
 
-               const promptType = isWebsite
-                    ? `Type: Website content.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: Keep brand names and tech terms in original ENGLISH. If the content seems to be an error, access denied, or unreadable binary, DO NOT state that. Instead, logically guess the site's purpose from its URL/Domain (e.g., "openclaw.ai" -> AI tool) and keep summary helpful.\n2. Determine status: "active", "parked", or "dead".\n   TELEGRAM RULES:\n   - Set "active" if there is a group name/member count.\n   - Set "dead" ONLY if explicitly "not found"/"expired".\n3. Generate 3-5 relevant hashtags mixing Hebrew/English.`
-                    : `Type: Text/Command.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: Keep all specific names, usernames, code, and technical terms in original ENGLISH.\n2. Status MUST be "text".\n3. Generate 3-5 relevant hashtags mixing Hebrew and English tags.`;
+              const promptType = isWebsite
+                    ? `Type: Website content.\nTasks:\n1. Write a DETAILED and COMPREHENSIVE summary (2-3 sentences) in HEBREW explaining exactly what this website does, its features, and its target audience. CRITICAL: Keep brand names and tech terms in original ENGLISH. If content is blocked/error, deduce the detailed purpose logically from the URL/Domain.\n2. Determine status: "active", "parked", or "dead".\n   TELEGRAM RULES: Set "active" if there is a group name/member count. Set "dead" ONLY if explicitly "not found"/"expired".\n3. Generate 3-5 relevant hashtags mixing Hebrew/English.`
+                    : `Type: Text/Command.\nTasks:\n1. Write a DETAILED summary (2-3 sentences) in HEBREW explaining the text/command. CRITICAL: Keep specific names, usernames, code, and technical terms in original ENGLISH.\n2. Status MUST be "text".\n3. Generate 3-5 relevant hashtags mixing Hebrew and English tags.`;
 
-                const systemPrompt = `You are a Professional Web Analyst.
-Your task is to provide a high-quality, accurate summary of the provided link or text.
+                const systemPrompt = `You are a Senior Professional Web Analyst and Tech Expert.
+Your task is to provide a high-quality, in-depth, and highly descriptive summary. DO NOT provide short or lazy answers. Expand on the features logically.
 Return ONLY valid JSON. No markdown formatting.
 Required format: {"summary": "...", "status": "active|parked|dead|text", "tags": ["#tag1", "#tag2"]}
 ${promptType}
@@ -1738,14 +1747,24 @@ ${contentToAnalyze}`;
                         }
                     }
 
-                    else if (currentProvider === 'openrouter') {
-                        // רשימה מעודכנת של מודלים חזקים בחינם (הוסר Deepseek שהפסיק לעבוד)
-                        const models = [
-                            'google/gemini-2.0-flash-lite-preview-02-05:free',
-                            'meta-llama/llama-3.3-70b-instruct:free',
-                            'qwen/qwen-2.5-coder-32b-instruct:free',
-                            'mistralai/mistral-7b-instruct:free'
-                        ];
+                   else if (currentProvider === 'openrouter') {
+                        let models = window.dynamicOpenRouterModels;
+                        if (!models) {
+                            try {
+                                const req = await fetchWithTimeout('https://openrouter.ai/api/v1/models', {}, 10000);
+                                const data = await req.json();
+                                if (data.data) {
+                                    // משיכת מודלים חינמיים עדכניים ופעילים בלבד, סינון מודלים בעייתיים מהעבר
+                                    models = data.data
+                                        .filter(m => m.id.endsWith(':free') && !m.id.includes('mistral') && !m.id.includes('deepseek'))
+                                        .map(m => m.id)
+                                        .slice(0, 5); // ניקח את ה-5 הראשונים
+                                    window.dynamicOpenRouterModels = models;
+                                }
+                            } catch { models = ['google/gemini-2.0-flash-lite-preview-02-05:free', 'meta-llama/llama-3.3-70b-instruct:free']; }
+                        }
+                        if (!models?.length) models = ['meta-llama/llama-3.3-70b-instruct:free'];
+
                         for (const model of models) {
                             try {
                                 const res = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
@@ -1764,6 +1783,7 @@ ${contentToAnalyze}`;
                                 success = true;
                                 usedModelName = `🌐 OpenRouter (${model.split('/').pop()})`;
                                 window.lastWorkingAiProvider = 'openrouter';
+                                window.dynamicOpenRouterModels = [model]; // שומר את המודל התקין לסריקה הבאה
                                 break;
                             } catch (err) {
                                 lastError = err.message;
@@ -1772,6 +1792,7 @@ ${contentToAnalyze}`;
                             }
                         }
                         if (!success && shouldTryNextKey) {
+                            window.dynamicOpenRouterModels = null; // מאפס כדי שימשוך מחדש רשימה תקינה בפעם הבאה
                             const next = fallbackChain[i+1] ? `מנסה מפתח גיבוי...` : 'לא נותרו מפתחות פעילים.';
                             showToast(`⚠️ תקלה ב-OpenRouter (מפתח ${keyIndex}): ${lastError}. ${next}`, null, 5000, null, true);
                             continue;
