@@ -1467,11 +1467,14 @@
             closeAllMenus();
         });
 
-        function isQuotaError(msg) {
+       function isRecoverableError(msg) {
             const l = (msg || '').toLowerCase();
             return l.includes('quota') || l.includes('resource_exhausted') ||
                 l.includes('rate_limit') || l.includes('rate limit') ||
-                l.includes('exceeded') || l.includes('too many requests') || l.includes('429');
+                l.includes('exceeded') || l.includes('too many requests') || 
+                l.includes('429') || l.includes('401') || 
+                l.includes('invalid') || l.includes('unauthorized') || 
+                l.includes('no endpoints');
         }
 
         window.activeAiRequestController = null;
@@ -1627,15 +1630,16 @@ ${promptType}
 Data to Analyze:
 ${contentToAnalyze}`;
                 
-                let jsonString   = '';
+               let jsonString   = '';
                 let success      = false;
                 let lastError    = 'לא ניתן להגיע לספק ה-AI הנבחר';
                 let usedModelName = '';
 
                 for (let i = 0; i < fallbackChain.length; i++) {
                     if (success) break;
-                    const { provider: currentProvider, key: activeKey, keyIndex } = fallbackChain[i];
-                    let quotaExhausted = false;
+                    const { provider: currentProvider, key: rawKey, keyIndex } = fallbackChain[i];
+                    const activeKey = rawKey.trim(); // ניקוי רווחים נסתרים
+                    let shouldTryNextKey = false;
 
                     if (currentProvider === 'gemini') {
                         let models = window.dynamicGeminiModels;
@@ -1643,6 +1647,7 @@ ${contentToAnalyze}`;
                             try {
                                 const req = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models?key=${activeKey}`, {}, 10000);
                                 const data = await req.json();
+                                if (data.error) throw new Error(data.error.message);
                                 if (data.models) {
                                     models = data.models.filter(m => m.supportedGenerationMethods?.includes('generateContent') && m.name.includes('gemini')).map(m => m.name.replace('models/', ''));
                                     models.sort((a, b) => (a.includes('flash') ? -1 : 1));
@@ -1662,6 +1667,7 @@ ${contentToAnalyze}`;
                                 );
                                 const rd = await res.json();
                                 if (rd.error) throw new Error(rd.error.message);
+                                if (!rd.candidates || !rd.candidates[0]?.content?.parts?.[0]?.text) throw new Error('Empty response from Gemini');
                                 const rawText = rd.candidates[0].content.parts[0].text;
                                 const jm = rawText.match(/\{[\s\S]*\}/);
                                 if (!jm) throw new Error('No valid JSON in response');
@@ -1674,14 +1680,14 @@ ${contentToAnalyze}`;
                                 break;
                             } catch (err) {
                                 lastError = err.message;
-                                if (isQuotaError(err.message)) { quotaExhausted = true; window.dynamicGeminiModels = null; }
+                                if (isRecoverableError(err.message)) { shouldTryNextKey = true; window.dynamicGeminiModels = null; }
                                 console.warn(`Gemini [${model}]:`, err.message);
                             }
                         }
-                        if (!success && quotaExhausted) {
+                        if (!success && shouldTryNextKey) {
                             window.dynamicGeminiModels = null;
-                            const next = fallbackChain[i+1] ? `עובר למפתח הבא...` : 'לא נותרו מפתחות.';
-                            showToast(`⚠️ נגמרו התוקנים ב-Gemini (מפתח ${keyIndex}). ${next}`, null, 5000, null, true);
+                            const next = fallbackChain[i+1] ? `מנסה מפתח גיבוי...` : 'לא נותרו מפתחות פעילים.';
+                            showToast(`⚠️ תקלה ב-Gemini (מפתח ${keyIndex}): ${lastError}. ${next}`, null, 5000, null, true);
                             continue;
                         }
                     }
@@ -1692,6 +1698,7 @@ ${contentToAnalyze}`;
                             try {
                                 const req = await fetchWithTimeout('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': `Bearer ${activeKey}` } }, 10000);
                                 const data = await req.json();
+                                if (data.error) throw new Error(data.error.message);
                                 if (data.data) { models = data.data.map(m => m.id).sort((a, b) => (a.includes('llama') ? -1 : 1)); window.dynamicGroqModels = models; }
                             } catch { models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']; }
                         }
@@ -1706,6 +1713,7 @@ ${contentToAnalyze}`;
                                 }, 30000);
                                 const rd = await res.json();
                                 if (rd.error) throw new Error(rd.error.message);
+                                if (!rd.choices || !rd.choices[0]?.message?.content) throw new Error('Empty response from Groq');
                                 const rawText = rd.choices[0].message.content;
                                 const jm = rawText.match(/\{[\s\S]*\}/);
                                 if (!jm) throw new Error('No valid JSON');
@@ -1718,35 +1726,36 @@ ${contentToAnalyze}`;
                                 break;
                             } catch (err) {
                                 lastError = err.message;
-                                if (isQuotaError(err.message)) { quotaExhausted = true; window.dynamicGroqModels = null; }
+                                if (isRecoverableError(err.message)) { shouldTryNextKey = true; window.dynamicGroqModels = null; }
                                 console.warn(`Groq [${model}]:`, err.message);
                             }
                         }
-                        if (!success && quotaExhausted) {
+                        if (!success && shouldTryNextKey) {
                             window.dynamicGroqModels = null;
-                            const next = fallbackChain[i+1] ? `עובר למפתח הבא...` : 'לא נותרו מפתחות.';
-                            showToast(`⚠️ נגמרו התוקנים ב-Groq (מפתח ${keyIndex}). ${next}`, null, 5000, null, true);
+                            const next = fallbackChain[i+1] ? `מנסה מפתח גיבוי...` : 'לא נותרו מפתחות פעילים.';
+                            showToast(`⚠️ תקלה ב-Groq (מפתח ${keyIndex}): ${lastError}. ${next}`, null, 5000, null, true);
                             continue;
                         }
                     }
 
                     else if (currentProvider === 'openrouter') {
+                        // רשימה מעודכנת של מודלים חזקים בחינם (הוסר Deepseek שהפסיק לעבוד)
                         const models = [
                             'google/gemini-2.0-flash-lite-preview-02-05:free',
                             'meta-llama/llama-3.3-70b-instruct:free',
                             'qwen/qwen-2.5-coder-32b-instruct:free',
-                            'deepseek/deepseek-chat:free'
+                            'mistralai/mistral-7b-instruct:free'
                         ];
-                        let quotaExhaustedOR = false;
                         for (const model of models) {
                             try {
                                 const res = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
                                     method: 'POST',
-                                    headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': window.location.href },
+                                    headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': window.location.origin },
                                     body: JSON.stringify({ model, temperature: 0.1, messages: [{ role: 'user', content: systemPrompt }], response_format: { type: 'json_object' } })
                                 }, 30000);
                                 const rd = await res.json();
                                 if (rd.error) throw new Error(rd.error.message);
+                                if (!rd.choices || !rd.choices[0]?.message?.content) throw new Error('Empty response from OpenRouter');
                                 const rawText = rd.choices[0].message.content;
                                 const jm = rawText.match(/\{[\s\S]*\}/);
                                 if (!jm) throw new Error('No valid JSON');
@@ -1758,20 +1767,20 @@ ${contentToAnalyze}`;
                                 break;
                             } catch (err) {
                                 lastError = err.message;
-                                if (isQuotaError(err.message)) quotaExhaustedOR = true;
+                                if (isRecoverableError(err.message)) shouldTryNextKey = true;
                                 console.warn(`OpenRouter [${model}]:`, err.message);
                             }
                         }
-                        if (!success && quotaExhaustedOR) {
-                            const next = fallbackChain[i+1] ? `עובר למפתח הבא...` : 'לא נותרו מפתחות.';
-                            showToast(`⚠️ נגמרו התוקנים ב-OpenRouter (מפתח ${keyIndex}). ${next}`, null, 5000, null, true);
+                        if (!success && shouldTryNextKey) {
+                            const next = fallbackChain[i+1] ? `מנסה מפתח גיבוי...` : 'לא נותרו מפתחות פעילים.';
+                            showToast(`⚠️ תקלה ב-OpenRouter (מפתח ${keyIndex}): ${lastError}. ${next}`, null, 5000, null, true);
                             continue;
                         }
                     }
                 }
 
                 if (!success) throw new Error('ספק ה-AI נכשל: ' + lastError);
-
+                
                 jsonString = jsonString.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
                 const jm2 = jsonString.match(/\{[\s\S]*\}/);
                 if (!jm2) throw new Error('לא נמצא JSON תקין');
@@ -1840,7 +1849,7 @@ ${contentToAnalyze}`;
                 if (i < itemsToScan.length - 1) {
                     const result = state.items.find(it => it.id === itemsToScan[i].id);
                     let delay = 300;
-                    if (result?.aiSummary && isQuotaError(result.aiSummary)) {
+                   if (result?.aiSummary && isRecoverableError(result.aiSummary)) {
                         delay = 20000;
                         window.lastWorkingAiProvider = null;
                         showToast(`<div style="width:100%;"><div>⚠️ <b>מכסות מלאות — ממתין 20 שניות...</b></div>
@@ -2654,7 +2663,7 @@ ${contentToAnalyze}`;
                 if (i < selectedArr.length - 1) {
                     const result = state.items.find(it => it.id === itemId);
                     let delay = 300;
-                    if (result?.aiSummary && isQuotaError(result.aiSummary)) {
+                    if (result?.aiSummary && isRecoverableError(result.aiSummary)) {
                         delay = 20000; window.lastWorkingAiProvider = null;
                         showToast(`<div style="width:100%;"><div>⚠️ <b>מכסות מלאות — ממתין 20 שניות...</b></div>
                             <div style="width:100%;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin-top:8px;overflow:hidden;">
