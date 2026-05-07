@@ -1489,20 +1489,17 @@
 
             const settings       = getAiSettings();
             
-            // שינוי קריטי: המנוע הנבחר (מהגדרות או ממעקף) הוא היחיד שבו משתמשים. הסרנו את הנפילה לספקים אחרים.
-            const preferred      = overrideProvider || settings.provider;
-            const allProviders   = [preferred];
-            const fallbackChain  = [];
+           // שימוש קשיח בספק הנבחר ומניעת שגיאות מפתחות מספקים אחרים
+            const currentProvider = overrideProvider || settings.provider;
+            const pKeys = settings.keys[currentProvider] || [];
+            const fallbackChain = (Array.isArray(pKeys) ? pKeys : [pKeys])
+                .filter(k => k && k.trim())
+                .map((k, idx) => ({ provider: currentProvider, key: k, keyIndex: idx + 1 }));
 
-            allProviders.forEach(p => {
-                const pKeys = Array.isArray(settings.keys[p]) ? settings.keys[p] : (settings.keys[p] ? [settings.keys[p]] : []);
-                pKeys.filter(k => k && k.trim()).forEach((k, idx) => {
-                    fallbackChain.push({ provider: p, key: k, keyIndex: idx + 1 });
-                });
-            });
-
-            if (fallbackChain.length === 0)
-                return alert('עליך להזין לפחות מפתח API אחד במנוע שבחרת תחת הגדרות ה-AI.');
+            if (fallbackChain.length === 0) {
+                const providerNames = { 'gemini': 'Google Gemini', 'groq': 'Groq', 'openrouter': 'OpenRouter' };
+                return alert(`לא נמצא מפתח תקין עבור ${providerNames[currentProvider]}. אנא עדכן מפתח בהגדרות.`);
+            }
 
             item.isScanning = true;
             renderList();
@@ -1541,7 +1538,7 @@
                         u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`
                     ];
 
-                    let scrapedOk = false;
+                   let scrapedOk = false;
                     try {
                         const proxyPromises = proxies.map(async (proxyFn) => {
                             const proxyUrl = proxyFn(cleanContent);
@@ -1560,18 +1557,29 @@
                             doc2.querySelectorAll('script,style,nav,footer,noscript,iframe,header').forEach(el => el.remove());
                             const bodyText = (doc2.body?.innerText || '').replace(/\s+/g, ' ').trim();
                             if (bodyText.length < 30) throw new Error('empty body');
+                            
+                            // חסימת ג'יבריש/בינארי שמשגע את ה-AI (כמו שקרה ב-openclaw)
+                            const weirdCharCount = (bodyText.match(/[^\x20-\x7E\n\r\tא-ת]/g) || []).length;
+                            if (weirdCharCount > bodyText.length * 0.15) throw new Error('binary_or_garbage');
+                            
                             const lb = bodyText.toLowerCase();
                             if (lb.includes('just a moment') || lb.includes('enable javascript and cookies') ||
                                 lb.includes('checking your browser') || lb.includes('verify you are human') ||
+                                lb.includes('access denied') || lb.includes('security check') ||
                                 (lb.includes('cloudflare') && lb.includes('ray id'))) throw new Error('cloudflare_blocked');
+                            
                             return bodyText.substring(0, 3500);
                         });
                         contentToAnalyze = await Promise.any(proxyPromises);
                         scrapedOk = true;
                     } catch (_) { scrapedOk = false; }
 
-                    if (!scrapedOk)
-                        contentToAnalyze = `URL: ${cleanContent}\nDescription: ${item.description || 'none'}\nNote: Page blocked by anti-bot. Do NOT mark as "dead". Assume "active". Analyze based on URL and description only.`;
+                    if (!scrapedOk || contentToAnalyze.length < 100) {
+                        const domainMatch = cleanContent.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?]+)/im);
+                        const domain = domainMatch ? domainMatch[1] : cleanContent;
+                        // פקודה חדשה: שולח ל-AI את הכתובת ומאלץ אותו להבין לבד מה האתר עושה בלי להתלונן על סריקה
+                        contentToAnalyze = `[SYSTEM NOTE: SCRAPING BLOCKED BY CLOUDFLARE/ANTI-BOT]\nTarget URL: ${cleanContent}\nDomain Name: ${domain}\nUser Description: ${item.description || 'No description'}\nTask: Identify this professional service, tool, or website based strictly on its domain name and context. Do NOT report scraping issues or unreadable content. Provide a definitive, expert summary of what this site is.`;
+                    }
                 }
 
                 const isTelegramUrl = /(?:t\.me|telegram\.me)\//i.test(cleanContent);
@@ -1606,17 +1614,19 @@
                     }
                 }
 
-                const promptType = isWebsite
-                    ? `Type: Website content.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: You MUST keep brand names, usernames, website names, software, and technical terms in their original ENGLISH within the Hebrew summary to maximize searchability.\n2. Determine status: "active", "parked", or "dead".\n   TELEGRAM RULES:\n   - If the page contains a specific group/bot name, a description, OR a member/subscriber count (e.g., "3 members"), you MUST set status to "active".\n   - Set "dead" ONLY if the page explicitly says "not found", "expired", "invalid", or if it is a completely empty "Join Group" page with NO details at all.\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for brands/tech terms).`
-                    : `Type: Text/Command.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: Keep all specific names, usernames, code, and technical terms in their original ENGLISH within the Hebrew summary.\n2. Status MUST be "text".\n3. Generate 3-5 relevant hashtags. Mix Hebrew tags and English tags (always use English tags for specific names/tech terms).`;
+               const promptType = isWebsite
+                    ? `Type: Website content.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: Keep brand names and tech terms in original ENGLISH. If the content seems to be an error, access denied, or unreadable binary, DO NOT state that. Instead, logically guess the site's purpose from its URL/Domain (e.g., "openclaw.ai" -> AI tool) and keep summary helpful.\n2. Determine status: "active", "parked", or "dead".\n   TELEGRAM RULES:\n   - Set "active" if there is a group name/member count.\n   - Set "dead" ONLY if explicitly "not found"/"expired".\n3. Generate 3-5 relevant hashtags mixing Hebrew/English.`
+                    : `Type: Text/Command.\nTasks:\n1. Write a highly accurate summary (1-2 sentences) in HEBREW. CRITICAL: Keep all specific names, usernames, code, and technical terms in original ENGLISH.\n2. Status MUST be "text".\n3. Generate 3-5 relevant hashtags mixing Hebrew and English tags.`;
 
-                const systemPrompt = `You are a strict JSON-only API. Return ONLY valid JSON. No markdown formatting, no extra text.
-Required format: {"summary": "...", "status": "active|parked|dead|text", "tags": ["#tag1", "#tag2", "#tag3"]}
+                const systemPrompt = `You are a Professional Web Analyst.
+Your task is to provide a high-quality, accurate summary of the provided link or text.
+Return ONLY valid JSON. No markdown formatting.
+Required format: {"summary": "...", "status": "active|parked|dead|text", "tags": ["#tag1", "#tag2"]}
 ${promptType}
 
-Content to analyze:
+Data to Analyze:
 ${contentToAnalyze}`;
-
+                
                 let jsonString   = '';
                 let success      = false;
                 let lastError    = 'לא ניתן להגיע לספק ה-AI הנבחר';
