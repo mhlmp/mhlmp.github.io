@@ -800,9 +800,11 @@
             window.addEventListener('click', () => closeAllMenus());
             window.addEventListener('resize', closeAllMenus);
 
-            document.getElementById('searchInput')?.addEventListener('input', () =>
-                window.requestAnimationFrame(renderList)
-            );
+          let searchTimeout;
+            document.getElementById('searchInput')?.addEventListener('input', () => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => window.requestAnimationFrame(renderList), 150);
+            });
             
             document.getElementById('categoryFilter')?.addEventListener('change', () => {
                 saveUiSettings();
@@ -1088,6 +1090,9 @@
         async function cloudLogin() {
             if (!navigator.onLine)
                 return showToast('❌ לא ניתן להתחבר ללא חיבור לאינטרנט.', null, 4000, null, true);
+            if (!auth || !db)
+                return showToast('❌ שירותי הענן נחסמו. בדוק אם קיים חוסם פרסומות המונע גישה ל-Firebase.', null, 5000, null, true);
+                
             try { await signInWithPopup(auth, new GoogleAuthProvider()); }
             catch (e) { alert(e.message); }
         }
@@ -1267,12 +1272,13 @@
                 if (item.siteStatus === 'dead')   { statusClass = 'ai-status-dead';    statusText = '🔴 לא זמין'; }
 
                 let tagsHtml = '';
-                if (item.aiTags && item.aiTags.length > 0) {
+               if (item.aiTags && item.aiTags.length > 0) {
                     tagsHtml = `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;">
-                        ${item.aiTags.map(tag =>
-                            `<span style="background:rgba(96,165,250,0.15);color:var(--primary-color);padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid rgba(96,165,250,0.3);font-weight:bold;cursor:pointer;"
-                                onclick="event.stopPropagation();document.getElementById('searchInput').value='${tag.replace(/'/g,"\\'")}';document.getElementById('searchInput').dispatchEvent(new Event('input'));">${escapeHtml(tag)}</span>`
-                        ).join('')}
+                        ${item.aiTags.map(tag => {
+                            const safeTagValue = escapeHtml(tag).replace(/'/g, "\\'");
+                            return `<span style="background:rgba(96,165,250,0.15);color:var(--primary-color);padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid rgba(96,165,250,0.3);font-weight:bold;cursor:pointer;"
+                                onclick="event.stopPropagation();document.getElementById('searchInput').value='${safeTagValue}';document.getElementById('searchInput').dispatchEvent(new Event('input'));">${escapeHtml(tag)}</span>`;
+                        }).join('')}
                     </div>`;
                 }
 
@@ -1535,7 +1541,7 @@
 
                let contentToAnalyze = cleanContent;
 
-                if (isWebsite && forceUrlOnly) {
+               if (isWebsite && forceUrlOnly) {
                     const domainMatch = cleanContent.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?]+)/im);
                     const domain = domainMatch ? domainMatch[1] : cleanContent;
                     
@@ -1543,9 +1549,7 @@
 Target URL: ${cleanContent}
 Domain Name: ${domain}
 User Description: ${item.description || 'No description provided'}
-Task: The user explicitly requested to analyze this item based ONLY on the URL and Domain Name, without scraping page content. 
-Use your internal knowledge base as a Senior Tech Expert to deduce and explain the purpose, features, and target audience of this specific website or service. 
-Provide a DETAILED, rich, and highly professional summary (2-3 sentences) in HEBREW. DO NOT give a short or lazy answer. Assume status is "active".`;
+Task: Analyze based ONLY on the URL and User Description. CRITICAL RULE: If you do not have factual, preexisting knowledge of the specific domain "${domain}", DO NOT GUESS OR INVENT FEATURES. Answer EXACTLY: "ניתוח מבוסס כתובת: האתר אינו מוכר למודל ואין מספיק מידע. אנא הוסף תיאור ידני." Assume status is "active".`;
                 } else if (isWebsite) {
                     const proxies = [
                         u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
@@ -1592,8 +1596,11 @@ Provide a DETAILED, rich, and highly professional summary (2-3 sentences) in HEB
                     if (!scrapedOk || contentToAnalyze.length < 100) {
                         const domainMatch = cleanContent.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?]+)/im);
                         const domain = domainMatch ? domainMatch[1] : cleanContent;
-                        // פקודה חדשה: שולח ל-AI את הכתובת ומאלץ אותו להבין לבד מה האתר עושה בלי להתלונן על סריקה
-                        contentToAnalyze = `[SYSTEM NOTE: SCRAPING BLOCKED BY CLOUDFLARE/ANTI-BOT]\nTarget URL: ${cleanContent}\nDomain Name: ${domain}\nUser Description: ${item.description || 'No description'}\nTask: Identify this professional service, tool, or website based strictly on its domain name and context. Do NOT report scraping issues or unreadable content. Provide a definitive, expert summary of what this site is.`;
+                        contentToAnalyze = `[SYSTEM NOTE: SCRAPING BLOCKED BY CLOUDFLARE/ANTI-BOT]
+Target URL: ${cleanContent}
+Domain Name: ${domain}
+User Description: ${item.description || 'No description provided'}
+Task: Scraping failed. Identify this website ONLY if you have hard, factual knowledge of "${domain}". If you don't know it definitively, DO NOT GUESS. State exactly: "האתר חסום לסריקה אוטומטית (Anti-Bot) ואינו מוכר למודל. הניתוח מסתמך על התיאור הידני בלבד." Combine this with the User Description if available.`;
                     }
                 }
 
@@ -1630,9 +1637,9 @@ Provide a DETAILED, rich, and highly professional summary (2-3 sentences) in HEB
                 }
 
               const promptType = isWebsite
-                    ? `Type: Website content.\nTasks:\n1. Write a DETAILED and COMPREHENSIVE summary (2-3 sentences) in HEBREW explaining exactly what this website does, its features, and its target audience. CRITICAL: Keep brand names and tech terms in original ENGLISH. If content is blocked/error, deduce the detailed purpose logically from the URL/Domain.\n2. Determine status: "active", "parked", or "dead".\n   TELEGRAM RULES: Set "active" if there is a group name/member count. Set "dead" ONLY if explicitly "not found"/"expired".\n3. Generate 3-5 relevant hashtags mixing Hebrew/English.`
+                    ? `Type: Website content.\nTasks:\n1. Write a concise summary in HEBREW explaining what this website does. CRITICAL RULE: NEVER GUESS. If the content is blocked and you DO NOT know the domain definitively, admit you don't know. Rely heavily on the 'User Description' if it exists. Keep brand names in ENGLISH.\n2. Determine status: "active", "parked", or "dead".\n3. Generate 3-5 relevant hashtags.`
                     : `Type: Text/Command.\nTasks:\n1. Write a DETAILED summary (2-3 sentences) in HEBREW explaining the text/command. CRITICAL: Keep specific names, usernames, code, and technical terms in original ENGLISH.\n2. Status MUST be "text".\n3. Generate 3-5 relevant hashtags mixing Hebrew and English tags.`;
-
+              
                 const systemPrompt = `You are a Senior Professional Web Analyst and Tech Expert.
 Your task is to provide a high-quality, in-depth, and highly descriptive summary. DO NOT provide short or lazy answers. Expand on the features logically.
 Return ONLY valid JSON. No markdown formatting.
@@ -2787,7 +2794,14 @@ ${contentToAnalyze}`;
 
             const wDiff = window.outerWidth - window.innerWidth;
             const hDiff = window.outerHeight - window.innerHeight;
-            overlay.style.display = (wDiff > 160 || hDiff > 160) && !document.fullscreenElement ? 'flex' : 'none';
+            // מניעת False Positive כשמקלדת קופצת בנייד (מתעלם מ-hDiff אם הרוחב קטן מ-768px)
+            const isKeyboardLikely = window.innerWidth < 768 && hDiff > 150 && wDiff < 50;
+            
+            if (isKeyboardLikely || document.fullscreenElement) {
+                overlay.style.display = 'none';
+            } else {
+                overlay.style.display = (wDiff > 160 || hDiff > 160) ? 'flex' : 'none';
+            }
         }, 2000);
 
         document.addEventListener('contextmenu', e => {
