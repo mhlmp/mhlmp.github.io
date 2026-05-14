@@ -877,6 +877,28 @@
             document.getElementById('downloadHtmlBtn')?.addEventListener('click', downloadSite);
             document.getElementById('downloadSourceBtn')?.addEventListener('click', downloadSource);
             document.getElementById('wakeLockBtn')?.addEventListener('click', toggleWakeLock);
+            // מנגנון Event Delegation גלובלי לכל הכרטיסיות
+            document.getElementById('listContainer')?.addEventListener('click', (e) => {
+                const card = e.target.closest('.card');
+                if (!card) return;
+                
+                const id = parseInt(card.getAttribute('data-id'));
+                const item = state.items.find(i => i.id === id);
+                if (!item) return;
+
+                if (e.target.closest('.btn-share')) { e.stopPropagation(); shareItem(item); return; }
+                if (e.target.closest('.btn-copy')) { e.stopPropagation(); copyText(item.content); return; }
+                if (e.target.closest('.btn-edit')) { e.stopPropagation(); editItem(item); return; }
+                if (e.target.closest('.pin-btn')) { e.stopPropagation(); togglePin(id); return; }
+                if (e.target.closest('.trash-btn')) { e.stopPropagation(); moveToTrash(id); return; }
+                if (e.target.closest('.ai-edit-btn')) { e.stopPropagation(); window.openEditAiModal(item); return; }
+                
+                const linkEl = e.target.closest('.card-link');
+                if (linkEl && !e.target.closest('.card-actions')) {
+                    e.preventDefault();
+                    if (!state.isSelectionMode) window.open(item.content, '_blank', 'noopener,noreferrer');
+                }
+            });
         }
 
         async function toggleWakeLock() {
@@ -1356,65 +1378,58 @@
                     scanSingleItem(item.id, qs.provider || null, qs.urlOnly || false);
                 }
             });
-
-            div.querySelector('.btn-share').onclick = (e) => { e.stopPropagation(); shareItem(item); };
-            div.querySelector('.btn-copy').onclick  = (e) => { e.stopPropagation(); copyText(item.content); };
-            div.querySelector('.btn-edit').onclick  = (e) => { e.stopPropagation(); editItem(item); };
-            div.querySelector('.pin-btn').onclick   = (e) => { e.stopPropagation(); togglePin(item.id); };
-            div.querySelector('.trash-btn').onclick = (e) => { e.stopPropagation(); moveToTrash(item.id); };
-
-            const aiEditBtn = div.querySelector('.ai-edit-btn');
-            if (aiEditBtn) aiEditBtn.onclick = (e) => { e.stopPropagation(); window.openEditAiModal(item); };
-
-            const linkEl = div.querySelector('.card-link');
-            if (linkEl) {
-                linkEl.onclick = (e) => {
-                    e.preventDefault();
-                    if (!state.isSelectionMode) window.open(item.content, '_blank', 'noopener,noreferrer');
-                };
-            }
+           
             return div;
         }
 
-       async function handleAdd(e) {
-            e.preventDefault();
-            let content = document.getElementById('itemContent').value.trim();
-            content = content.replace(/^[\/\\]+/, '');
-            if (!content) return;
+     async function handleAdd(e) {
+           e.preventDefault();
+           let content = document.getElementById('itemContent').value.trim();
+           content = content.replace(/^[\/\\]+/, '');
+           if (!content) return;
 
-            const existingItem = state.items.find(i => i.content.toLowerCase() === content.toLowerCase());
-            if (existingItem) {
-                const addAnyway = confirm(`⚠️ הפריט כבר קיים תחת "${existingItem.category}".\n\nהאם להוסיף כפילות?`);
-                if (!addAnyway) { e.target.reset(); return; }
-            }
+           const existingItem = state.items.find(i => i.content.toLowerCase() === content.toLowerCase());
+           if (existingItem) {
+               const addAnyway = confirm(`⚠️ הפריט כבר קיים תחת "${existingItem.category}".\n\nהאם להוסיף כפילות?`);
+               if (!addAnyway) { e.target.reset(); return; }
+           }
 
-            const now = nowIso();
-            const newItem = {
-                id: Date.now(),
-                content,
-                description: document.getElementById('itemDescription').value.trim(),
-                category: document.getElementById('itemCategory').value.trim() || 'כללי',
-                note: document.getElementById('itemNote').value.trim(),
-                date: now,
-                createdAt: now,
-                updatedAt: now,
-                type: URL_REGEX.test(content) ? 'link' : 'text',
-                isPinned: false
-            };
+           const now = nowIso();
+           const newItem = {
+               id: Date.now(),
+               content,
+               description: document.getElementById('itemDescription').value.trim(),
+               category: document.getElementById('itemCategory').value.trim() || 'כללי',
+               note: document.getElementById('itemNote').value.trim(),
+               date: now,
+               createdAt: now,
+               updatedAt: now,
+               type: URL_REGEX.test(content) ? 'link' : 'text',
+               isPinned: false
+           };
 
-            e.target.reset();
-            const details = document.querySelector('details');
-            if (details) details.open = false;
+           e.target.reset();
+           const details = document.querySelector('details');
+           if (details) details.open = false;
 
-            await saveItemToCloud(newItem);
-            showToast('✅ פריט נוסף');
+           await saveItemToCloud(newItem);
+           
+           // הודעה עם כפתור UNDO שמוחק את המסמך שיצרנו כרגע
+           showToast('✅ פריט נוסף', async () => {
+               try {
+                   await deleteDoc(doc(db, 'users', state.user.uid, 'items', newItem.id.toString()));
+                   showToast('↩️ ההוספה בוטלה והפריט נמחק');
+               } catch(err) {
+                   console.error(err);
+               }
+           }, 7000);
 
-            const settings = getAiSettings();
-            if (settings.autoScan &&
-                (settings.keys.gemini.length > 0 || settings.keys.groq.length > 0 || settings.keys.openrouter.length > 0)) {
-                setTimeout(() => scanSingleItem(newItem.id, null, false), 800);
-            }
-        }
+           const settings = getAiSettings();
+           if (settings.autoScan &&
+               (settings.keys.gemini.length > 0 || settings.keys.groq.length > 0 || settings.keys.openrouter.length > 0)) {
+               setTimeout(() => scanSingleItem(newItem.id, null, false), 800);
+           }
+       }
 
      window.saveAiSettings = async function () {
             const cleanKey = (id) => document.getElementById(id).value.replace(/\s+/g, '');
@@ -2440,13 +2455,26 @@ ${contentToAnalyze}`;
             showToast('♻️ הפריט שוחזר');
         };
 
-        window.deleteForever = async function (id) {
-            if(!confirm("מחיקה זו אינה הפיכה. האם אתה בטוח?")) return;
-            try {
-                await deleteDoc(doc(db, 'users', state.user.uid, 'trash', id.toString()));
-                openTrashModal();
-            } catch(e) { console.error(e); }
-        };
+       window.deleteForever = async function (id) {
+           // שומרים את האובייקט רגע לפני שייעלם
+           const itemToDel = state.trash.find(i => i.id === id);
+           if (!itemToDel) return;
+           
+           if(!confirm("מחיקה זו אינה הפיכה. האם אתה בטוח?")) return;
+           try {
+               await deleteDoc(doc(db, 'users', state.user.uid, 'trash', id.toString()));
+               openTrashModal();
+               
+               // אפשרות להתחרט ולהחזיר אותו לסל
+               showToast('🗑️ הפריט נמחק לצמיתות', async () => {
+                   try {
+                       await setDoc(doc(db, 'users', state.user.uid, 'trash', id.toString()), itemToDel);
+                       openTrashModal();
+                       showToast('↩️ המחיקה בוטלה, הפריט חזר לסל');
+                   } catch(err) { console.error(err); }
+               }, 6000);
+           } catch(e) { console.error(e); }
+       };
 
         document.getElementById('restoreAllBtn')?.addEventListener('click', async () => {
             if (state.trash.length === 0) return;
@@ -2477,27 +2505,51 @@ ${contentToAnalyze}`;
             showToast('♻️ כל הפריטים שוחזרו');
         });
 
-        document.getElementById('emptyTrashBtn')?.addEventListener('click', async () => {
-            if (state.trash.length === 0) return;
-            if (!confirm(`האם למחוק לצמיתות ${state.trash.length} פריטים?`)) return;
-            
-            showToast('מרוקן את הסל...', null, 0, 'empty-toast', false);
-            
-            const CHUNK_SIZE = 450;
-            for (let i = 0; i < state.trash.length; i += CHUNK_SIZE) {
-                const chunk = state.trash.slice(i, i + CHUNK_SIZE);
-                const batch = writeBatch(db);
-                chunk.forEach(item => {
-                    const trashRef = doc(db, 'users', state.user.uid, 'trash', item.id.toString());
-                    batch.delete(trashRef);
-                });
-                await batch.commit();
-            }
-            
-            removeToast('empty-toast');
-            openTrashModal();
-            showToast('סל המחזור רוקן');
-        });
+       document.getElementById('emptyTrashBtn')?.addEventListener('click', async () => {
+           if (state.trash.length === 0) return;
+           if (!confirm(`האם למחוק לצמיתות ${state.trash.length} פריטים?`)) return;
+           
+           // שומרים "צילום מצב" של הפח בזיכרון לפני שמוחקים בענן
+           const snapshotOfTrash = [...state.trash]; 
+           showToast('מרוקן את הסל...', null, 0, 'empty-toast', false);
+           
+           const CHUNK_SIZE = 450;
+           for (let i = 0; i < state.trash.length; i += CHUNK_SIZE) {
+               const chunk = state.trash.slice(i, i + CHUNK_SIZE);
+               const batch = writeBatch(db);
+               chunk.forEach(item => {
+                   const trashRef = doc(db, 'users', state.user.uid, 'trash', item.id.toString());
+                   batch.delete(trashRef);
+               });
+               await batch.commit();
+           }
+           
+           removeToast('empty-toast');
+           openTrashModal();
+           
+           // מציגים הודעת מחיקה עם אופציה לשחזור מהיר
+           showToast('🗑️ סל המחזור רוקן', async () => {
+               showToast('משחזר את הסל...', null, 0, 'undo-empty-toast', false);
+               try {
+                   // מעלים חזרה לענן את הפריטים ששמרנו בזיכרון
+                   for (let i = 0; i < snapshotOfTrash.length; i += CHUNK_SIZE) {
+                       const chunk = snapshotOfTrash.slice(i, i + CHUNK_SIZE);
+                       const batch = writeBatch(db);
+                       chunk.forEach(item => {
+                           const trashRef = doc(db, 'users', state.user.uid, 'trash', item.id.toString());
+                           batch.set(trashRef, item);
+                       });
+                       await batch.commit();
+                   }
+                   removeToast('undo-empty-toast');
+                   openTrashModal();
+                   showToast('↩️ ריקון הסל בוטל!');
+               } catch(err) {
+                   removeToast('undo-empty-toast');
+                   showToast('⚠️ שגיאה בביטול המחיקה', null, 3000, null, true);
+               }
+           }, 8000);
+       });
 
         function setupScrollToTop() {
             const btn = document.getElementById('scrollTopBtn');
