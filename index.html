@@ -1567,7 +1567,7 @@ Task: Analyze based ONLY on the URL and User Description. CRITICAL RULE: If you 
                         u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`
                     ];
 
-                   let scrapedOk = false;
+                 let scrapedOk = false;
                     try {
                         const proxyPromises = proxies.map(async (proxyFn) => {
                             const proxyUrl = proxyFn(cleanContent);
@@ -1583,13 +1583,23 @@ Task: Analyze based ONLY on the URL and User Description. CRITICAL RULE: If you 
                             }
                             const parser = new DOMParser();
                             const doc2 = parser.parseFromString(htmlText, 'text/html');
+                            
+                            // משיכת כותרת ותיאור המטא - קריטי לאתרי SPA שאין להם טקסט ב-body (כמו lofrayer)
+                            const pageTitle = doc2.title || '';
+                            const metaDesc = doc2.querySelector('meta[name="description"]')?.content || doc2.querySelector('meta[property="og:description"]')?.content || '';
+                            
                             doc2.querySelectorAll('script,style,nav,footer,noscript,iframe,header').forEach(el => el.remove());
                             const bodyText = (doc2.body?.innerText || '').replace(/\s+/g, ' ').trim();
-                            if (bodyText.length < 30) throw new Error('empty body');
                             
-                            // חסימת ג'יבריש/בינארי שמשגע את ה-AI (כמו שקרה ב-openclaw)
+                            // שילוב כל המידע הרלוונטי
+                            const combinedText = `Page Title: ${pageTitle}\nMeta Description: ${metaDesc}\nPage Content: ${bodyText}`.trim();
+                            
+                            // מורידים את הרף ל-20 תווים בלבד כי מספיק שיש כותרת קצרה באתר כדי שנדע מהו
+                            if (combinedText.length < 20) throw new Error('empty content');
+                            
+                            // חסימת ג'יבריש/בינארי
                             const weirdCharCount = (bodyText.match(/[^\x20-\x7E\n\r\tא-ת]/g) || []).length;
-                            if (weirdCharCount > bodyText.length * 0.15) throw new Error('binary_or_garbage');
+                            if (bodyText.length > 50 && weirdCharCount > bodyText.length * 0.15) throw new Error('binary_or_garbage');
                             
                             const lb = bodyText.toLowerCase();
                             if (lb.includes('just a moment') || lb.includes('enable javascript and cookies') ||
@@ -1597,20 +1607,25 @@ Task: Analyze based ONLY on the URL and User Description. CRITICAL RULE: If you 
                                 lb.includes('access denied') || lb.includes('security check') ||
                                 (lb.includes('cloudflare') && lb.includes('ray id'))) throw new Error('cloudflare_blocked');
                             
-                            return bodyText.substring(0, 3500);
+                            return combinedText.substring(0, 3500);
                         });
                         contentToAnalyze = await Promise.any(proxyPromises);
                         scrapedOk = true;
                     } catch (_) { scrapedOk = false; }
 
-                    if (!scrapedOk || contentToAnalyze.length < 100) {
+                    // מורידים את רף ה-100 תווים גם כאן למקרה של אתר שחזר רק עם כותרת קטנה
+                    if (!scrapedOk || contentToAnalyze.length < 40) {
                         const domainMatch = cleanContent.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?]+)/im);
                         const domain = domainMatch ? domainMatch[1] : cleanContent;
-                        contentToAnalyze = `[SYSTEM NOTE: SCRAPING BLOCKED BY CLOUDFLARE/ANTI-BOT]
+                        // שינינו את הפרומפט כך שיעודד את המודל *להשתמש* בידע הפנימי שלו כדי לזהות את האתר, כפי שהוא עושה בצאט רגיל
+                        contentToAnalyze = `[SYSTEM NOTE: SCRAPING BLOCKED OR EMPTY]
 Target URL: ${cleanContent}
 Domain Name: ${domain}
 User Description: ${item.description || 'No description provided'}
-Task: Scraping failed. Identify this website ONLY if you have hard, factual knowledge of "${domain}". If you don't know it definitively, DO NOT GUESS. State exactly: "האתר חסום לסריקה אוטומטית (Anti-Bot) ואינו מוכר למודל. הניתוח מסתמך על התיאור הידני בלבד." Combine this with the User Description if available.`;
+Task: Scraping automatically failed (possibly Cloudflare or SPA). 
+CRITICAL: PLEASE USE YOUR INTERNAL TRAINING DATA to identify what "${domain}" or "${cleanContent}" is. 
+If you recognize the brand, app, or service (for example, known apps like "Lo Frayer" / "לא פראייר"), provide a full Hebrew summary of what it does. 
+Only if you have ABSOLUTELY ZERO knowledge of it, state: "האתר חסום לסריקה אוטומטית ואינו מוכר למודל."`;
                     }
                 }
 
