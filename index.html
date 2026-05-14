@@ -1195,14 +1195,15 @@
                     const n = parseInt(query.replace(/\D/g, ''));
                     return meta.visualIndex === n;
                 }
-                const safeTags = (item.aiTags || []).join(' ').toLowerCase();
-                const matchesSearch = !query ||
-                    item.content.toLowerCase().includes(query) ||
-                    (item.description || '').toLowerCase().includes(query) ||
-                    (item.category || '').toLowerCase().includes(query) ||
-                    (item.note || '').toLowerCase().includes(query) ||
-                    safeTags.includes(query);
-                return matchesSearch && matchesCat;
+               const safeTags = (item.aiTags || []).join(' ').toLowerCase();
+                const matchesSearch = !query ||
+                    item.content.toLowerCase().includes(query) ||
+                    (item.description || '').toLowerCase().includes(query) ||
+                    (item.category || '').toLowerCase().includes(query) ||
+                    (item.note || '').toLowerCase().includes(query) ||
+                    (item.aiSummary || '').toLowerCase().includes(query) || // <--- התוספת שכאן מאפשרת חיפוש בתוך הסיכום
+                    safeTags.includes(query);
+                return matchesSearch && matchesCat;
             });
 
             state.filteredItems = filtered;
