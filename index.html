@@ -120,11 +120,22 @@
             display: flex; flex-direction: column; gap: 12px;
             overflow: visible; position: relative; z-index: 100;
         }
-        .search-container input {
-            width: 100%; padding: 12px 16px; font-size: 16px;
-            border: 1px solid var(--glass-border); border-radius: var(--radius);
-            background: rgba(127,127,127,0.1); color: var(--text-primary);
-        }
+       .search-container { position: relative; }
+        .search-container input {
+            width: 100%; padding: 12px 16px; padding-left: 40px; font-size: 16px;
+            border: 1px solid var(--glass-border); border-radius: var(--radius);
+            background: rgba(127,127,127,0.1); color: var(--text-primary);
+        }
+        /* הסתרת ה-X המובנה של הדפדפן כדי למנוע כפילות */
+        .search-container input[type="search"]::-webkit-search-cancel-button {
+            -webkit-appearance: none; appearance: none;
+        }
+        #clearSearchBtn {
+            position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+            background: none; border: none; font-size: 16px; color: var(--text-secondary);
+            cursor: pointer; display: none; padding: 5px; z-index: 10; transition: color 0.2s;
+        }
+        #clearSearchBtn:hover { color: var(--primary-color); }
         .filters-container { display: flex; gap: 10px; flex-wrap: wrap; }
         .filters-container select {
             flex: 1; min-width: 130px; height: 44px; padding: 0 10px;
@@ -472,9 +483,10 @@
 
     <div id="protectedContent" class="auth-required locked">
         <div id="controlsArea" class="glass-panel">
-            <div class="search-container">
-                <input type="search" id="searchInput" placeholder="🔍 חפש קישור, תיאור או #מספר...">
-            </div>
+           <div class="search-container">
+                <input type="search" id="searchInput" placeholder="🔍 חפש קישור, תיאור או #מספר...">
+                <button id="clearSearchBtn" title="נקה חיפוש" aria-label="נקה חיפוש">✖</button>
+            </div>
             <div class="filters-container">
                 <select id="categoryFilter"><option value="">📂 כל הקטגוריות</option></select>
                 <select id="sortOrder">
@@ -795,11 +807,26 @@
             window.addEventListener('click', () => closeAllMenus());
             window.addEventListener('resize', closeAllMenus);
 
-          let searchTimeout;
-            document.getElementById('searchInput')?.addEventListener('input', () => {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => window.requestAnimationFrame(renderList), 150);
-            });
+         let searchTimeout;
+            const searchInput = document.getElementById('searchInput');
+            const clearSearchBtn = document.getElementById('clearSearchBtn');
+
+            searchInput?.addEventListener('input', () => {
+                // הצגה או הסתרה של ה-X לפי התוכן בתיבה
+                if (clearSearchBtn) clearSearchBtn.style.display = searchInput.value ? 'block' : 'none';
+                
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => window.requestAnimationFrame(renderList), 150);
+            });
+
+            clearSearchBtn?.addEventListener('click', () => {
+                if (searchInput) {
+                    searchInput.value = ''; // ניקוי התיבה
+                    clearSearchBtn.style.display = 'none'; // הסתרת ה-X
+                    searchInput.focus(); // החזרת הסמן לתיבת החיפוש
+                    window.requestAnimationFrame(renderList); // רענון הרשימה מיד
+                }
+            });
             
             document.getElementById('categoryFilter')?.addEventListener('change', () => {
                 saveUiSettings();
