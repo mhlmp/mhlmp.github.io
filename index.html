@@ -120,9 +120,9 @@
             display: flex; flex-direction: column; gap: 12px;
             overflow: visible; position: relative; z-index: 100;
         }
-       .search-container { position: relative; }
+      .search-container { position: relative; display: flex; align-items: center; }
         .search-container input {
-            width: 100%; padding: 12px 16px; padding-left: 40px; font-size: 16px;
+            width: 100%; padding: 12px 16px; font-size: 16px;
             border: 1px solid var(--glass-border); border-radius: var(--radius);
             background: rgba(127,127,127,0.1); color: var(--text-primary);
         }
@@ -131,11 +131,12 @@
             -webkit-appearance: none; appearance: none;
         }
         #clearSearchBtn {
-            position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-            background: none; border: none; font-size: 16px; color: var(--text-secondary);
-            cursor: pointer; display: none; padding: 5px; z-index: 10; transition: color 0.2s;
+            position: absolute; left: 10px; /* ממוקם בצד שמאל עבור ממשק RTL */
+            background: none; border: none; font-size: 14px; color: var(--text-secondary);
+            cursor: pointer; display: none; padding: 8px; z-index: 10; transition: color 0.2s;
+            border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
         }
-        #clearSearchBtn:hover { color: var(--primary-color); }
+        #clearSearchBtn:hover { color: var(--primary-color); background: rgba(127,127,127,0.1); }}
         .filters-container { display: flex; gap: 10px; flex-wrap: wrap; }
         .filters-container select {
             flex: 1; min-width: 130px; height: 44px; padding: 0 10px;
@@ -485,7 +486,7 @@
         <div id="controlsArea" class="glass-panel">
            <div class="search-container">
                 <input type="search" id="searchInput" placeholder="🔍 חפש קישור, תיאור או #מספר...">
-                <button id="clearSearchBtn" title="נקה חיפוש" aria-label="נקה חיפוש">✖</button>
+                <button id="clearSearchBtn" title="נקה חיפוש" aria-label="נקה חיפוש" style="display: none;">✖</button>
             </div>
             <div class="filters-container">
                 <select id="categoryFilter"><option value="">📂 כל הקטגוריות</option></select>
