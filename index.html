@@ -1370,9 +1370,10 @@
             return div;
         }
 
-        async function handleAdd(e) {
+       async function handleAdd(e) {
             e.preventDefault();
-            const content = document.getElementById('itemContent').value.trim();
+            let content = document.getElementById('itemContent').value.trim();
+            content = content.replace(/^[\/\\]+/, '');
             if (!content) return;
 
             const existingItem = state.items.find(i => i.content.toLowerCase() === content.toLowerCase());
@@ -1409,16 +1410,18 @@
             }
         }
 
-       window.saveAiSettings = async function () {
+     window.saveAiSettings = async function () {
+            const cleanKey = (id) => document.getElementById(id).value.replace(/\s+/g, '');
             const settings = {
                 provider: document.getElementById('aiProviderSelect').value,
                 autoScan: document.getElementById('autoScanNew').checked,
                 keys: {
-                    gemini:     [document.getElementById('keyGemini1').value.trim(), document.getElementById('keyGemini2').value.trim(), document.getElementById('keyGemini3').value.trim()].filter(Boolean),
-                    groq:       [document.getElementById('keyGroq1').value.trim(), document.getElementById('keyGroq2').value.trim(), document.getElementById('keyGroq3').value.trim()].filter(Boolean),
-                    openrouter: [document.getElementById('keyOpenRouter1').value.trim(), document.getElementById('keyOpenRouter2').value.trim(), document.getElementById('keyOpenRouter3').value.trim()].filter(Boolean)
+                    gemini:     [cleanKey('keyGemini1'), cleanKey('keyGemini2'), cleanKey('keyGemini3')].filter(Boolean),
+                    groq:       [cleanKey('keyGroq1'), cleanKey('keyGroq2'), cleanKey('keyGroq3')].filter(Boolean),
+                    openrouter: [cleanKey('keyOpenRouter1'), cleanKey('keyOpenRouter2'), cleanKey('keyOpenRouter3')].filter(Boolean)
                 }
             };
+         
             localStorage.setItem('aiSettingsPro', JSON.stringify(settings)); // גיבוי מקומי
             if (state.user) {
                 try {
@@ -1523,9 +1526,9 @@
                 }
             };
 
-            try {
-                let cleanContent = item.content.trim().replace(/^[\/]+/, '');
-                let isWebsite    = item.type === 'link';
+          try {
+                let cleanContent = item.content.trim().replace(/^[\/\\]+/, '').replace(/\s+/g, '');
+                let isWebsite    = item.type === 'link' || URL_REGEX.test(cleanContent);
 
                 if (isWebsite && !/^https?:\/\//i.test(cleanContent))
                     cleanContent = 'https://' + cleanContent;
@@ -1701,14 +1704,18 @@ ${contentToAnalyze}`;
                         }
                     }
 
-                    else if (currentProvider === 'groq') {
+                   else if (currentProvider === 'groq') {
                         let models = window.dynamicGroqModels;
+                        const safeGroqKey = activeKey.replace(/\s+/g, '');
                         if (!models) {
                             try {
-                                const req = await fetchWithTimeout('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': `Bearer ${activeKey}` } }, 10000);
+                                const req = await fetchWithTimeout('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': `Bearer ${safeGroqKey}` } }, 10000);
                                 const data = await req.json();
                                 if (data.error) throw new Error(data.error.message);
-                                if (data.data) { models = data.data.map(m => m.id).sort((a, b) => (a.includes('llama') ? -1 : 1)); window.dynamicGroqModels = models; }
+                                if (data.data) { 
+                                    models = data.data.map(m => m.id).filter(id => id.includes('llama-3') || id.includes('mixtral')).sort((a, b) => (a.includes('70b') ? -1 : 1)); 
+                                    window.dynamicGroqModels = models; 
+                                }
                             } catch { models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']; }
                         }
                         if (!models?.length) models = ['llama-3.3-70b-versatile'];
@@ -1717,7 +1724,7 @@ ${contentToAnalyze}`;
                             try {
                                 const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
                                     method: 'POST',
-                                    headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
+                                    headers: { 'Authorization': `Bearer ${safeGroqKey}`, 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ model, temperature: 0.1, messages: [{ role: 'user', content: systemPrompt }], response_format: { type: 'json_object' } })
                                 }, 30000);
                                 const rd = await res.json();
