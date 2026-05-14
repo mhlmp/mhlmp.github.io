@@ -839,17 +839,19 @@
             });
 
             window.addEventListener('offline', () => {
-                updateSyncStatus('offline', 'מקומי (אין רשת)');
-                showToast('⚠️ החיבור אבד. שינויים יישמרו ויסונכרנו כשהרשת תחזור.', null, 6000, null, true);
-                if (db) disableNetwork(db).catch(() => {});
-            });
+                state.isOffline = true; // <-- עדכון המשתנה ששכחנו
+                updateSyncStatus('offline', 'מקומי (אין רשת)');
+                showToast('⚠️ החיבור אבד. שינויים יישמרו ויסונכרנו כשהרשת תחזור.', null, 6000, null, true);
+                if (db) disableNetwork(db).catch(() => {});
+            });
 
-            window.addEventListener('online', () => {
-                updateSyncStatus('syncing', 'מתחבר מחדש...');
-                showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 4000);
-                if (db) enableNetwork(db).catch(() => {}); 
-                setTimeout(() => { if (state.user && !state.isOffline) forceReload(true); }, 1500);
-            });
+            window.addEventListener('online', () => {
+                state.isOffline = false; // <-- מחזירים למצב פעיל כדי לאפשר סנכרון
+                updateSyncStatus('syncing', 'מתחבר מחדש...');
+                showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 4000);
+                if (db) enableNetwork(db).catch(() => {}); 
+                setTimeout(() => { if (state.user && !state.isOffline) forceReload(true); }, 1500);
+            });
 
             let _lastVisibilitySync = 0;
             const visibilitySync = () => {
@@ -1132,24 +1134,26 @@
             } catch (e) { alert(e.message); }
         }
 
-      async function forceReload(silent = false) {
-            if (!state.user || state.isOffline || !db) return;
-            if (!navigator.onLine) {
-                if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
-                return;
-            }
-            const btn = document.getElementById('forceReloadBtn');
-            if (btn) btn.classList.add('spinning');
-            if (!silent) showToast("🔄 בודק נתונים מול הענן...", null, 2000);
-            try {
-                await disableNetwork(db);
-                await enableNetwork(db);
-                if (!silent) showToast("✅ הנתונים סונכרנו בהצלחה עם הענן");
-            } catch (err) {} 
-            finally {
-                if (btn) btn.classList.remove('spinning');
-            }
-        }
+     async function forceReload(silent = false) {
+            if (!state.user || state.isOffline || !db) return;
+            if (!navigator.onLine) {
+                if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
+                return;
+            }
+            const btn = document.getElementById('forceReloadBtn');
+            if (btn) btn.classList.add('spinning');
+            if (!silent) showToast("🔄 בודק נתונים מול הענן...", null, 2000);
+            try {
+                await disableNetwork(db);
+                await enableNetwork(db);
+                updateSyncStatus('online', 'מחובר ✓'); // <-- התוספת שמוודאת שהכפתור יחזור לירוק
+                if (!silent) showToast("✅ הנתונים סונכרנו בהצלחה עם הענן");
+            } catch (err) {
+                updateSyncStatus('error', 'שגיאת סנכרון');
+            } finally {
+                if (btn) btn.classList.remove('spinning');
+            }
+        }
 
         function renderList() {
             if (!state.user) return;
