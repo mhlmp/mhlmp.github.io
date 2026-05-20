@@ -152,8 +152,8 @@
         }
         .action-btn:active::after { animation: ripple 0.4s ease-out; }
         
-        .btn-json { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
-        .btn-txt { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+        .btn-json { background: linear-gradient(135deg, #60a5fa, #2dd4bf); }
+        .btn-txt { background: linear-gradient(135deg, #3b82f6, #14b8a6); }
         .btn-site { background: linear-gradient(135deg, #6366f1, #4f46e5); }
         .btn-trash-view { background: linear-gradient(135deg, #64748b, #475569); }
         .btn-toggle {
@@ -507,13 +507,6 @@
                         <div class="dropdown-divider"></div>
                        <label for="smartImportInput">🔄 <b>ייבוא חכם (מיזוג)</b></label>
                         <input type="file" id="smartImportInput" accept=".txt">
-                    </div>
-                </div>
-                <div class="dropdown">
-                    <button class="action-btn btn-site drop-trigger" data-target="siteMenu">💾 אתר ▼</button>
-                    <div id="siteMenu" class="dropdown-content">
-                        <button id="downloadHtmlBtn">🌐 שמור אתר מלא (HTML)</button>
-                        <button id="downloadSourceBtn">💻 הורד קוד מקור (TXT)</button>
                     </div>
                 </div>
                 <div class="dropdown">
@@ -871,8 +864,6 @@
             document.getElementById('editAiForm')?.addEventListener('submit', handleEditAiSubmit);
             document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
             document.getElementById('exportTxtBtn')?.addEventListener('click', exportTxt);
-            document.getElementById('downloadHtmlBtn')?.addEventListener('click', downloadSite);
-            document.getElementById('downloadSourceBtn')?.addEventListener('click', downloadSource);
             document.getElementById('wakeLockBtn')?.addEventListener('click', toggleWakeLock);
             // מנגנון Event Delegation גלובלי לכל הכרטיסיות
             document.getElementById('listContainer')?.addEventListener('click', (e) => {
@@ -2331,20 +2322,7 @@ ${contentToAnalyze}`;
             downloadFile(`MH_Links_Backup_${new Date().toISOString().slice(0,10)}.txt`, data, 'text/plain');
             closeAllMenus();
         }
-
-        function downloadSite() {
-            closeAllMenus();
-            const cleanItems = state.items.map(item => { const c = { ...item }; delete c.isScanning; return c; });
-            const el = document.getElementById('offline-data');
-            if (el) el.textContent = JSON.stringify({ items: cleanItems, trash: state.trash });
-            downloadFile(`LinkManager_${new Date().toISOString().slice(0,10)}.html`, '<!DOCTYPE html>\n' + document.documentElement.outerHTML, 'text/html');
-        }
-
-        function downloadSource() {
-            closeAllMenus();
-            downloadFile('source.txt', '<!DOCTYPE html>\n' + document.documentElement.outerHTML, 'text/plain');
-        }
-
+        
         function downloadFile(n, c, t) {
             const b = new Blob([c], { type: t });
             const u = URL.createObjectURL(b);
