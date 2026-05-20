@@ -151,9 +151,9 @@
             transform: scale(1, 1) translate(-50%); transform-origin: 50% 50%;
         }
         .action-btn:active::after { animation: ripple 0.4s ease-out; }
-        
         .btn-json { background: linear-gradient(135deg, #60a5fa, #2dd4bf); }
         .btn-txt { background: linear-gradient(135deg, #3b82f6, #14b8a6); }
+        .btn-ai { background: linear-gradient(135deg, #8b5cf6, #d946ef); }
         .btn-trash-view { background: linear-gradient(135deg, #64748b, #475569); }
         .btn-toggle {
             background: rgba(127,127,127,0.1); color: var(--text-primary);
@@ -508,12 +508,10 @@
                         <input type="file" id="smartImportInput" accept=".txt">
                     </div>
                 </div>
-                <div class="dropdown">
-                    <button class="action-btn drop-trigger" data-target="aiMenu" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9);">✨ AI ▼</button>
+               <div class="dropdown">
+                    <button class="action-btn btn-ai drop-trigger" data-target="aiMenu">✨ AI ▼</button>
                     <div id="aiMenu" class="dropdown-content">
                         <button id="openAiSettingsBtn">⚙️ הגדרות AI ומפתחות</button>
-                        <div class="dropdown-divider"></div>
-                        <button id="wakeLockBtn" style="color: var(--primary-color);">💡 מצב מסך דולק (לסריקה ארוכה)</button>
                         <div class="dropdown-divider"></div>
                         <button id="bulkAiScanBtn">🤖 סרוק את כל המאגר</button>
                        <button id="cancelBulkAiBtn" style="display:none; color: var(--accent-red);">🛑 עצור סריקה</button>
@@ -686,9 +684,8 @@
         // הוספת האדמינים למעקף ואבטחה
         const ADMIN_EMAILS = ["meirhadad74@gmail.com", "meirhadad75@gmail.com"];
 
-        let app, auth, db;
+       let app, auth, db;
         let deferredPrompt;
-        let wakeLock = null;
         
         let state = {
             items: [], trash: [], user: null, unsubItems: null, unsubTrash: null,
@@ -863,7 +860,6 @@
             document.getElementById('editAiForm')?.addEventListener('submit', handleEditAiSubmit);
             document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
             document.getElementById('exportTxtBtn')?.addEventListener('click', exportTxt);
-            document.getElementById('wakeLockBtn')?.addEventListener('click', toggleWakeLock);
             // מנגנון Event Delegation גלובלי לכל הכרטיסיות
             document.getElementById('listContainer')?.addEventListener('click', (e) => {
                 const card = e.target.closest('.card');
@@ -886,30 +882,6 @@
                     if (!state.isSelectionMode) window.open(item.content, '_blank', 'noopener,noreferrer');
                 }
             });
-        }
-
-        async function toggleWakeLock() {
-            closeAllMenus();
-            if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied')
-                await Notification.requestPermission();
-
-            if (!('wakeLock' in navigator))
-                return showToast('❌ הדפדפן שלך לא תומך בפונקציית מסך דולק.', null, 4000, null, true);
-
-            try {
-                if (wakeLock !== null) {
-                    await wakeLock.release();
-                    wakeLock = null;
-                    document.getElementById('wakeLockBtn').innerHTML = '💡 מצב מסך דולק (לסריקה ארוכה)';
-                    showToast('המסך יחזור להתכבות כרגיל.');
-                } else {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                    document.getElementById('wakeLockBtn').innerHTML = '🛑 בטל מצב מסך דולק';
-                    showToast('✅ המסך יישאר דולק עד שתבטל זאת.');
-                }
-            } catch (err) {
-                showToast(`שגיאה: ${err.message}`, null, 4000, null, true);
-            }
         }
 
         function repositionDropdown(menu) {
