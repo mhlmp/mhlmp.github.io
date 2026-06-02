@@ -491,6 +491,12 @@
                         <input type="file" id="importJsonInput" accept=".json">
                         <div class="dropdown-divider"></div>
                         <button id="exportJsonBtn">📤 ייצוא לקובץ JSON</button>
+                        <div id="excludePrivateJsonWrapper" style="display:none; padding: 8px 18px; text-align: right; background: rgba(127,127,127,0.05);">
+                            <label style="display:flex; align-items:center; justify-content:flex-end; gap:8px; cursor:pointer; font-size:13px; padding:0; color:var(--text-primary);">
+                                החרג 'שלי - פרטי'
+                                <input type="checkbox" id="excludePrivateJsonCb" style="cursor:pointer; transform:scale(1.2); accent-color:var(--primary-color);">
+                            </label>
+                        </div>
                     </div>
                 </div>
                 <div class="dropdown">
@@ -2273,9 +2279,28 @@ ${contentToAnalyze}`;
             r.readAsText(f);
         }
         
-        function exportJson() {
-            const cleanItems = state.items.map(item => { const c = { ...item }; delete c.isScanning; return c; });
-            downloadFile('backup.json', JSON.stringify({ items: cleanItems, trash: state.trash, schema: SCHEMA_VERSION }, null, 2), 'application/json');
+       function exportJson() {
+            const excludeCb = document.getElementById('excludePrivateJsonCb');
+            const shouldExclude = excludeCb ? excludeCb.checked : false;
+
+            const cleanItems = state.items
+                .filter(item => {
+                    if (shouldExclude && item.category === 'שלי - פרטי') return false;
+                    return true;
+                })
+                .map(item => { 
+                    const c = { ...item }; 
+                    delete c.isScanning; 
+                    return c; 
+                });
+                
+            // סינון סל המחזור כדי להבטיח שפריטים פרטיים לא זולגים דרך הפח בייצוא
+            const cleanTrash = state.trash.filter(item => {
+                if (shouldExclude && item.category === 'שלי - פרטי') return false;
+                return true;
+            });
+
+            downloadFile('backup.json', JSON.stringify({ items: cleanItems, trash: cleanTrash, schema: SCHEMA_VERSION }, null, 2), 'application/json');
             closeAllMenus();
         }
 
@@ -2339,10 +2364,16 @@ ${contentToAnalyze}`;
             const select  = document.getElementById('categoryFilter');
             const datalist = document.getElementById('categoriesDatalist');
             
-            // בדיקה אם להציג את אופציית החרגת הקטגוריה בתפריט TXT
-            const excludeWrapper = document.getElementById('excludePrivateWrapper');
-            if (excludeWrapper) {
-                excludeWrapper.style.display = cats.has('שלי - פרטי') ? 'block' : 'none';
+          // בדיקה אם להציג את אופציית החרגת הקטגוריה בתפריטים
+            const excludeWrapperTxt = document.getElementById('excludePrivateWrapper');
+            const excludeWrapperJson = document.getElementById('excludePrivateJsonWrapper');
+            const hasPrivate = cats.has('שלי - פרטי');
+            
+            if (excludeWrapperTxt) {
+                excludeWrapperTxt.style.display = hasPrivate ? 'block' : 'none';
+            }
+            if (excludeWrapperJson) {
+                excludeWrapperJson.style.display = hasPrivate ? 'block' : 'none';
             }
 
             if (!select || !datalist) return;
