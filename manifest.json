@@ -1,4 +1,5 @@
 {
+  "id": "/",
   "name": "Link Manager Pro",
   "short_name": "MHLMP",
   "start_url": "./index.html",
@@ -8,31 +9,22 @@
   "theme_color": "#0f172a",
   "orientation": "portrait-primary",
   "description": "ניהול קישורים חכם ומאובטח בענן של גוגל",
-  "categories": ["productivity", "utilities"],
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "icon.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "icon.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icon.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "icon.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     }
   ],
   "screenshots": [
