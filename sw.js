@@ -1,11 +1,12 @@
 // 1. שנה את מספר הגרסה באופן ידני בכל פעם שאתה מעלה עדכון משמעותי ל-GitHub כדי לאלץ רענון קאש לכל המשתמשים.
-const CACHE_NAME = 'LinkManager-v4.0-SyncEngine';
+const CACHE_NAME = 'LinkManager-v4.1-SyncEngine';
 
+// שימוש בנתיבי שורש (Root) כדי להתאים ל-Manifest ולמנוע שגיאות ניתוב
 const urlsToCache = [
-  './',
-  './index.html',
-  './manifest.json',
-  './icon.png'
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icon.png'
 ];
 
 // התקנה - דוחף את הגרסה החדשה מיד
@@ -13,7 +14,11 @@ self.addEventListener('install', event => {
   self.skipWaiting(); 
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(urlsToCache))
+      .then(cache => {
+        console.log('[Service Worker] Caching app shell');
+        return cache.addAll(urlsToCache);
+      })
+      .catch(error => console.error('[Service Worker] Cache addAll failed:', error))
   );
 });
 
@@ -36,6 +41,9 @@ self.addEventListener('activate', event => {
 
 // אסטרטגיית טעינה: Network First (קודם רשת, אם נכשל - זיכרון)
 self.addEventListener('fetch', event => {
+  // הגנה קריטית: אי אפשר לקאשש בקשות POST/PUT. מתעלמים מכל מה שאינו בקשת קריאה (GET)
+  if (event.request.method !== 'GET') return;
+
   const url = event.request.url;
   
   // החרגת כל קריאות ה-API כדי שה-SW לא יתערב או ינסה לקאשש אותן
@@ -46,13 +54,15 @@ self.addEventListener('fetch', event => {
       url.includes('api.allorigins.win') || 
       url.includes('corsproxy.io') ||
       url.includes('api.codetabs.com') ||
-      url.includes('firebase')) {
+      url.includes('firebase') ||
+      url.startsWith('chrome-extension')) {
       return; // נותן לבקשה לצאת לרשת כרגיל ללא מעורבות SW
   }
 
   event.respondWith(
     fetch(event.request)
       .then(response => {
+        // נוודא שהתגובה תקינה ורק אז נשמור ב-Cache
         if (response && response.status === 200) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
