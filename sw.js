@@ -1,7 +1,7 @@
-// 1. שנה את מספר הגרסה באופן ידני בכל פעם שאתה מעלה עדכון משמעותי ל-GitHub כדי לאלץ רענון קאש לכל המשתמשים.
-const CACHE_NAME = 'LinkManager-v4.1-SyncEngine';
+// 1. הגרסה הוקפצה ל-4.2 לאיפוס קאש והחלת התיקונים הקריטיים
+const CACHE_NAME = 'LinkManager-v4.2-SyncEngine';
 
-// שימוש בנתיבי שורש (Root) כדי להתאים ל-Manifest ולמנוע שגיאות ניתוב
+// שימוש בנתיבי שורש (Root) בלבד כדי לנעול את ה-Scope
 const urlsToCache = [
   '/',
   '/index.html',
@@ -73,13 +73,12 @@ self.addEventListener('fetch', event => {
   );
 });
 
-// טיפול בלחיצה על התראות מערכת (Push Notifications)
+// טיפול בלחיצה על התראות מערכת
 self.addEventListener('notificationclick', event => {
-  event.notification.close(); // סוגר את ההתראה
+  event.notification.close();
   
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
-      // אם האפליקציה כבר פתוחה באחד הטאבים, נביא אותה לפרונט
       if (clientList.length > 0) {
         let client = clientList[0];
         for (let i = 0; i < clientList.length; i++) {
@@ -89,7 +88,6 @@ self.addEventListener('notificationclick', event => {
         }
         return client.focus();
       }
-      // אם היא סגורה לגמרי, נפתח אותה מחדש
       return clients.openWindow('/');
     })
   );
