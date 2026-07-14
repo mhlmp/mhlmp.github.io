@@ -14,6 +14,8 @@
     <link rel="icon" type="image/png" href="/icon.png">
     <link rel="preload" href="/icon.png" as="image">
     
+    <!-- ייבוא המערכת החדשה של גוגל להתחברות פנימית (One Tap) -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script id="offline-data" type="application/json"></script>
     
     <style>
@@ -97,7 +99,7 @@
 
         @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-        .btn-login { background: var(--google-btn); color: white; border: none; padding: 10px 24px; border-radius: 30px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+        .btn-login { background: var(--google-btn); color: white; border: none; padding: 10px 24px; border-radius: 30px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         .btn-action-sm { background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 8px 14px; border-radius: 8px; cursor: pointer; margin-left: 5px; font-size: 0.85rem; }
 
         #welcomeScreen { display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border); min-height: 80vh; margin-bottom: 20px; }
@@ -141,12 +143,6 @@
             position: relative; overflow: hidden;
         }
         .action-btn:active { transform: scale(0.94); box-shadow: inset 0 3px 6px rgba(0,0,0,0.2); }
-        .action-btn::after {
-            content: ''; position: absolute; top: 50%; left: 50%; width: 5px; height: 5px;
-            background: rgba(255, 255, 255, 0.4); opacity: 0; border-radius: 100%;
-            transform: scale(1, 1) translate(-50%); transform-origin: 50% 50%;
-        }
-        .action-btn:active::after { animation: ripple 0.4s ease-out; }
         .btn-json { background: linear-gradient(135deg, #60a5fa, #2dd4bf); }
         .btn-txt { background: linear-gradient(135deg, #3b82f6, #14b8a6); }
         .btn-ai { background: linear-gradient(135deg, #8b5cf6, #d946ef); }
@@ -293,10 +289,6 @@
        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
-        @keyframes ripple {
-            0% { transform: scale(0, 0); opacity: 0.5; }
-            100% { transform: scale(40, 40); opacity: 0; }
-        }
         
         .header-logo {
             width: 32px; height: 32px; object-fit: contain;
@@ -305,11 +297,7 @@
             transition: transform 0.3s ease;
         }
         .header-logo:hover { transform: scale(1.1) rotate(-5deg); }
-        @media (max-width: 400px) {
-            h1 { font-size: 1.4rem !important; }
-            .header-logo { width: 26px; height: 26px; }
-        }
-
+        
         .card-checkbox { display: none; position: absolute; top: 10px; right: 10px; transform: scale(1.3); accent-color: var(--primary-color); pointer-events: none; z-index: 10; }
         body.selection-mode-active .card-checkbox { display: block; }
         body.selection-mode-active .card.selected { border: 2px solid var(--primary-color); background: rgba(96, 165, 250, 0.12); }
@@ -331,7 +319,6 @@
         .bulk-btn { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); padding: 7px 14px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 0.85rem; transition: 0.2s; }
         .bulk-btn:hover { background: rgba(255,255,255,0.2); }
         .bulk-btn.delete { background: rgba(239, 68, 68, 0.2); border-color: var(--accent-red); color: #fca5a5; }
-        .bulk-btn.delete:hover { background: var(--accent-red); color: white; }
 
         #loading-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -418,10 +405,13 @@
     </header>
 
     <div id="userSection" class="glass-panel">
-        <div id="loggedOutView" style="display:flex; width:100%; justify-content:center;">
-            <button id="googleLoginBtn" class="btn-login">
+        <div id="loggedOutView" style="display:flex; width:100%; justify-content:center; flex-direction:column; align-items:center; gap:15px;">
+            <!-- כפתור ה-One Tap של גוגל ירונדר כאן -->
+            <div id="googleSignInDiv"></div>
+            <!-- כפתור הגיבוי אם חוסם פרסומות חוסם את החלון הקופץ -->
+            <button id="fallbackLoginBtn" class="btn-login" style="display:none;">
                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" alt="G">
-                התחבר עם Google
+                התחברות חלופית
             </button>
         </div>
         <div id="loggedInView" style="display:none; width:100%; justify-content:space-between; align-items:center;">
@@ -660,14 +650,21 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import {
-            getAuth, signInWithPopup, GoogleAuthProvider, signOut,
+            getAuth, signInWithPopup, GoogleAuthProvider, signOut, signInWithCredential,
             onAuthStateChanged, setPersistence, browserLocalPersistence
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import {
             getFirestore, doc, setDoc, getDoc, collection, onSnapshot, 
-            deleteDoc, writeBatch, serverTimestamp, enableNetwork, disableNetwork,
+            deleteDoc, writeBatch, enableNetwork, disableNetwork,
             initializeFirestore, persistentLocalCache, persistentMultipleTabManager
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // =========================================================================================
+        // הגדרה קריטית למניעת יציאה מהאפליקציה! 
+        // אנא הכנס כאן את ה-Web Client ID שלך מתוך מסוף Firebase
+        // =========================================================================================
+        const GOOGLE_CLIENT_ID = 933486826829-k0020us3vsn4j2agi2vealoml0dtnme7.apps.googleusercontent.com; 
+        // =========================================================================================
 
         const firebaseConfig = {
             apiKey: "AIzaSyDwofGCJUWkdLGWyXK7_UBAbbC39FXnAmI",
@@ -704,7 +701,6 @@
             auth = getAuth(app);
             setPersistence(auth, browserLocalPersistence);
             try {
-                // מנסה לאתחל עם זיכרון מקומי מורחב (עלול להיכשל בחלק מה-PWAs)
                 db = initializeFirestore(app, {
                     localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
                 });
@@ -738,6 +734,7 @@
 
             initServiceWorker();
             initTheme();
+            initGoogleAuth(); // <-- אתחול ה-One Tap
             setupEventListeners();
             setupFirebaseListeners();
             setupScrollToTop();
@@ -756,6 +753,48 @@
                 }
             });
         });
+
+        // פונקציית יצירת חלון ההתחברות הפנימי בתוך האפליקציה (GIS)
+        function initGoogleAuth() {
+            if (GOOGLE_CLIENT_ID.includes("הכנס_כאן")) {
+                document.getElementById('fallbackLoginBtn').style.display = 'flex';
+                return;
+            }
+            if (window.google && google.accounts) {
+                google.accounts.id.initialize({
+                    client_id: GOOGLE_CLIENT_ID,
+                    callback: handleCredentialResponse,
+                    auto_select: false,
+                    cancel_on_tap_outside: true
+                });
+                google.accounts.id.renderButton(
+                    document.getElementById("googleSignInDiv"),
+                    { theme: "filled_blue", size: "large", shape: "pill", type: "standard", locale: "he" }
+                );
+            } else {
+                document.getElementById('fallbackLoginBtn').style.display = 'flex';
+            }
+        }
+
+        async function handleCredentialResponse(response) {
+            const credential = GoogleAuthProvider.credential(response.credential);
+            try {
+                showToast('מתחבר לחשבון...', null, 0, 'login-toast', false);
+                await signInWithCredential(auth, credential);
+                removeToast('login-toast');
+            } catch (error) {
+                console.error("Login failed:", error);
+                showToast('❌ שגיאה בהתחברות: ' + error.message, null, 4000, null, true);
+                document.getElementById('fallbackLoginBtn').style.display = 'flex';
+            }
+        }
+
+        // גיבוי במידה וחוסם פרסומות חסם את חלון ההתחברות הפנימי
+        window.fallbackLogin = async function() {
+            if (!navigator.onLine) return showToast('❌ לא ניתן להתחבר ללא חיבור לאינטרנט.', null, 4000, null, true);
+            try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+            catch (e) { alert(e.message); }
+        };
 
         function initServiceWorker() {
             if (!('serviceWorker' in navigator)) return;
@@ -812,7 +851,7 @@
             document.getElementById('toggleDuplicatesBtn')?.addEventListener('click', toggleDuplicates);
             document.getElementById('toggleDeadBtn')?.addEventListener('click', toggleDeadFilter);
             
-            document.getElementById('googleLoginBtn')?.addEventListener('click', cloudLogin);
+            document.getElementById('fallbackLoginBtn')?.addEventListener('click', window.fallbackLogin);
             document.getElementById('logoutBtn')?.addEventListener('click', cloudLogout);
             document.getElementById('switchAccountBtn')?.addEventListener('click', switchAccount);
             
@@ -1069,16 +1108,6 @@
             if (lbl) lbl.textContent = label || status;
         }
 
-        async function cloudLogin() {
-            if (!navigator.onLine)
-                return showToast('❌ לא ניתן להתחבר ללא חיבור לאינטרנט.', null, 4000, null, true);
-            if (!auth || !db)
-                return showToast('❌ שירותי הענן נחסמו. בדוק אם קיים חוסם פרסומות המונע גישה ל-Firebase.', null, 5000, null, true);
-                
-            try { await signInWithPopup(auth, new GoogleAuthProvider()); }
-            catch (e) { alert(e.message); }
-        }
-
         async function cloudLogout() {
             if (state.unsubItems) state.unsubItems();
             if (state.unsubTrash) state.unsubTrash();
@@ -1091,9 +1120,15 @@
                 if (state.unsubItems) state.unsubItems();
                 if (state.unsubTrash) state.unsubTrash();
                 await signOut(auth);
-                const provider = new GoogleAuthProvider();
-                provider.setCustomParameters({ prompt: 'select_account' });
-                await signInWithPopup(auth, provider);
+                
+                // שימוש בחלון הקופץ הפנימי להחלפת חשבון במידה והוגדר
+                if (window.google && google.accounts && !GOOGLE_CLIENT_ID.includes("הכנס_כאן")) {
+                    google.accounts.id.prompt();
+                } else {
+                    const provider = new GoogleAuthProvider();
+                    provider.setCustomParameters({ prompt: 'select_account' });
+                    await signInWithPopup(auth, provider);
+                }
             } catch (e) { alert(e.message); }
         }
 
