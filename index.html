@@ -6,14 +6,14 @@
     <meta name="theme-color" content="#0f172a">
     <title>MH Link Manager Pro</title>
     
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="/manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-   <link rel="apple-touch-icon" href="icon.png">
-    <link rel="icon" type="image/png" href="icon.png">
+    <link rel="apple-touch-icon" href="/icon.png">
+    <link rel="icon" type="image/png" href="/icon.png">
     <!-- פקודה לדפדפן להוריד את התמונה כמה שיותר מהר, כי היא חיונית לכותרת -->
-    <link rel="preload" href="icon.png" as="image">
+    <link rel="preload" href="/icon.png" as="image">
     
     <script id="offline-data" type="application/json"></script>
     
@@ -305,7 +305,7 @@
         
         .header-logo {
             width: 32px; height: 32px; object-fit: contain;
-            border-radius: 8px; /* למקרה שהלוגו מרובע ונרצה לעדן קצוות */
+            border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
             transition: transform 0.3s ease;
         }
@@ -414,9 +414,9 @@
 
    <header>
         <h1 style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 10px;">
-            <img src="icon.png" alt="Logo" class="header-logo" decoding="async" loading="eager">
+            <img src="/icon.png" alt="Logo" class="header-logo" decoding="async" loading="eager">
             <span style="background: linear-gradient(135deg, #60a5fa, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">MH Link Manager Pro</span>
-            <img src="icon.png" alt="Logo" class="header-logo" style="transform: scaleX(-1);" decoding="async" loading="eager">
+            <img src="/icon.png" alt="Logo" class="header-logo" style="transform: scaleX(-1);" decoding="async" loading="eager">
         </h1>
         <button id="installAppBtn">⬇️ התקן אפליקציה</button>
         <div id="itemCount">ממתין להתחברות...</div>
@@ -761,7 +761,7 @@
 
         function initServiceWorker() {
             if (!('serviceWorker' in navigator)) return;
-            navigator.serviceWorker.register('./sw.js').then(reg => {
+            navigator.serviceWorker.register('/sw.js').then(reg => {
                 reg.addEventListener('updatefound', () => {
                     const nw = reg.installing;
                     nw.addEventListener('statechange', () => {
@@ -834,19 +834,19 @@
             });
 
             window.addEventListener('offline', () => {
-                state.isOffline = true; // <-- עדכון המשתנה ששכחנו
-                updateSyncStatus('offline', 'מקומי (אין רשת)');
-                showToast('⚠️ החיבור אבד. שינויים יישמרו ויסונכרנו כשהרשת תחזור.', null, 6000, null, true);
-                if (db) disableNetwork(db).catch(() => {});
-            });
+                state.isOffline = true;
+                updateSyncStatus('offline', 'מקומי (אין רשת)');
+                showToast('⚠️ החיבור אבד. שינויים יישמרו ויסונכרנו כשהרשת תחזור.', null, 6000, null, true);
+                if (db) disableNetwork(db).catch(() => {});
+            });
 
-            window.addEventListener('online', () => {
-                state.isOffline = false; // <-- מחזירים למצב פעיל כדי לאפשר סנכרון
-                updateSyncStatus('syncing', 'מתחבר מחדש...');
-                showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 4000);
-                if (db) enableNetwork(db).catch(() => {}); 
-                setTimeout(() => { if (state.user && !state.isOffline) forceReload(true); }, 1500);
-            });
+            window.addEventListener('online', () => {
+                state.isOffline = false;
+                updateSyncStatus('syncing', 'מתחבר מחדש...');
+                showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 4000);
+                if (db) enableNetwork(db).catch(() => {}); 
+                setTimeout(() => { if (state.user && !state.isOffline) forceReload(true); }, 1500);
+            });
 
             let _lastVisibilitySync = 0;
             const visibilitySync = () => {
@@ -866,7 +866,7 @@
             document.getElementById('editAiForm')?.addEventListener('submit', handleEditAiSubmit);
             document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
             document.getElementById('exportTxtBtn')?.addEventListener('click', exportTxt);
-            // מנגנון Event Delegation גלובלי לכל הכרטיסיות
+            
             document.getElementById('listContainer')?.addEventListener('click', (e) => {
                 const card = e.target.closest('.card');
                 if (!card) return;
@@ -923,7 +923,6 @@
                         }
                     });
 
-                    // נוודא שאין מאזין פתוח קודם כדי למנוע כפילויות ברענון
                     if (state.unsubItems) state.unsubItems();
                     if (state.unsubTrash) state.unsubTrash();
 
@@ -980,7 +979,6 @@
                                 trashChanged = true;
                             }
                         });
-                        // עדכון לייב של סל המחזור אם הוא פתוח כרגע
                         if (trashChanged && document.getElementById('trashModal').classList.contains('open')) {
                             openTrashModal();
                         }
@@ -1029,7 +1027,6 @@
                 return;
             }
 
-            // פריצת דרך ודילוג על טיימר האזהרה למשתמשים המורשים
             if (state.user && ADMIN_EMAILS.includes(state.user.email)) {
                 welcomeScreen.style.display = 'none';
                 welcomeScreen.classList.remove('visible');
@@ -1103,25 +1100,25 @@
         }
 
      async function forceReload(silent = false) {
-            if (!state.user || state.isOffline || !db) return;
-            if (!navigator.onLine) {
-                if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
-                return;
-            }
-            const btn = document.getElementById('forceReloadBtn');
-            if (btn) btn.classList.add('spinning');
-            if (!silent) showToast("🔄 בודק נתונים מול הענן...", null, 2000);
-            try {
-                await disableNetwork(db);
-                await enableNetwork(db);
-                updateSyncStatus('online', 'מחובר ✓'); // <-- התוספת שמוודאת שהכפתור יחזור לירוק
-                if (!silent) showToast("✅ הנתונים סונכרנו בהצלחה עם הענן");
-            } catch (err) {
-                updateSyncStatus('error', 'שגיאת סנכרון');
-            } finally {
-                if (btn) btn.classList.remove('spinning');
-            }
-        }
+            if (!state.user || state.isOffline || !db) return;
+            if (!navigator.onLine) {
+                if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
+                return;
+            }
+            const btn = document.getElementById('forceReloadBtn');
+            if (btn) btn.classList.add('spinning');
+            if (!silent) showToast("🔄 בודק נתונים מול הענן...", null, 2000);
+            try {
+                await disableNetwork(db);
+                await enableNetwork(db);
+                updateSyncStatus('online', 'מחובר ✓');
+                if (!silent) showToast("✅ הנתונים סונכרנו בהצלחה עם הענן");
+            } catch (err) {
+                updateSyncStatus('error', 'שגיאת סנכרון');
+            } finally {
+                if (btn) btn.classList.remove('spinning');
+            }
+        }
 
         function renderList() {
             if (!state.user) return;
@@ -1168,14 +1165,14 @@
                     return meta.visualIndex === n;
                 }
                const safeTags = (item.aiTags || []).join(' ').toLowerCase();
-                const matchesSearch = !query ||
-                    item.content.toLowerCase().includes(query) ||
-                    (item.description || '').toLowerCase().includes(query) ||
-                    (item.category || '').toLowerCase().includes(query) ||
-                    (item.note || '').toLowerCase().includes(query) ||
-                    (item.aiSummary || '').toLowerCase().includes(query) || // <--- התוספת שכאן מאפשרת חיפוש בתוך הסיכום
-                    safeTags.includes(query);
-                return matchesSearch && matchesCat;
+                const matchesSearch = !query ||
+                    item.content.toLowerCase().includes(query) ||
+                    (item.description || '').toLowerCase().includes(query) ||
+                    (item.category || '').toLowerCase().includes(query) ||
+                    (item.note || '').toLowerCase().includes(query) ||
+                    (item.aiSummary || '').toLowerCase().includes(query) ||
+                    safeTags.includes(query);
+                return matchesSearch && matchesCat;
             });
 
             state.filteredItems = filtered;
@@ -1346,7 +1343,7 @@
                     scanSingleItem(item.id, qs.provider || null, qs.urlOnly || false);
                 }
             });
-           
+            
             return div;
         }
 
@@ -1382,7 +1379,6 @@
 
            await saveItemToCloud(newItem);
            
-           // הודעה עם כפתור UNDO שמוחק את המסמך שיצרנו כרגע
            showToast('✅ פריט נוסף', async () => {
                try {
                    await deleteDoc(doc(db, 'users', state.user.uid, 'items', newItem.id.toString()));
@@ -1411,7 +1407,7 @@
                 }
             };
          
-            localStorage.setItem('aiSettingsPro', JSON.stringify(settings)); // גיבוי מקומי
+            localStorage.setItem('aiSettingsPro', JSON.stringify(settings)); 
             if (state.user) {
                 try {
                      updateSyncStatus('syncing', 'שומר מפתחות...');
@@ -1422,10 +1418,9 @@
                      showToast('⚠️ הגדרות נשמרו מקומית בלבד', null, 3000, null, true);
                 }
             }
-            // עדכון המשתנה ב-state שיהיה זמין לכל הקריאות
             state.aiSettings = settings;
             document.getElementById('aiSettingsModal').style.display = 'none';
-            showToast('✅ הגדרות מנועי AI עובדכנו ונשמרו בענן!');
+            showToast('✅ הגדרות מנועי AI עודכנו ונשמרו בענן!');
         };
 
       function getAiSettings() {
@@ -1484,7 +1479,6 @@
 
             const settings       = getAiSettings();
             
-           // שימוש קשיח בספק הנבחר ומניעת שגיאות מפתחות מספקים אחרים
             const currentProvider = overrideProvider || settings.provider;
             const pKeys = settings.keys[currentProvider] || [];
             const fallbackChain = (Array.isArray(pKeys) ? pKeys : [pKeys])
@@ -1557,20 +1551,16 @@ Task: Analyze based ONLY on the URL and User Description. CRITICAL RULE: If you 
                             const parser = new DOMParser();
                             const doc2 = parser.parseFromString(htmlText, 'text/html');
                             
-                            // משיכת כותרת ותיאור המטא - קריטי לאתרי SPA שאין להם טקסט ב-body (כמו lofrayer)
                             const pageTitle = doc2.title || '';
                             const metaDesc = doc2.querySelector('meta[name="description"]')?.content || doc2.querySelector('meta[property="og:description"]')?.content || '';
                             
                             doc2.querySelectorAll('script,style,nav,footer,noscript,iframe,header').forEach(el => el.remove());
                             const bodyText = (doc2.body?.innerText || '').replace(/\s+/g, ' ').trim();
                             
-                            // שילוב כל המידע הרלוונטי
                             const combinedText = `Page Title: ${pageTitle}\nMeta Description: ${metaDesc}\nPage Content: ${bodyText}`.trim();
                             
-                            // מורידים את הרף ל-20 תווים בלבד כי מספיק שיש כותרת קצרה באתר כדי שנדע מהו
                             if (combinedText.length < 20) throw new Error('empty content');
                             
-                            // חסימת ג'יבריש/בינארי
                             const weirdCharCount = (bodyText.match(/[^\x20-\x7E\n\r\tא-ת]/g) || []).length;
                             if (bodyText.length > 50 && weirdCharCount > bodyText.length * 0.15) throw new Error('binary_or_garbage');
                             
@@ -1586,11 +1576,9 @@ Task: Analyze based ONLY on the URL and User Description. CRITICAL RULE: If you 
                         scrapedOk = true;
                     } catch (_) { scrapedOk = false; }
 
-                    // מורידים את רף ה-100 תווים גם כאן למקרה של אתר שחזר רק עם כותרת קטנה
                     if (!scrapedOk || contentToAnalyze.length < 40) {
                         const domainMatch = cleanContent.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?]+)/im);
                         const domain = domainMatch ? domainMatch[1] : cleanContent;
-                        // שינינו את הפרומפט כך שיעודד את המודל *להשתמש* בידע הפנימי שלו כדי לזהות את האתר, כפי שהוא עושה בצאט רגיל
                         contentToAnalyze = `[SYSTEM NOTE: SCRAPING BLOCKED OR EMPTY]
 Target URL: ${cleanContent}
 Domain Name: ${domain}
@@ -1658,7 +1646,7 @@ ${contentToAnalyze}`;
                 for (let i = 0; i < fallbackChain.length; i++) {
                     if (success) break;
                     const { provider: currentProvider, key: rawKey, keyIndex } = fallbackChain[i];
-                    const activeKey = rawKey.trim(); // ניקוי רווחים נסתרים
+                    const activeKey = rawKey.trim(); 
                     let shouldTryNextKey = false;
 
                     if (currentProvider === 'gemini') {
@@ -1769,11 +1757,10 @@ ${contentToAnalyze}`;
                                 const req = await fetchWithTimeout('https://openrouter.ai/api/v1/models', {}, 10000);
                                 const data = await req.json();
                                 if (data.data) {
-                                    // משיכת מודלים חינמיים עדכניים ופעילים בלבד, סינון מודלים בעייתיים מהעבר
                                     models = data.data
                                         .filter(m => m.id.endsWith(':free') && !m.id.includes('mistral') && !m.id.includes('deepseek'))
                                         .map(m => m.id)
-                                        .slice(0, 5); // ניקח את ה-5 הראשונים
+                                        .slice(0, 5);
                                     window.dynamicOpenRouterModels = models;
                                 }
                             } catch { models = ['google/gemini-2.0-flash-lite-preview-02-05:free', 'meta-llama/llama-3.3-70b-instruct:free']; }
@@ -1798,7 +1785,7 @@ ${contentToAnalyze}`;
                                 success = true;
                                 usedModelName = `🌐 OpenRouter (${model.split('/').pop()})`;
                                 window.lastWorkingAiProvider = 'openrouter';
-                                window.dynamicOpenRouterModels = [model]; // שומר את המודל התקין לסריקה הבאה
+                                window.dynamicOpenRouterModels = [model];
                                 break;
                             } catch (err) {
                                 lastError = err.message;
@@ -1807,7 +1794,7 @@ ${contentToAnalyze}`;
                             }
                         }
                         if (!success && shouldTryNextKey) {
-                            window.dynamicOpenRouterModels = null; // מאפס כדי שימשוך מחדש רשימה תקינה בפעם הבאה
+                            window.dynamicOpenRouterModels = null;
                             const next = fallbackChain[i+1] ? `מנסה מפתח גיבוי...` : 'לא נותרו מפתחות פעילים.';
                             showToast(`⚠️ תקלה ב-OpenRouter (מפתח ${keyIndex}): ${lastError}. ${next}`, null, 5000, null, true);
                             continue;
@@ -1963,10 +1950,9 @@ ${contentToAnalyze}`;
                 
                 updateSyncStatus('online', 'מחובר ✓');
                 
-                // הוספת מנגנון UNDO למחיקה עם הגנה מפני שגיאות
                 const toastId = 'trash-undo-' + id;
                 showToast('🗑️ הועבר לסל המחזור', async () => {
-                    removeToast(toastId); // מנקה את ההודעה הישנה
+                    removeToast(toastId);
                     updateSyncStatus('syncing', 'משחזר...');
                     try {
                         const undoBatch = writeBatch(db);
@@ -1984,7 +1970,7 @@ ${contentToAnalyze}`;
                         console.error('Undo Trash error:', undoErr);
                         showToast('⚠️ שגיאה בביטול המחיקה', null, 3000, null, true);
                     }
-                }, 8000, toastId); // קוצב זמן ל-8 שניות ומזהה ייחודי
+                }, 8000, toastId); 
             } catch (e) { 
                 console.error('Trash error:', e); 
                 updateSyncStatus('error', 'שגיאת רשת');
@@ -2002,11 +1988,10 @@ ${contentToAnalyze}`;
             
             const msg = item.isPinned ? '📌 ננעץ' : '📌 שוחרר';
             
-            // הוספת מנגנון UNDO לנעיצה/שחרור
             showToast(msg, async () => {
                 const currentItem = state.items.find(i => i.id === id);
                 if (currentItem) {
-                    currentItem.isPinned = !currentItem.isPinned; // הופכים חזרה
+                    currentItem.isPinned = !currentItem.isPinned; 
                     currentItem.updatedAt = nowIso();
                     await saveItemToCloud(currentItem);
                     showToast('↩️ הפעולה בוטלה');
@@ -2029,7 +2014,6 @@ ${contentToAnalyze}`;
             const item    = state.items.find(i => String(i.id) === idValue);
             if (!item) return;
             
-            // צילום מצב: שומרים עותק מדויק של הפריט לפני העריכה
             const originalItemSnapshot = JSON.parse(JSON.stringify(item));
             
             const c = document.getElementById('editItemContent').value.trim();
@@ -2044,12 +2028,11 @@ ${contentToAnalyze}`;
             renderList();
             await saveItemToCloud(item);
             
-            // מציגים הודעה עם אפשרות לביטול (Undo)
             showToast('✅ עודכן בהצלחה', async () => {
                 const currentItem = state.items.find(i => i.id === originalItemSnapshot.id);
                 if (currentItem) {
-                    Object.assign(currentItem, originalItemSnapshot); // משחזרים למצב המקורי
-                    currentItem.updatedAt = nowIso(); // מעדכנים תאריך כדי שהענן יקבל את השינוי
+                    Object.assign(currentItem, originalItemSnapshot); 
+                    currentItem.updatedAt = nowIso(); 
                     renderList();
                     await saveItemToCloud(currentItem);
                     showToast('↩️ העריכה בוטלה בהצלחה');
@@ -2072,7 +2055,6 @@ ${contentToAnalyze}`;
             const item    = state.items.find(i => String(i.id) === idValue);
             if (!item) return;
             
-            // צילום מצב: שומרים עותק מדויק של הפריט לפני העריכה
             const originalItemSnapshot = JSON.parse(JSON.stringify(item));
             
             item.siteStatus = document.getElementById('editAiStatus').value;
@@ -2085,11 +2067,10 @@ ${contentToAnalyze}`;
             renderList();
             await saveItemToCloud(item);
             
-            // מציגים הודעה עם אפשרות לביטול (Undo)
             showToast('✅ פיענוח AI עודכן', async () => {
                 const currentItem = state.items.find(i => i.id === originalItemSnapshot.id);
                 if (currentItem) {
-                    Object.assign(currentItem, originalItemSnapshot); // משחזרים למצב המקורי
+                    Object.assign(currentItem, originalItemSnapshot); 
                     currentItem.updatedAt = nowIso();
                     renderList();
                     await saveItemToCloud(currentItem);
@@ -2162,7 +2143,6 @@ ${contentToAnalyze}`;
                         let countTrash = 0;
                         const CHUNK_SIZE = 450;
                         
-                        // העלאת הקישורים
                         for (let i = 0; i < importedItems.length; i += CHUNK_SIZE) {
                             const chunk = importedItems.slice(i, i + CHUNK_SIZE);
                             const batch = writeBatch(db);
@@ -2175,7 +2155,6 @@ ${contentToAnalyze}`;
                             await batch.commit();
                         }
 
-                        // העלאת סל המחזור
                         for (let i = 0; i < importedTrash.length; i += CHUNK_SIZE) {
                             const chunk = importedTrash.slice(i, i + CHUNK_SIZE);
                             const batch = writeBatch(db);
@@ -2263,7 +2242,7 @@ ${contentToAnalyze}`;
                             if (tags)    newItem.aiTags      = tags.split(',').filter(t => t.trim());
                             const ref = doc(db, 'users', state.user.uid, 'items', newItem.id.toString());
                             batch.set(ref, newItem);
-                            contentMap.set(content.toLowerCase(), newItem); // למנוע כפילויות בתוך אותו ייבוא
+                            contentMap.set(content.toLowerCase(), newItem); 
                             added++;
                         }
                     });
@@ -2294,7 +2273,6 @@ ${contentToAnalyze}`;
                     return c; 
                 });
                 
-            // סינון סל המחזור כדי להבטיח שפריטים פרטיים לא זולגים דרך הפח בייצוא
             const cleanTrash = state.trash.filter(item => {
                 if (shouldExclude && item.category === 'שלי - פרטי') return false;
                 return true;
@@ -2364,7 +2342,6 @@ ${contentToAnalyze}`;
             const select  = document.getElementById('categoryFilter');
             const datalist = document.getElementById('categoriesDatalist');
             
-          // בדיקה אם להציג את אופציית החרגת הקטגוריה בתפריטים
             const excludeWrapperTxt = document.getElementById('excludePrivateWrapper');
             const excludeWrapperJson = document.getElementById('excludePrivateJsonWrapper');
             const hasPrivate = cats.has('שלי - פרטי');
@@ -2454,7 +2431,6 @@ ${contentToAnalyze}`;
         };
 
        window.deleteForever = async function (id) {
-           // שומרים את האובייקט רגע לפני שייעלם
            const itemToDel = state.trash.find(i => i.id === id);
            if (!itemToDel) return;
            
@@ -2463,7 +2439,6 @@ ${contentToAnalyze}`;
                await deleteDoc(doc(db, 'users', state.user.uid, 'trash', id.toString()));
                openTrashModal();
                
-               // אפשרות להתחרט ולהחזיר אותו לסל
                showToast('🗑️ הפריט נמחק לצמיתות', async () => {
                    try {
                        await setDoc(doc(db, 'users', state.user.uid, 'trash', id.toString()), itemToDel);
@@ -2481,7 +2456,7 @@ ${contentToAnalyze}`;
             showToast('משחזר את הפריטים...', null, 0, 'restore-toast', false);
             const stamp = nowIso();
             
-            const CHUNK_SIZE = 200; // כל שחזור הוא 2 פעולות (כתיבה ומחיקה) אז 200 זה 400 פעולות למנה (בטוח מתחת ל-500)
+            const CHUNK_SIZE = 200; 
             for (let i = 0; i < state.trash.length; i += CHUNK_SIZE) {
                 const chunk = state.trash.slice(i, i + CHUNK_SIZE);
                 const batch = writeBatch(db);
@@ -2507,7 +2482,6 @@ ${contentToAnalyze}`;
            if (state.trash.length === 0) return;
            if (!confirm(`האם למחוק לצמיתות ${state.trash.length} פריטים?`)) return;
            
-           // שומרים "צילום מצב" של הפח בזיכרון לפני שמוחקים בענן
            const snapshotOfTrash = [...state.trash]; 
            showToast('מרוקן את הסל...', null, 0, 'empty-toast', false);
            
@@ -2525,11 +2499,9 @@ ${contentToAnalyze}`;
            removeToast('empty-toast');
            openTrashModal();
            
-           // מציגים הודעת מחיקה עם אופציה לשחזור מהיר
            showToast('🗑️ סל המחזור רוקן', async () => {
                showToast('משחזר את הסל...', null, 0, 'undo-empty-toast', false);
                try {
-                   // מעלים חזרה לענן את הפריטים ששמרנו בזיכרון
                    for (let i = 0; i < snapshotOfTrash.length; i += CHUNK_SIZE) {
                        const chunk = snapshotOfTrash.slice(i, i + CHUNK_SIZE);
                        const batch = writeBatch(db);
