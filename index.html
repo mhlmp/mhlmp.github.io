@@ -727,10 +727,10 @@
             setupFirebaseListeners();
             setupScrollToTop();
             
-            // מטפל בתוצאה של ההתחברות לאחר שחוזרים מההפניה הפנימית
+            // תופס שגיאות אם המשתמש חזר מ-Redirect
             getRedirectResult(auth).catch((error) => {
                 console.error("Login redirect error:", error);
-                showToast('❌ התחברות נכשלה', null, 4000, null, true);
+                showToast('❌ התחברות נכשלה: ' + error.message, null, 4000, null, true);
             });
             
             window.addEventListener('beforeinstallprompt', (e) => {
@@ -748,21 +748,35 @@
             });
         });
 
-        // פונקציית התחברות חדשה: משתמשת בהפניה (Redirect) כדי לשמור את האפליקציה ב-PWA
+        // פונקציית התחברות חכמה - מעדיפה Popup, ונופלת ל-Redirect רק אם ה-Popup נחסם (מעולה ל-PWA)
         async function cloudLogin() {
             if (!navigator.onLine)
                 return showToast('❌ לא ניתן להתחבר ללא חיבור לאינטרנט.', null, 4000, null, true);
             if (!auth || !db)
-                return showToast('❌ שירותי הענן נחסמו. בדוק אם קיים חוסם פרסומות המונע גישה ל-Firebase.', null, 5000, null, true);
+                return showToast('❌ שירותי הענן נחסמו. בדוק חוסם פרסומות.', null, 5000, null, true);
                 
             try { 
-                showToast('מתחבר לחשבון...', null, 0, 'login-toast', false);
+                showToast('פותח חלון התחברות מאובטח...', null, 0, 'login-toast', false);
                 const provider = new GoogleAuthProvider();
                 provider.setCustomParameters({ prompt: 'select_account' });
-                // השימוש ב-signInWithRedirect מונע את חסימת ה-PWA וזריקה לפיירפוקס
-                await signInWithRedirect(auth, provider); 
+                
+                // ב-PWA (ובמחשב) Popup הרבה יותר יציב מ-Redirect שלא מאבד את ההקשר של האפליקציה
+                await signInWithPopup(auth, provider); 
+                removeToast('login-toast');
             }
-            catch (e) { alert(e.message); }
+            catch (e) { 
+                removeToast('login-toast');
+                if (e.code === 'auth/popup-blocked') {
+                    showToast('⚠️ חלון קופץ נחסם, מנסה התחברות חלופית...', null, 2000);
+                    try {
+                        await signInWithRedirect(auth, provider);
+                    } catch (redirectError) {
+                        alert("שגיאה בהתחברות: " + redirectError.message);
+                    }
+                } else if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
+                    showToast('❌ שגיאת התחברות: ' + e.message, null, 5000, null, true);
+                }
+            }
         }
 
         async function switchAccount() {
@@ -781,7 +795,7 @@
                     const nw = reg.installing;
                     nw.addEventListener('statechange', () => {
                         if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-                            if (confirm('נמצא עדכון חדש! האם לרענן עכשיו?')) window.location.reload();
+                            if (confirm('נמצא עדכון חדש למערכת! האם לרענן עכשיו?')) window.location.reload();
                         }
                     });
                 });
@@ -852,30 +866,22 @@
                 state.isOffline = true;
                 updateSyncStatus('offline', 'מקומי (אין רשת)');
                 showToast('⚠️ החיבור אבד. שינויים יישמרו ויסונכרנו כשהרשת תחזור.', null, 6000, null, true);
-                if (db) disableNetwork(db).catch(() => {});
             });
 
             window.addEventListener('online', () => {
                 state.isOffline = false;
-                updateSyncStatus('syncing', 'מתחבר מחדש...');
-                showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 4000);
-                if (db) enableNetwork(db).catch(() => {}); 
-                setTimeout(() => { if (state.user && !state.isOffline) forceReload(true); }, 1500);
+                updateSyncStatus('syncing', 'מתחבר לענן...');
+                showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 3000);
             });
 
-            let _lastVisibilitySync = 0;
-            const visibilitySync = () => {
-                if (!state.user || state.isOffline || !navigator.onLine) return;
-                const now = Date.now();
-                if (now - _lastVisibilitySync < 6000) return;
-                _lastVisibilitySync = now;
-                if (db) enableNetwork(db).catch(() => {});
-                forceReload(true);
-            };
+            // הסרתי את הכיבוי/הדלקה הידני של הרשת באירוע visibilitychange.
+            // Firebase יודע לנהל את עצמו מעולה ברקע. ההתערבות עשתה ניתוקים כפולים.
             document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') visibilitySync();
+                if (document.visibilityState === 'visible' && state.user && navigator.onLine) {
+                   // רק מעדכן סטטוס ויזואלי אם צריך, בלי לגעת ברשת של פיירבייס
+                   updateSyncStatus('online', 'מחובר ✓'); 
+                }
             });
-            window.addEventListener('focus', visibilitySync);
 
             document.getElementById('editItemForm')?.addEventListener('submit', handleEditSubmit);
             document.getElementById('editAiForm')?.addEventListener('submit', handleEditAiSubmit);
@@ -923,7 +929,7 @@
             if (!auth || !db) return;
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
-                    state.isOffline = false;
+                    state.isOffline = !navigator.onLine;
                     state.user = user;
                     
                     document.getElementById('userName').textContent = user.displayName;
