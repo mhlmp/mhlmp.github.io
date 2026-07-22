@@ -84,10 +84,12 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.3); animation: fadeIn 0.5s ease; border: 1px solid rgba(255,255,255,0.2);
         }
 
-        #userSection { padding: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        #userSection { padding: 12px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .user-top-row { display: flex; justify-content: space-between; align-items: center; width: 100%; }
         .user-info { display: flex; align-items: center; gap: 12px; }
         .user-avatar { width: 42px; height: 42px; border-radius: 50%; border: 2px solid var(--glass-border); object-fit: cover; }
         .user-name { font-weight: 700; font-size: 1rem; }
+        .user-email { font-size: 0.8rem; color: var(--primary-color); font-weight: bold; margin-bottom: 2px; }
         .cloud-status { font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
         .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; display: inline-block; flex-shrink: 0; }
         .status-dot.online { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
@@ -411,19 +413,23 @@
             </button>
         </div>
         <div id="loggedInView" style="display:none; width:100%; justify-content:space-between; align-items:center;">
-            <div class="user-info">
-                <img id="userAvatar" src="" class="user-avatar" alt="Avatar">
-                <div>
-                    <div id="userName" class="user-name">שם משתמש</div>
-                    <div class="cloud-status">
-                        <span class="status-dot online" id="syncDot"></span>
-                        <span id="syncLabel">מחובר</span>
-                        <button id="forceReloadBtn" class="btn-reload" title="רענן נתונים מהענן">🔄</button>
+            <div class="user-top-row">
+                <div class="user-info">
+                    <img id="userAvatar" src="" class="user-avatar" alt="Avatar">
+                    <div>
+                        <div id="userName" class="user-name">שם משתמש</div>
+                        <div id="userEmailDisplay" class="user-email">email@gmail.com</div>
+                        <div class="cloud-status">
+                            <span class="status-dot online" id="syncDot"></span>
+                            <span id="syncLabel">מחובר</span>
+                            <button id="forceReloadBtn" class="btn-reload" title="רענן נתונים מהענן">🔄</button>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div style="display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end;">
-                <button id="switchAccountBtn" class="btn-action-sm">🔄 החלף</button>
+            <div style="display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; width:100%; margin-top:8px;">
+                <button id="hardResetBtn" class="btn-action-sm" style="background: rgba(217, 48, 37, 0.15); border-color: var(--accent-red); color: #fca5a5;" title="נקה מטמון ושחזר הכל מהענן">💥 איפוס עמוק</button>
+                <button id="switchAccountBtn" class="btn-action-sm">🔄 החלף חשבון</button>
                 <button id="logoutBtn" class="btn-action-sm">יציאה</button>
             </div>
         </div>
@@ -652,7 +658,8 @@
         import {
             getFirestore, doc, setDoc, getDoc, collection, onSnapshot, 
             deleteDoc, writeBatch, enableNetwork, disableNetwork,
-            initializeFirestore, persistentLocalCache, persistentMultipleTabManager
+            initializeFirestore, persistentLocalCache, persistentSingleTabManager,
+            terminate, clearIndexedDbPersistence
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -690,11 +697,12 @@
             auth = getAuth(app);
             setPersistence(auth, browserLocalPersistence);
             try {
+                // המעבר ל-Single Tab מונע קריסות Cache ונעילת DB במכשירים ניידים
                 db = initializeFirestore(app, {
-                    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+                    localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() })
                 });
             } catch (err) {
-                console.warn('[Firebase] Persistent DB failed, falling back to default', err);
+                console.warn('[Firebase] Persistent DB failed, falling back to memory', err);
                 db = getFirestore(app);
             }
         } catch (e) { console.error('[Firebase] Init Error:', e); }
@@ -727,7 +735,6 @@
             setupFirebaseListeners();
             setupScrollToTop();
             
-            // תופס שגיאות אם המשתמש חזר מ-Redirect
             getRedirectResult(auth).catch((error) => {
                 console.error("Login redirect error:", error);
                 showToast('❌ התחברות נכשלה: ' + error.message, null, 4000, null, true);
@@ -748,7 +755,6 @@
             });
         });
 
-        // פונקציית התחברות חכמה - מעדיפה Popup, ונופלת ל-Redirect רק אם ה-Popup נחסם (מעולה ל-PWA)
         async function cloudLogin() {
             if (!navigator.onLine)
                 return showToast('❌ לא ניתן להתחבר ללא חיבור לאינטרנט.', null, 4000, null, true);
@@ -760,7 +766,6 @@
                 const provider = new GoogleAuthProvider();
                 provider.setCustomParameters({ prompt: 'select_account' });
                 
-                // ב-PWA (ובמחשב) Popup הרבה יותר יציב מ-Redirect שלא מאבד את ההקשר של האפליקציה
                 await signInWithPopup(auth, provider); 
                 removeToast('login-toast');
             }
@@ -852,6 +857,30 @@
 
             document.getElementById('forceReloadBtn')?.addEventListener('click', () => forceReload(false));
 
+            // כפתור איפוס עמוק לפריצת בעיות קאש
+            document.getElementById('hardResetBtn')?.addEventListener('click', async () => {
+                if(!confirm('⚠️ אזהרה: זה ימחק לחלוטין את המטמון המקומי וימשוך הכל טרי מהענן. אם שמרת פריטים באופליין שעוד לא סונכרנו - הם יאבדו. להמשיך?')) return;
+                try {
+                    showToast('משמיד מטמון ישן...', null, 0, 'reset-toast', false);
+                    if (state.unsubItems) state.unsubItems();
+                    if (state.unsubTrash) state.unsubTrash();
+                    await terminate(db);
+                    await clearIndexedDbPersistence(db);
+                    
+                    try {
+                        const dbs = await window.indexedDB.databases();
+                        dbs.forEach(dbinfo => window.indexedDB.deleteDatabase(dbinfo.name));
+                    } catch(e){}
+                    
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    alert('המטמון נוקה בהצלחה! האפליקציה תופעל מחדש.');
+                    window.location.reload(true);
+                } catch(e) {
+                    alert('שגיאה בניקוי: ' + e.message);
+                }
+            });
+
             ['importJsonInput', 'smartImportInput'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
@@ -874,11 +903,8 @@
                 showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 3000);
             });
 
-            // הסרתי את הכיבוי/הדלקה הידני של הרשת באירוע visibilitychange.
-            // Firebase יודע לנהל את עצמו מעולה ברקע. ההתערבות עשתה ניתוקים כפולים.
             document.addEventListener('visibilitychange', () => {
                 if (document.visibilityState === 'visible' && state.user && navigator.onLine) {
-                   // רק מעדכן סטטוס ויזואלי אם צריך, בלי לגעת ברשת של פיירבייס
                    updateSyncStatus('online', 'מחובר ✓'); 
                 }
             });
@@ -932,7 +958,16 @@
                     state.isOffline = !navigator.onLine;
                     state.user = user;
                     
+                    // פורץ נעילת רשת: מוודא שפיירבייס מנסה למשוך מהרשת מיד עם ההתחברות
+                    try {
+                        if (navigator.onLine) {
+                            await enableNetwork(db);
+                        }
+                    } catch(e) { console.warn("Force network enable failed", e); }
+                    
                     document.getElementById('userName').textContent = user.displayName;
+                    // מציג את האימייל כדי שתוכל לראות מיד אם התחברת בטעות לחשבון ריק
+                    document.getElementById('userEmailDisplay').textContent = user.email;
                     document.getElementById('userAvatar').src = user.photoURL;
                     handleLockScreen(true);
 
@@ -1185,7 +1220,7 @@
             if (filtered.length === 0) {
                 let extraHint = '';
                 if (state.items.length === 0) {
-                    extraHint = '<br><br><small style="opacity:0.7;">אם יצרת קישורים בעבר והרשימה ריקה, ייתכן שהתחברת לחשבון גוגל אחר (נסה ללחוץ על "החלף").</small>';
+                    extraHint = '<br><br><small style="opacity:0.7;">אם בטוח היו לך קישורים והרשימה ריקה, נסה ללחוץ על הכפתור האדום החדש למעלה "איפוס עמוק", או בדוק את האימייל שמוצג למעלה כדי לוודא שאתה במשתמש הנכון.</small>';
                 }
                 container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--text-secondary); font-size:1.1rem;">לא נמצאו תוצאות 🔍${extraHint}</div>`;
                 return;
