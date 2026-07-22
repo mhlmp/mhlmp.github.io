@@ -422,13 +422,12 @@
                         <div class="cloud-status">
                             <span class="status-dot online" id="syncDot"></span>
                             <span id="syncLabel">מחובר</span>
-                            <button id="forceReloadBtn" class="btn-reload" title="רענן נתונים מהענן">🔄</button>
+                            <button id="forceReloadBtn" class="btn-reload" title="רענן מול הענן">🔄</button>
                         </div>
                     </div>
                 </div>
             </div>
             <div style="display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; width:100%; margin-top:8px;">
-                <button id="hardResetBtn" class="btn-action-sm" style="background: rgba(217, 48, 37, 0.15); border-color: var(--accent-red); color: #fca5a5;" title="נקה מטמון ושחזר הכל מהענן">💥 איפוס עמוק</button>
                 <button id="switchAccountBtn" class="btn-action-sm">🔄 החלף חשבון</button>
                 <button id="logoutBtn" class="btn-action-sm">יציאה</button>
             </div>
@@ -656,7 +655,7 @@
             onAuthStateChanged, setPersistence, browserLocalPersistence
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import {
-            getFirestore, doc, setDoc, getDoc, collection, onSnapshot, 
+            getFirestore, doc, setDoc, getDoc, collection, onSnapshot, getDocs,
             deleteDoc, writeBatch, enableNetwork, disableNetwork,
             initializeFirestore, persistentLocalCache, persistentSingleTabManager,
             terminate, clearIndexedDbPersistence
@@ -687,8 +686,9 @@
             filteredItems: []
         };
         let abortAiScan = false;
-        let resolveDataLoaded;
-        const initialDataLoadedPromise = new Promise(resolve => resolveDataLoaded = resolve);
+        
+        let isServerDataArrived = false;
+        let forceHideLockScreenTimer;
 
         function nowIso() { return new Date().toISOString(); }
 
@@ -697,7 +697,6 @@
             auth = getAuth(app);
             setPersistence(auth, browserLocalPersistence);
             try {
-                // המעבר ל-Single Tab מונע קריסות Cache ונעילת DB במכשירים ניידים
                 db = initializeFirestore(app, {
                     localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() })
                 });
@@ -855,31 +854,8 @@
             document.getElementById('trashBtn')?.addEventListener('click', openTrashModal);
             document.getElementById('closeTrashModalBtn')?.addEventListener('click', closeTrashModal);
 
+            // חיבור כפתור הריענון ללוגיקת משיכה מהענן ואיפוס עמוק (ללא כפתור אדום נפרד)
             document.getElementById('forceReloadBtn')?.addEventListener('click', () => forceReload(false));
-
-            // כפתור איפוס עמוק לפריצת בעיות קאש
-            document.getElementById('hardResetBtn')?.addEventListener('click', async () => {
-                if(!confirm('⚠️ אזהרה: זה ימחק לחלוטין את המטמון המקומי וימשוך הכל טרי מהענן. אם שמרת פריטים באופליין שעוד לא סונכרנו - הם יאבדו. להמשיך?')) return;
-                try {
-                    showToast('משמיד מטמון ישן...', null, 0, 'reset-toast', false);
-                    if (state.unsubItems) state.unsubItems();
-                    if (state.unsubTrash) state.unsubTrash();
-                    await terminate(db);
-                    await clearIndexedDbPersistence(db);
-                    
-                    try {
-                        const dbs = await window.indexedDB.databases();
-                        dbs.forEach(dbinfo => window.indexedDB.deleteDatabase(dbinfo.name));
-                    } catch(e){}
-                    
-                    localStorage.clear();
-                    sessionStorage.clear();
-                    alert('המטמון נוקה בהצלחה! האפליקציה תופעל מחדש.');
-                    window.location.reload(true);
-                } catch(e) {
-                    alert('שגיאה בניקוי: ' + e.message);
-                }
-            });
 
             ['importJsonInput', 'smartImportInput'].forEach(id => {
                 const el = document.getElementById(id);
@@ -957,16 +933,11 @@
                 if (user) {
                     state.isOffline = !navigator.onLine;
                     state.user = user;
+                    isServerDataArrived = false;
                     
-                    // פורץ נעילת רשת: מוודא שפיירבייס מנסה למשוך מהרשת מיד עם ההתחברות
-                    try {
-                        if (navigator.onLine) {
-                            await enableNetwork(db);
-                        }
-                    } catch(e) { console.warn("Force network enable failed", e); }
+                    try { if (navigator.onLine) await enableNetwork(db); } catch(e) {}
                     
                     document.getElementById('userName').textContent = user.displayName;
-                    // מציג את האימייל כדי שתוכל לראות מיד אם התחברת בטעות לחשבון ריק
                     document.getElementById('userEmailDisplay').textContent = user.email;
                     document.getElementById('userAvatar').src = user.photoURL;
                     handleLockScreen(true);
@@ -983,7 +954,8 @@
                     if (state.unsubTrash) state.unsubTrash();
 
                     const itemsRef = collection(db, 'users', user.uid, 'items');
-                    state.unsubItems = onSnapshot(itemsRef, (snapshot) => {
+                    
+                    state.unsubItems = onSnapshot(itemsRef, { includeMetadataChanges: true }, (snapshot) => {
                         let hasChanges = false;
                         snapshot.docChanges().forEach((change) => {
                             const data = change.doc.data();
@@ -1006,16 +978,18 @@
                             }
                         });
 
+                        if (!snapshot.metadata.fromCache) {
+                            isServerDataArrived = true;
+                        }
+
                         if (hasChanges || snapshot.metadata.fromCache) {
                             renderList();
                             updateCategoryDropdowns();
                         }
                         updateSyncStatus(navigator.onLine ? 'online' : 'offline', navigator.onLine ? 'מחובר ✓' : 'מקומי');
-                        resolveDataLoaded();
                     }, (err) => {
                         console.error('[Sync] onSnapshot items error:', err);
                         updateSyncStatus('error', 'שגיאת חיבור');
-                        resolveDataLoaded();
                     });
 
                    const trashRef = collection(db, 'users', user.uid, 'trash');
@@ -1093,31 +1067,31 @@
             welcomeScreen.style.display = 'flex';
             welcomeScreen.classList.add('visible');
             protectedContent.classList.add('locked');
+            document.getElementById('itemCount').textContent = 'מוריד נתונים מהענן...';
             
-            let secondsLeft = 3;
             if (progressCircle) {
-                progressCircle.style.transition = 'stroke-dashoffset 1s linear';
+                progressCircle.style.transition = 'stroke-dashoffset 2s linear';
                 progressCircle.style.strokeDashoffset = '283';
             }
             
-            const aestheticTimerPromise = new Promise(resolve => {
-                const tick = setInterval(() => {
-                    secondsLeft--;
-                    if (progressCircle) progressCircle.style.strokeDashoffset = (283 - (283 * (3 - secondsLeft) / 3));
-                    if (secondsLeft <= 0) { clearInterval(tick); resolve(); }
-                }, 1000);
-            });
+            const waitInterval = setInterval(() => {
+                if (isServerDataArrived || !navigator.onLine) {
+                    clearInterval(waitInterval);
+                    clearTimeout(forceHideLockScreenTimer);
+                    welcomeScreen.style.display = 'none';
+                    welcomeScreen.classList.remove('visible');
+                    protectedContent.classList.remove('locked');
+                    renderList();
+                }
+            }, 500);
 
-            const safeDataPromise = Promise.race([
-                initialDataLoadedPromise,
-                new Promise(resolve => setTimeout(resolve, 4500))
-            ]);
-
-            Promise.all([aestheticTimerPromise, safeDataPromise]).then(() => {
+            forceHideLockScreenTimer = setTimeout(() => {
+                clearInterval(waitInterval);
                 welcomeScreen.style.display = 'none';
                 welcomeScreen.classList.remove('visible');
                 protectedContent.classList.remove('locked');
-            });
+                renderList();
+            }, 12000);
         }
 
         function updateSyncStatus(status, label) {
@@ -1134,24 +1108,42 @@
             window.location.reload();
         }
 
-     async function forceReload(silent = false) {
+        // פונקציה חכמה שכעת מבצעת משיכה כפויה מהענן + ניקוי מטמון
+        async function forceReload(silent = false) {
             if (!state.user || state.isOffline || !db) return;
             if (!navigator.onLine) {
                 if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
                 return;
             }
+            
+            if (!silent) {
+                if(!confirm('⚠️ פעולה זו מוחקת את המטמון המקומי וטוענת הכל בצורה נקייה מהענן.\nהאם להמשיך?')) return;
+            }
+
             const btn = document.getElementById('forceReloadBtn');
             if (btn) btn.classList.add('spinning');
-            if (!silent) showToast("🔄 בודק נתונים מול הענן...", null, 2000);
+            if (!silent) showToast("🔄 מנקה מטמון ומושך מחדש מהענן...", null, 0, 'reset-toast', false);
+            
             try {
-                await disableNetwork(db);
-                await enableNetwork(db);
-                updateSyncStatus('online', 'מחובר ✓');
-                if (!silent) showToast("✅ הנתונים סונכרנו בהצלחה עם הענן");
+                if (state.unsubItems) state.unsubItems();
+                if (state.unsubTrash) state.unsubTrash();
+
+                // סגירה ומחיקת מסד הנתונים המקומי והמטמון
+                await terminate(db);
+                await clearIndexedDbPersistence(db);
+                
+                try {
+                    const dbs = await window.indexedDB.databases();
+                    dbs.forEach(dbinfo => window.indexedDB.deleteDatabase(dbinfo.name));
+                } catch(e){}
+                
+                // רענון העמוד טוען הכל באופן מאולץ מהרשת (כי המטמון ריק)
+                window.location.reload(true);
             } catch (err) {
-                updateSyncStatus('error', 'שגיאת סנכרון');
-            } finally {
+                console.error(err);
                 if (btn) btn.classList.remove('spinning');
+                updateSyncStatus('error', 'שגיאת רשת');
+                if (!silent) showToast("⚠️ שגיאה ברענון הנתונים: " + err.message, null, 3000, null, true);
             }
         }
 
@@ -1220,13 +1212,14 @@
             if (filtered.length === 0) {
                 let extraHint = '';
                 if (state.items.length === 0) {
-                    extraHint = '<br><br><small style="opacity:0.7;">אם בטוח היו לך קישורים והרשימה ריקה, נסה ללחוץ על הכפתור האדום החדש למעלה "איפוס עמוק", או בדוק את האימייל שמוצג למעלה כדי לוודא שאתה במשתמש הנכון.</small>';
+                    extraHint = '<br><br><small style="opacity:0.7;">אם בטוח היו לך קישורים והרשימה ריקה, לחץ על לחצן הרענון (🔄) למעלה לטעינה נקייה מחדש.</small>';
                 }
                 container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--text-secondary); font-size:1.1rem;">לא נמצאו תוצאות 🔍${extraHint}</div>`;
                 return;
             }
 
             const isIndexSort = sort === 'index-asc' || sort === 'index-desc';
+            const mainFragment = document.createDocumentFragment();
 
             if (isIndexSort) {
                 const section = document.createElement('div');
@@ -1235,13 +1228,13 @@
                 grid.className = 'items-grid';
                 filtered.forEach(item => grid.appendChild(createCard(item, visualMetaMap.get(item.id) || {})));
                 section.appendChild(grid);
-                container.appendChild(section);
+                mainFragment.appendChild(section);
             } else {
                 const pinnedItems  = filtered.filter(i => i.isPinned);
                 const regularItems = filtered.filter(i => !i.isPinned);
 
                 if (pinnedItems.length > 0)
-                    renderGroup(container, '📌 מוצמד', pinnedItems, true, visualMetaMap);
+                    renderGroup(mainFragment, '📌 מוצמד', pinnedItems, true, visualMetaMap);
 
                 const groups = {};
                 regularItems.forEach(i => {
@@ -1256,23 +1249,30 @@
                     if (a.startsWith('⚠️') || a.startsWith('🔴')) return -1;
                     if (b.startsWith('⚠️') || b.startsWith('🔴')) return 1;
                     return a.localeCompare(b);
-                }).forEach(cat => renderGroup(container, cat, groups[cat], false, visualMetaMap));
+                }).forEach(cat => renderGroup(mainFragment, cat, groups[cat], false, visualMetaMap));
             }
+            
+            container.appendChild(mainFragment);
         }
 
-        function renderGroup(container, title, items, isPinned, visualMetaMap) {
+        function renderGroup(containerFragment, title, items, isPinned, visualMetaMap) {
             const section = document.createElement('div');
             section.className = 'category-block';
             const header = document.createElement('div');
             header.className = 'category-header';
             if (isPinned) header.style.cssText = 'border-bottom: 2px solid var(--accent-gold); color: var(--accent-gold);';
             header.innerHTML = `<h2>${escapeHtml(title)}</h2><span class="category-badge">${items.length}</span>`;
+            
             const grid = document.createElement('div');
             grid.className = 'items-grid';
-            items.forEach(i => grid.appendChild(createCard(i, visualMetaMap.get(i.id) || {})));
+            
+            const gridFragment = document.createDocumentFragment();
+            items.forEach(i => gridFragment.appendChild(createCard(i, visualMetaMap.get(i.id) || {})));
+            grid.appendChild(gridFragment);
+            
             section.appendChild(header);
             section.appendChild(grid);
-            container.appendChild(section);
+            containerFragment.appendChild(section);
         }
 
         function createCard(item, meta) {
