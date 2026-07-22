@@ -1,5 +1,5 @@
-// הוקפץ לגרסה 4.3 כדי לאלץ רענון במכשיר שלך
-const CACHE_NAME = 'LinkManager-v4.3-SyncEngine';
+// הוקפץ לגרסה 5.0 - ניקוי לוגיקת Cache בעייתית וחסימת בעיות התחברות ב-PWA
+const CACHE_NAME = 'LinkManager-v5.0-StableSync';
 
 const urlsToCache = [
   '/',
@@ -33,24 +33,32 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // 1. מתעלמים מבקשות שהן לא קריאה (GET)
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
   
-  // 2. הגנה קריטית לפיירבייס:
-  // אם הבקשה מיועדת לשרת חיצוני (Firebase, Google, Groq וכו'),
-  // אנחנו עוצרים את ה-Service Worker ונותנים לדפדפן לטפל בזה טבעי.
-  // זה פותר את בעיית המסך הריק!
+  // הגנה קריטית: אנו שומרים רק בקשות שמגיעות לאותו הדומיין של האתר שלך.
+  // זה מונע "השתלטות" על בקשות התחברות לגוגל ולפיירבייס שמפילות את הלוגין באפליקציה.
   if (url.origin !== self.location.origin) {
       return; 
   }
 
-  // 3. אסטרטגיית Network First רק לקבצים המקומיים שלנו
+  // עבור ניווט לעמוד הראשי (למשל פתיחת האפליקציה מהמסך בית גם אם התווסף פרמטר קוד)
+  if (event.request.mode === 'navigate' || url.pathname === '/') {
+      event.respondWith(
+          fetch(event.request).catch(() => {
+              // במצב אופליין נטען מהקאש, תוך התעלמות מפרמטרים דינמיים של פיירבייס
+              return caches.match('/', { ignoreSearch: true });
+          })
+      );
+      return;
+  }
+
+  // שאר הקבצים המקומיים: נסה להביא מהרשת קודם (כדי לקבל עדכונים), ואם נופל הבא מהקאש
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        if (response && response.status === 200) {
+        if (response && response.status === 200 && response.type === 'basic') {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
         }
