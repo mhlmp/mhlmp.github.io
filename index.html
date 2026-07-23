@@ -768,21 +768,16 @@
                 const provider = new GoogleAuthProvider();
                 provider.setCustomParameters({ prompt: 'select_account' });
 
-                try {
-                    await signInWithPopup(auth, provider);
-                    removeToast('login-toast');
-                } catch (err) {
-                    if (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
-                        showToast('⚠️ מעביר לדף התחברות...', null, 2000);
-                        await signInWithRedirect(auth, provider);
-                    } else {
-                        removeToast('login-toast');
-                        showToast('❌ שגיאת התחברות: ' + err.message, null, 5000, null, true);
-                    }
-                }
-            } catch (e) {
+                await signInWithPopup(auth, provider);
                 removeToast('login-toast');
-                showToast('❌ שגיאה כללית בהתחברות: ' + e.message, null, 5000, null, true);
+                
+            } catch (err) {
+                removeToast('login-toast');
+                // חוסם את היציאה לדפדפן חיצוני (Redirect) גם אם החלון נסגר
+                if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
+                    console.error("Login Error:", err);
+                    showToast('❌ שגיאת התחברות: ' + err.message, null, 5000, null, true);
+                }
             }
         }
 
