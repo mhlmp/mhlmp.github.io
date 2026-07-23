@@ -764,42 +764,39 @@
             });
         });
 
-        async function cloudLogin() {
-            if (!navigator.onLine)
-                return showToast('❌ לא ניתן להתחבר ללא אינטרנט.', null, 4000, null, true);
-            if (!auth)
-                return showToast('❌ שירותי ההתחברות אינם זמינים.', null, 5000, null, true);
+       async function cloudLogin() {
+            if (!navigator.onLine) return showToast('❌ לא ניתן להתחבר ללא אינטרנט.', null, 4000, null, true);
+            if (!auth) return showToast('❌ שירותי ההתחברות אינם זמינים.', null, 5000, null, true);
 
             const provider = new GoogleAuthProvider();
             provider.setCustomParameters({ prompt: 'select_account' });
 
+            // אנו מתחילים את הפתיחה *מיידית* כדי לשמור על Trust הדפדפן ולמנוע זריקה לכרום החיצוני!
+            const authPromise = signInWithPopup(auth, provider);
+            
+            // רק אחרי שהחלון הפנימי קיבל פקודת פתיחה, מציגים את הטוסט
+            showToast('פותח חיבור מאובטח...', null, 0, 'login-toast', false);
+
             try {
-                showToast('פותח חלון התחברות...', null, 0, 'login-toast', false);
-                await signInWithPopup(auth, provider);
+                await authPromise;
                 removeToast('login-toast');
             } catch (err) {
                 removeToast('login-toast');
-                if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
-                    return; // המשתמש סגר את החלון מרצונו, הכל תקין
-                }
-                
-                // אם פופ-אפ נחסם (קורה הרבה באפליקציות PWA), ננסה לעבור לשיטת Redirect
-                if (err.code === 'auth/popup-blocked' || err.message.toLowerCase().includes('popup')) {
-                    showToast('חלון קופץ נחסם, עובר להתחברות מאובטחת...', null, 3000);
-                    signInWithRedirect(auth, provider);
-                } else {
+                if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
                     console.error("Login Error:", err);
                     showToast('❌ שגיאת התחברות: ' + err.message, null, 5000, null, true);
                 }
             }
         }
 
-        async function switchAccount() {
+       async function switchAccount() {
             try {
                 if (state.unsubItems) state.unsubItems();
                 if (state.unsubTrash) state.unsubTrash();
+                showToast('מתנתק...', null, 2000);
                 await signOut(auth);
-                await cloudLogin();
+                // לא קוראים ל-cloudLogin מכאן כי זה שובר את אבטחת הדפדפן וזורק אותך החוצה!
+                // במקום זאת, ה-onAuthStateChanged יחזיר את המסך למצב מנותק והמשתמש ילחץ בעצמו.
             } catch (e) { alert(e.message); }
         }
 
