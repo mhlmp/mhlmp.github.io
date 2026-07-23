@@ -1,5 +1,5 @@
-// הוקפץ לגרסה 5.0 - ניקוי לוגיקת Cache בעייתית וחסימת בעיות התחברות ב-PWA
-const CACHE_NAME = 'LinkManager-v5.0-StableSync';
+// גרסה 6.0 - תיקון קריטי לנתיבי Auth
+const CACHE_NAME = 'LinkManager-v6.0-AuthFix';
 
 const urlsToCache = [
   '/',
@@ -36,25 +36,22 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
-  
-  // הגנה קריטית: אנו שומרים רק בקשות שמגיעות לאותו הדומיין של האתר שלך.
-  // זה מונע "השתלטות" על בקשות התחברות לגוגל ולפיירבייס שמפילות את הלוגין באפליקציה.
-  if (url.origin !== self.location.origin) {
+
+  // התיקון הקריטי: נותן לפיירבייס לנהל את נתיבי ההתחברות שלו בצורה טבעית!
+  // כל בקשה שמתחילה ב- /__/ שייכת פנימית ל-Firebase Auth / Hosting.
+  if (url.pathname.startsWith('/__/') || url.origin !== self.location.origin) {
       return; 
   }
 
-  // עבור ניווט לעמוד הראשי (למשל פתיחת האפליקציה מהמסך בית גם אם התווסף פרמטר קוד)
   if (event.request.mode === 'navigate' || url.pathname === '/') {
       event.respondWith(
           fetch(event.request).catch(() => {
-              // במצב אופליין נטען מהקאש, תוך התעלמות מפרמטרים דינמיים של פיירבייס
               return caches.match('/', { ignoreSearch: true });
           })
       );
       return;
   }
 
-  // שאר הקבצים המקומיים: נסה להביא מהרשת קודם (כדי לקבל עדכונים), ואם נופל הבא מהקאש
   event.respondWith(
     fetch(event.request)
       .then(response => {
