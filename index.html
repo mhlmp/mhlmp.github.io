@@ -422,7 +422,7 @@
                         <div class="cloud-status">
                             <span class="status-dot online" id="syncDot"></span>
                             <span id="syncLabel">מחובר</span>
-                            <button id="forceReloadBtn" class="btn-reload" title="רענן מול הענן">🔄</button>
+                            <button id="forceReloadBtn" class="btn-reload" title="רענן מול הענן ומשוך הכל">🔄</button>
                         </div>
                     </div>
                 </div>
@@ -652,7 +652,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import {
             getAuth, signInWithPopup, GoogleAuthProvider, signOut, signInWithRedirect, getRedirectResult,
-            onAuthStateChanged, setPersistence, browserLocalPersistence
+            onAuthStateChanged, browserLocalPersistence
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import {
             getFirestore, doc, setDoc, getDoc, collection, onSnapshot, getDocs,
@@ -695,7 +695,7 @@
         try {
             app  = initializeApp(firebaseConfig);
             auth = getAuth(app);
-            setPersistence(auth, browserLocalPersistence);
+            // פקודת ההתמדה הוסרה לבקשת הסטנדרט החדש ולמניעת התנגשות קריסות
             try {
                 db = initializeFirestore(app, {
                     localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() })
@@ -734,9 +734,13 @@
             setupFirebaseListeners();
             setupScrollToTop();
             
-            getRedirectResult(auth).catch((error) => {
+            getRedirectResult(auth).then(result => {
+                if(result && result.user) {
+                    showToast('✅ מחובר בהצלחה!');
+                }
+            }).catch((error) => {
                 console.error("Login redirect error:", error);
-                showToast('❌ התחברות נכשלה: ' + error.message, null, 4000, null, true);
+                showToast('❌ התחברות נכשלה מהענן: ' + error.message, null, 4000, null, true);
             });
             
             window.addEventListener('beforeinstallprompt', (e) => {
@@ -754,32 +758,33 @@
             });
         });
 
+        // פונקציית התחברות סופר-מוגנת
         async function cloudLogin() {
             if (!navigator.onLine)
-                return showToast('❌ לא ניתן להתחבר ללא חיבור לאינטרנט.', null, 4000, null, true);
-            if (!auth || !db)
-                return showToast('❌ שירותי הענן נחסמו. בדוק חוסם פרסומות.', null, 5000, null, true);
-                
-            try { 
-                showToast('פותח חלון התחברות מאובטח...', null, 0, 'login-toast', false);
+                return showToast('❌ לא ניתן להתחבר ללא אינטרנט.', null, 4000, null, true);
+            if (!auth)
+                return showToast('❌ שירותי ההתחברות אינם זמינים.', null, 5000, null, true);
+
+            try {
+                showToast('מתחבר לחשבון...', null, 0, 'login-toast', false);
                 const provider = new GoogleAuthProvider();
                 provider.setCustomParameters({ prompt: 'select_account' });
-                
-                await signInWithPopup(auth, provider); 
-                removeToast('login-toast');
-            }
-            catch (e) { 
-                removeToast('login-toast');
-                if (e.code === 'auth/popup-blocked') {
-                    showToast('⚠️ חלון קופץ נחסם, מנסה התחברות חלופית...', null, 2000);
-                    try {
+
+                try {
+                    await signInWithPopup(auth, provider);
+                    removeToast('login-toast');
+                } catch (err) {
+                    if (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
+                        showToast('⚠️ מעביר לדף התחברות...', null, 2000);
                         await signInWithRedirect(auth, provider);
-                    } catch (redirectError) {
-                        alert("שגיאה בהתחברות: " + redirectError.message);
+                    } else {
+                        removeToast('login-toast');
+                        showToast('❌ שגיאת התחברות: ' + err.message, null, 5000, null, true);
                     }
-                } else if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
-                    showToast('❌ שגיאת התחברות: ' + e.message, null, 5000, null, true);
                 }
+            } catch (e) {
+                removeToast('login-toast');
+                showToast('❌ שגיאה כללית בהתחברות: ' + e.message, null, 5000, null, true);
             }
         }
 
@@ -1058,6 +1063,7 @@
             }
 
             if (state.user && ADMIN_EMAILS.includes(state.user.email)) {
+                // מנהלים עוקפים מסך נעילה ישר
                 welcomeScreen.style.display = 'none';
                 welcomeScreen.classList.remove('visible');
                 protectedContent.classList.remove('locked');
@@ -1091,7 +1097,7 @@
                 welcomeScreen.classList.remove('visible');
                 protectedContent.classList.remove('locked');
                 renderList();
-            }, 12000);
+            }, 12000); // 12 שניות גג המתנה
         }
 
         function updateSyncStatus(status, label) {
