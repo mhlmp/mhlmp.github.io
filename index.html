@@ -195,41 +195,42 @@
         .category-badge { background: rgba(127,127,127,0.1); padding: 4px 12px; border-radius: 12px; font-weight: 600; font-size: 0.85rem; border: 1px solid var(--glass-border); white-space: nowrap; }
         
         .items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px; }
-        .card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius); position: relative; display: flex; flex-direction: column; transition: transform 0.2s, box-shadow 0.2s; }
+       .card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius); position: relative; display: flex; flex-direction: column; transition: transform 0.2s, box-shadow 0.2s; overflow: hidden; }
         .card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
         .card.pinned { border: 2px solid var(--accent-gold); background: rgba(255, 255, 0, 0.05); }
-        .card-index { position: absolute; top: 10px; left: 10px; background: rgba(127,127,127,0.15); font-size: 10px; padding: 2px 7px; border-radius: 6px; font-family: monospace; color: var(--text-secondary); z-index: 1; }
-        .card-body { padding: 16px; padding-top: 36px; flex-grow: 1; }
-        .card-link { display: block; color: var(--primary-color); font-weight: 700; text-decoration: none; margin-bottom: 8px; word-break: break-all; font-size: 15px; line-height: 1.4; }
-        .card-text-content { background: rgba(127,127,127,0.05); padding: 10px; border-radius: 8px; font-family: monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; border: 1px solid var(--glass-border); }
-        .card-desc { font-size: 14px; opacity: 0.9; margin-bottom: 8px; line-height: 1.5; }
-        .card-note { margin-top: 10px; padding: 8px 10px; background-color: var(--note-bg); color: #4a3b10; font-size: 13px; border-radius: 8px; border-right: 4px solid var(--accent-gold); display: flex; gap: 8px; }
+        
+        .card-header-bar { display: flex; justify-content: space-between; align-items: flex-start; padding: 14px; gap: 10px; position: relative; z-index: 2; }
+        .card-header-content { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+        .card-meta-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 2px; }
+        .card-index-badge { background: rgba(127,127,127,0.15); font-size: 10px; padding: 2px 6px; border-radius: 6px; font-family: monospace; color: var(--text-secondary); }
+        
+        .card-link { display: block; color: var(--primary-color); font-weight: 700; text-decoration: none; word-break: break-all; font-size: 15px; line-height: 1.4; margin: 0; }
+        .card-text-content { background: rgba(127,127,127,0.05); padding: 10px; border-radius: 8px; font-family: monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; border: 1px solid var(--glass-border); margin: 0; }
+        
+        .card-header-controls { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+        .ctrl-btn { background: rgba(127,127,127,0.08); border: 1px solid transparent; color: var(--text-primary); width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+        .ctrl-btn:hover, .card.show-actions .actions-trigger-btn { background: rgba(127,127,127,0.2); color: var(--primary-color); transform: scale(1.05); }
+        .card.is-expanded .expand-btn { transform: rotate(180deg); background: rgba(127,127,127,0.2); color: var(--primary-color); }
 
-        .card-footer {
-            padding: 8px 12px; border-top: 1px solid var(--glass-border);
-            background: rgba(127,127,127,0.05); display: flex;
-            justify-content: space-between; align-items: center;
-            border-radius: 0 0 var(--radius) var(--radius); gap: 6px; min-height: 46px;
-        }
-        .card-footer-left { display: flex; align-items: center; gap: 4px; flex-shrink: 0; min-width: 0; }
-        .tag-category {
-            font-size: 10px; background: rgba(127,127,127,0.12); padding: 3px 8px;
-            border-radius: 10px; border: 1px solid var(--glass-border); font-weight: 600;
-            max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-            flex-shrink: 1; display: inline-block;
-        }
-        .duplicate-badge {
-            color: var(--accent-red); font-weight: bold; font-size: 11px;
-            display: none; margin-right: 3px; background: rgba(239,68,68,0.1);
-            padding: 2px 5px; border-radius: 4px; white-space: nowrap; flex-shrink: 0;
-        }
-        .card-actions { display: flex; gap: 1px; flex-shrink: 0; }
-        .icon-btn {
-            background: transparent; border: none; cursor: pointer; font-size: 15px;
-            width: 30px; height: 30px; border-radius: 6px;
-            display: flex; align-items: center; justify-content: center;
-            color: var(--text-secondary); transition: all 0.15s; flex-shrink: 0;
-        }
+        /* --- מגירות נשלפות באנימציה מודרנית (Grid 0fr to 1fr) --- */
+        .card-actions-wrapper, .card-details-wrapper { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s; }
+        .card-actions-inner, .card-details-inner { min-height: 0; overflow: hidden; }
+        
+        /* עיצוב מגירת התיאורים (מטה) */
+        .card.is-expanded .card-details-wrapper { grid-template-rows: 1fr; }
+        .card-details-content { padding: 0 14px 14px 14px; display: flex; flex-direction: column; gap: 8px; }
+        .card-desc { font-size: 14px; opacity: 0.9; line-height: 1.5; margin: 4px 0 0 0; }
+        .card-note { padding: 8px 10px; background-color: var(--note-bg); color: #4a3b10; font-size: 13px; border-radius: 8px; border-right: 4px solid var(--accent-gold); display: flex; gap: 8px; margin: 0; }
+        
+        /* עיצוב מגירת הפעולות (אמצע) */
+        .card-actions-wrapper { border-top: 1px solid transparent; }
+        .card.show-actions .card-actions-wrapper { grid-template-rows: 1fr; background: rgba(127,127,127,0.04); border-top-color: var(--glass-border); }
+        .card-actions-content { padding: 8px 14px; display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+        
+        .tag-category { font-size: 10px; background: rgba(127,127,127,0.12); padding: 3px 8px; border-radius: 10px; border: 1px solid var(--glass-border); font-weight: 600; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
+        .duplicate-badge { color: var(--accent-red); font-weight: bold; font-size: 11px; background: rgba(239,68,68,0.1); padding: 2px 5px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
+        
+        .icon-btn { background: transparent; border: none; cursor: pointer; font-size: 15px; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); transition: all 0.15s; flex-shrink: 0; }
         .icon-btn:hover { color: var(--primary-color); background: rgba(127,127,127,0.12); }
         .pin-btn.active { color: var(--accent-gold); }
 
@@ -1327,38 +1328,77 @@
                 </div>`;
             }
 
-            div.innerHTML = `
+           div.innerHTML = `
                 <input type="checkbox" class="card-checkbox" ${state.selectedIds.has(item.id) ? 'checked' : ''}>
-                <div class="card-index">#${visualIndex}</div>
-                <div class="card-body">
-                    ${contentHtml}
-                    ${item.description ? `<div class="card-desc">${escapeHtml(item.description)}</div>` : ''}
-                    ${noteHtml}
-                    ${aiHtml}
-                </div>
-                <div class="card-footer">
-                    <div class="card-footer-left">
-                        <span class="tag-category" title="${escapeHtml(item.category || 'כללי')}">${escapeHtml(item.category || 'כללי')}</span>
-                        <span class="duplicate-badge" style="display:${isDup ? 'inline' : 'none'}">כפול</span>
+                
+                <!-- 1. כותרת עליונה (תמיד גלויה) -->
+                <div class="card-header-bar">
+                    <div class="card-header-content">
+                        <div class="card-meta-row">
+                            <span class="card-index-badge">#${visualIndex}</span>
+                            <span class="tag-category" title="${escapeHtml(item.category || 'כללי')}">${escapeHtml(item.category || 'כללי')}</span>
+                            <span class="duplicate-badge" style="display:${isDup ? 'inline' : 'none'}">כפול</span>
+                            ${item.isPinned ? '<span style="color:var(--accent-gold); font-size:11px;">📌</span>' : ''}
+                        </div>
+                        ${contentHtml}
                     </div>
-                   <div class="card-actions">
-                        <button class="icon-btn btn-ai-scan" title="נתח עם AI" aria-label="נתח פריט זה באמצעות בינה מלאכותית">✨</button>
-                        <button class="icon-btn btn-share" title="שתף" aria-label="שתף פריט זה">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                    <div class="card-header-controls">
+                        <button class="ctrl-btn actions-trigger-btn" title="תפריט פעולות">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.5"></circle><circle cx="12" cy="12" r="1.5"></circle><circle cx="12" cy="19" r="1.5"></circle></svg>
                         </button>
-                        <button class="icon-btn btn-copy" title="העתק" aria-label="העתק תוכן פריט זה ללוח">📋</button>
-                        <button class="icon-btn btn-edit" title="ערוך" aria-label="ערוך פריט זה">✏️</button>
-                        <button class="icon-btn pin-btn ${item.isPinned ? 'active' : ''}" title="נעץ" aria-label="נעץ פריט זה בראש הרשימה">📌</button>
-                        <button class="icon-btn trash-btn" title="מחק" aria-label="העבר פריט זה לסל המחזור">🗑️</button>
+                        <button class="ctrl-btn expand-btn" title="הרחב פרטים">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 2. מגירת פעולות (נפתחת עצמאית) -->
+                <div class="card-actions-wrapper">
+                    <div class="card-actions-inner">
+                        <div class="card-actions-content card-actions">
+                            <button class="icon-btn btn-ai-scan" title="נתח עם AI">✨</button>
+                            <button class="icon-btn btn-share" title="שתף">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                            </button>
+                            <button class="icon-btn btn-copy" title="העתק">📋</button>
+                            <button class="icon-btn btn-edit" title="ערוך">✏️</button>
+                            <button class="icon-btn pin-btn ${item.isPinned ? 'active' : ''}" title="נעץ">📌</button>
+                            <button class="icon-btn trash-btn" title="מחק">🗑️</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. מגירת פרטים מלאים (נפתחת עצמאית) -->
+                <div class="card-details-wrapper">
+                    <div class="card-details-inner">
+                        <div class="card-details-content">
+                            ${item.description ? `<div class="card-desc">${escapeHtml(item.description)}</div>` : ''}
+                            ${noteHtml}
+                            ${aiHtml}
+                        </div>
                     </div>
                 </div>
             `;
-
+            
             div.onclick = (e) => { if (state.isSelectionMode) { e.preventDefault(); toggleSelection(item.id); } };
             div.addEventListener('contextmenu', (e) => {
                 if (e.target.closest('.card-actions')) return;
                 e.preventDefault();
                 if (!state.isSelectionMode) enterSelectionMode(item.id);
+            });
+
+            // הפעלת מגירת פעולות (3 נקודות)
+            const actionsBtn = div.querySelector('.actions-trigger-btn');
+            actionsBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                div.classList.toggle('show-actions');
+            });
+
+            // הפעלת מגירת התיאורים וה-AI (חץ)
+            const expandBtn = div.querySelector('.expand-btn');
+            expandBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                div.classList.toggle('is-expanded');
             });
 
             const btnAi = div.querySelector('.btn-ai-scan');
