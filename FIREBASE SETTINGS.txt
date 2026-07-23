@@ -2,23 +2,76 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 1. חסימה מוחלטת כברירת מחדל לכל מסד הנתונים
+    // =======================================================
+    // 🧠 פונקציות עזר - הגדרות זהות
+    // =======================================================
+    
+    function isLoggedIn() { return request.auth != null; }
+    function isOwner(userId) { return isLoggedIn() && request.auth.uid == userId; }
+    function isAdmin() { 
+      return isLoggedIn() && (request.auth.token.email == "meirhadad74@gmail.com" || request.auth.token.email == "meirhadad75@gmail.com"); 
+    }
+    
+    // =======================================================
+    // 🛡️ פונקציות הגנה מתקדמות (Validation & Schema)
+    // =======================================================
+
+    // 1. הגנה מפני ניפוח כמות השדות
+    function isPayloadSafe() { 
+      return request.resource.data.keys().size() <= 30; 
+    }
+
+    // 2. הגנה מפני מפלצות טקסט והזרקות קוד:
+    // מוודא שאם נשלח טקסט, הוא בגבולות הסביר ולא יקריס את המסד (עד 15,000 תווים לתוכן/AI, עד 2,000 לתיאור).
+    function isContentSizeSafe() {
+      let data = request.resource.data;
+      return (!("content" in data) || (data.content is string && data.content.size() < 15000)) &&
+             (!("aiSummary" in data) || (data.aiSummary is string && data.aiSummary.size() < 15000)) &&
+             (!("description" in data) || (data.description is string && data.description.size() < 2000));
+    }
+
+    // 3. הגנה על היסטוריה (Immutable Fields):
+    // כשמישהו מעדכן פריט קיים, אסור לו לשנות את ה-ID המקורי או את זמן היצירה המקורי.
+    function isNotChangingImmutableFields() {
+      let data = request.resource.data;
+      let oldData = resource.data;
+      return (!("id" in data) || data.id == oldData.id) &&
+             (!("createdAt" in data) || data.createdAt == oldData.createdAt);
+    }
+
+    // =======================================================
+    // 🔒 חוקי הגישה
+    // =======================================================
+
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // 2. הגישה למסמכי המשתמש (שם יושבים מפתחות ה-API היקרים)
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, create, update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin(); 
 
-      // 3. הגנה על תת-אוסף הקישורים
       match /items/{itemId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, delete: if isOwner(userId) || isAdmin();
+        
+        // יצירה חדשה: בודק בעלות, כמות שדות, ואורך טקסט תקין
+        allow create: if (isOwner(userId) || isAdmin()) 
+                      && isPayloadSafe() 
+                      && isContentSizeSafe();
+                      
+        // עדכון פריט קיים: הכל כמו ביצירה + מוודא שלא משנים שדות נעולים (ID/createdAt)
+        allow update: if (isOwner(userId) || isAdmin()) 
+                      && isPayloadSafe() 
+                      && isContentSizeSafe()
+                      && isNotChangingImmutableFields();
       }
 
-      // 4. הגנה על תת-אוסף סל המחזור
       match /trash/{trashId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, delete: if isOwner(userId) || isAdmin();
+        // סל המחזור מקבל את אותן הגנות מבניות כמו הרשימה הראשית
+        allow create, update: if (isOwner(userId) || isAdmin()) 
+                              && isPayloadSafe() 
+                              && isContentSizeSafe();
       }
     }
   }
