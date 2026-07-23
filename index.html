@@ -103,7 +103,7 @@
         .btn-login:hover { transform: scale(1.05); }
         .btn-action-sm { background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 8px 14px; border-radius: 8px; cursor: pointer; margin-left: 5px; font-size: 0.85rem; }
 
-        #welcomeScreen { display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border); min-height: 60vh; margin-bottom: 20px; }
+        #welcomeScreen { display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 15px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border); min-height: auto; margin-bottom: 10px; }
         #welcomeScreen.visible { display: flex !important; }
         
         .timer-ring { position: relative; width: 60px; height: 60px; margin-bottom: 12px; }
@@ -434,7 +434,7 @@
         </div>
     </div>
 
-    <div id="welcomeScreen" style="display:none;" class="visible">
+  <div id="welcomeScreen" style="display:none;" class="visible">
         <div class="timer-ring">
             <svg viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="45"></circle>
@@ -442,17 +442,17 @@
             </svg>
             <div class="timer-icon">🔒</div>
         </div>
-       <div style="margin-bottom: 25px; padding: 20px; background: linear-gradient(135deg, rgba(217, 48, 37, 0.15), rgba(217, 48, 37, 0.05)); border: 1px solid rgba(217, 48, 37, 0.4); border-radius: 12px; font-size: 0.95rem; color: #fca5a5; max-width: 450px; width: 90%; line-height: 1.6; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; backdrop-filter: blur(5px); box-sizing: border-box;">
-            <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 1.1rem; margin-bottom: 10px; color: #f87171;">
+       <div style="margin-bottom: 12px; padding: 12px 15px; background: linear-gradient(135deg, rgba(217, 48, 37, 0.15), rgba(217, 48, 37, 0.05)); border: 1px solid rgba(217, 48, 37, 0.4); border-radius: 12px; font-size: 0.85rem; color: #fca5a5; max-width: 450px; width: 95%; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; backdrop-filter: blur(5px); box-sizing: border-box;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 1rem; margin-bottom: 6px; color: #f87171;">
                 <span>⚠️</span><b>הבהרה משפטית</b><span>⚠️</span>
             </div>
             <div>
                 כל שימוש במערכת ובכלים המוצעים בה הוא על אחריות המשתמש בלבד. האתר אינו נושא בשום אחריות לכל נזק, אובדן מידע, או כל תוצאה אחרת שתנבע מהשימוש בו.
             </div>
         </div>
-        <h2 style="margin-bottom: 10px;">ברוכים הבאים לאתר שלי,<br><span style="color: var(--primary-color);">MH Link Manager Pro</span></h2>
-        <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 5px;">כדי לשמור על פרטיותך, הקישורים נטענים מהענן בלבד.</p>
-        <p style="color: var(--text-secondary); font-size: 0.95rem;">בעת יציאה (Logout) הכל נמחק מהמכשיר לחלוטין.</p>
+        <h2 style="margin-top: 0; margin-bottom: 6px; font-size: 1.3rem;">ברוכים הבאים,<br><span style="color: var(--primary-color);">MH Link Manager Pro</span></h2>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 2px; margin-top: 0;">כדי לשמור על פרטיותך, הקישורים נטענים מהענן בלבד.</p>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0; margin-bottom: 5px;">בעת יציאה הכל נמחק מהמכשיר לחלוטין.</p>
     </div>
 
     <div id="protectedContent" class="auth-required locked">
