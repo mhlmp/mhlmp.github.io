@@ -1,5 +1,5 @@
-// גרסה 6.0 - תיקון קריטי לנתיבי Auth
-const CACHE_NAME = 'LinkManager-v6.0-AuthFix';
+// גרסה 7.0 (Self-Healing & Auth-Safe)
+const CACHE_NAME = 'LinkManager-v7.0-MaxOptimized';
 
 const urlsToCache = [
   '/',
@@ -11,18 +11,18 @@ const urlsToCache = [
 self.addEventListener('install', event => {
   self.skipWaiting(); 
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(urlsToCache))
-      .catch(error => console.error('[Service Worker] Cache addAll failed:', error))
+    caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
   );
 });
 
 self.addEventListener('activate', event => {
+  // מנגנון ניקוי מטמון עצמי - מוחק כל זכר לגרסאות הבעייתיות הקודמות
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (cacheName !== CACHE_NAME) {
+            console.log('[SW] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -33,52 +33,43 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  // חסימת יירוט לבקשות לא רלוונטיות (רק GET מטופל)
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
 
-  // התיקון הקריטי: נותן לפיירבייס לנהל את נתיבי ההתחברות שלו בצורה טבעית!
-  // כל בקשה שמתחילה ב- /__/ שייכת פנימית ל-Firebase Auth / Hosting.
-  if (url.pathname.startsWith('/__/') || url.origin !== self.location.origin) {
+  // חוק ברזל מס' 1: ה-Service worker לא נוגע בחיבורי Firebase או בקשות API לשרתים זרים!
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/__/')) {
       return; 
   }
 
-  if (event.request.mode === 'navigate' || url.pathname === '/') {
+  // חוק ברזל מס' 2: בקשות HTML עובדות בשיטת Network First (להבטחת קוד מעודכן תמיד)
+  if (event.request.mode === 'navigate' || event.request.headers.get('accept').includes('text/html')) {
       event.respondWith(
-          fetch(event.request).catch(() => {
-              return caches.match('/', { ignoreSearch: true });
-          })
+          fetch(event.request)
+            .then(response => {
+                const responseClone = response.clone();
+                caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
+                return response;
+            })
+            .catch(() => caches.match(event.request).then(cached => {
+                return cached || caches.match('/');
+            }))
       );
       return;
   }
 
+  // חוק ברזל מס' 3: קבצים סטטיים בשיטת Stale-While-Revalidate (מהירות בזק)
   event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        if (response && response.status === 200 && response.type === 'basic') {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
+    caches.match(event.request).then(cachedResponse => {
+      const fetchPromise = fetch(event.request).then(networkResponse => {
+        if (networkResponse && networkResponse.status === 200) {
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, networkResponse.clone()));
         }
-        return response;
-      })
-      .catch(() => caches.match(event.request))
-  );
-});
-
-self.addEventListener('notificationclick', event => {
-  event.notification.close();
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
-      if (clientList.length > 0) {
-        let client = clientList[0];
-        for (let i = 0; i < clientList.length; i++) {
-          if (clientList[i].focused) {
-            client = clientList[i];
-          }
-        }
-        return client.focus();
-      }
-      return clients.openWindow('/');
+        return networkResponse;
+      }).catch(() => {}); // מתעלם משגיאות רשת ברקע
+      
+      return cachedResponse || fetchPromise;
     })
   );
 });
