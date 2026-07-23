@@ -69,8 +69,8 @@
             border-radius: var(--radius);
         }
 
-        header { text-align: center; margin-bottom: 25px; }
-        h1 { margin: 5px 0; font-size: 1.8rem; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        header { text-align: center; margin-bottom: 15px; }
+        h1 { margin: 5px 0; font-size: 1.45rem; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 10px; }
         
         #itemCount {
             display: inline-block; background: rgba(127, 127, 127, 0.1); padding: 4px 15px;
@@ -84,7 +84,7 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.3); animation: fadeIn 0.5s ease; border: 1px solid rgba(255,255,255,0.2);
         }
 
-        #userSection { padding: 12px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; }
+        #userSection { padding: 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; }
         .user-top-row { display: flex; justify-content: space-between; align-items: center; width: 100%; }
         .user-info { display: flex; align-items: center; gap: 12px; }
         .user-avatar { width: 42px; height: 42px; border-radius: 50%; border: 2px solid var(--glass-border); object-fit: cover; }
@@ -101,8 +101,7 @@
 
         .btn-login { background: var(--google-btn); color: white; border: none; padding: 12px 24px; border-radius: 30px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 1.05rem; box-shadow: 0 4px 10px rgba(0,0,0,0.2); margin: 0 auto; transition: transform 0.2s; }
         .btn-login:hover { transform: scale(1.05); }
-        .btn-action-sm { background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 8px 14px; border-radius: 8px; cursor: pointer; margin-left: 5px; font-size: 0.85rem; }
-
+.btn-action-sm { background: rgba(127,127,127,0.15); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 6px 14px; border-radius: 20px; cursor: pointer; margin-left: 5px; font-size: 0.78rem; font-weight: 600; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         #welcomeScreen { display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 15px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border); min-height: auto; margin-bottom: 10px; }
         #welcomeScreen.visible { display: flex !important; }
         
@@ -116,7 +115,7 @@
         .auth-required.locked { display: none !important; }
 
         #controlsArea {
-            padding: 14px; margin-bottom: 25px;
+            padding: 14px; margin-bottom: 15px;
             display: flex; flex-direction: column; gap: 12px;
             overflow: visible; position: relative; z-index: 100;
         }
@@ -183,7 +182,7 @@
         input[type="file"] { display: none; }
         .dropdown-divider { border-top: 1px solid var(--glass-border); margin: 6px 0; }
 
-        details { margin-bottom: 25px; }
+        details { margin-bottom: 15px; }
         summary { padding: 16px; cursor: pointer; font-weight: 700; color: var(--primary-color); background: rgba(127,127,127,0.05); list-style: none; display: flex; justify-content: center; border-radius: var(--radius); }
         #addItemForm { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
         #addItemForm input, #addItemForm textarea { padding: 12px; border: 1px solid var(--glass-border); border-radius: var(--radius); background: rgba(127,127,127,0.05); color: var(--text-primary); width: 100%; }
@@ -422,7 +421,7 @@
                         <div class="cloud-status">
                             <span class="status-dot online" id="syncDot"></span>
                             <span id="syncLabel">מחובר</span>
-                            <button id="forceReloadBtn" class="btn-reload" title="רענן מול הענן ומשוך הכל">🔄</button>
+                            <button id="forceReloadBtn" class="btn-reload" title="רענן מול הענן ומשוך הכל">☁️</button>
                         </div>
                     </div>
                 </div>
