@@ -741,7 +741,12 @@
                 }
             }).catch((error) => {
                 console.error("Login redirect error:", error);
-                showToast('❌ התחברות נכשלה מהענן: ' + error.message, null, 4000, null, true);
+                // התעלמות משגיאות של חסימת אחסון דפדפן (אופייני ל-PWA ולמובייל)
+                if (error.message.includes('storage-partitioned') || error.message.includes('missing initial state')) {
+                    console.warn('מתעלם משגיאת סשן דפדפן - מצב תקין ב-PWA.');
+                    return; 
+                }
+                showToast('❌ שגיאת התחברות: ' + error.message, null, 4000, null, true);
             });
             
             window.addEventListener('beforeinstallprompt', (e) => {
@@ -765,18 +770,24 @@
             if (!auth)
                 return showToast('❌ שירותי ההתחברות אינם זמינים.', null, 5000, null, true);
 
-            try {
-                showToast('מתחבר לחשבון...', null, 0, 'login-toast', false);
-                const provider = new GoogleAuthProvider();
-                provider.setCustomParameters({ prompt: 'select_account' });
+            const provider = new GoogleAuthProvider();
+            provider.setCustomParameters({ prompt: 'select_account' });
 
+            try {
+                showToast('פותח חלון התחברות...', null, 0, 'login-toast', false);
                 await signInWithPopup(auth, provider);
                 removeToast('login-toast');
-                
             } catch (err) {
                 removeToast('login-toast');
-                // חוסם את היציאה לדפדפן חיצוני (Redirect) גם אם החלון נסגר
-                if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
+                if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+                    return; // המשתמש סגר את החלון מרצונו, הכל תקין
+                }
+                
+                // אם פופ-אפ נחסם (קורה הרבה באפליקציות PWA), ננסה לעבור לשיטת Redirect
+                if (err.code === 'auth/popup-blocked' || err.message.toLowerCase().includes('popup')) {
+                    showToast('חלון קופץ נחסם, עובר להתחברות מאובטחת...', null, 3000);
+                    signInWithRedirect(auth, provider);
+                } else {
                     console.error("Login Error:", err);
                     showToast('❌ שגיאת התחברות: ' + err.message, null, 5000, null, true);
                 }
