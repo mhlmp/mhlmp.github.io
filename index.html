@@ -103,14 +103,14 @@
         .btn-login:hover { transform: scale(1.05); }
         .btn-action-sm { background: rgba(127,127,127,0.1); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 8px 14px; border-radius: 8px; cursor: pointer; margin-left: 5px; font-size: 0.85rem; }
 
-        #welcomeScreen { display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border); min-height: 80vh; margin-bottom: 20px; }
+        #welcomeScreen { display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border); min-height: 60vh; margin-bottom: 20px; }
         #welcomeScreen.visible { display: flex !important; }
         
-        .timer-ring { position: relative; width: 100px; height: 100px; margin-bottom: 20px; }
+        .timer-ring { position: relative; width: 60px; height: 60px; margin-bottom: 12px; }
         .timer-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
         .timer-ring circle { fill: none; stroke-width: 6; stroke: rgba(127,127,127,0.2); }
         .timer-ring .progress { stroke: var(--primary-color); stroke-dasharray: 283; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear; }
-        .timer-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 3rem; text-shadow: 0 0 20px rgba(255,255,255,0.2); }
+        .timer-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.8rem; text-shadow: 0 0 10px rgba(255,255,255,0.2); }
         
         .auth-required { transition: opacity 0.3s ease; }
         .auth-required.locked { display: none !important; }
