@@ -330,72 +330,163 @@
             transition: opacity 0.4s ease; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
         }
 
-        /* ==================== חלון סריקת סטטוסים חי ==================== */
+        /* ==================== חלון סריקת סטטוסים חי — תחתון, קומפקטי ולא חוסם תוכן ==================== */
         #statusScanPanel {
             position: fixed;
-            top: 78px;
-            right: 18px;
-            width: min(470px, calc(100vw - 36px));
-            max-height: min(72vh, 760px);
-            background: var(--glass-bg);
+            left: 50%;
+            right: auto;
+            bottom: 10px;
+            top: auto;
+            transform: translateX(-50%);
+            width: min(760px, calc(100vw - 24px));
+            height: 116px;
+            max-height: 116px;
+            background: color-mix(in srgb, var(--glass-bg) 94%, transparent);
             color: var(--text-primary);
             border: 1px solid var(--glass-border);
-            border-radius: 16px;
-            box-shadow: 0 18px 55px rgba(0,0,0,0.30);
-            backdrop-filter: blur(18px);
-            -webkit-backdrop-filter: blur(18px);
+            border-radius: 12px;
+            box-shadow: 0 10px 28px rgba(0,0,0,0.20);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
             z-index: 9700;
             display: none;
             flex-direction: column;
             overflow: hidden;
         }
-        #statusScanPanel.open { display: flex; animation: fadeIn 0.22s ease; }
+        #statusScanPanel.open { display: flex; animation: statusScanDockIn 0.18s ease; }
+        @keyframes statusScanDockIn {
+            from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
         .status-scan-header {
-            padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;
-            gap: 12px; border-bottom: 1px solid var(--glass-border);
-            background: rgba(127,127,127,0.08); flex-shrink: 0;
+            min-height: 34px;
+            padding: 5px 9px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            border-bottom: 1px solid var(--glass-border);
+            background: rgba(127,127,127,0.065);
+            flex-shrink: 0;
         }
-        .status-scan-title { font-weight: 800; font-size: 15px; display: flex; align-items: center; gap: 7px; }
-        .status-scan-counter { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
-        .status-scan-progress-wrap { height: 5px; background: rgba(127,127,127,0.15); overflow: hidden; flex-shrink: 0; }
+        .status-scan-actions { display:flex; align-items:center; gap:5px; flex-shrink:0; }
+        .status-scan-control-btn {
+            border:1px solid var(--glass-border); background:rgba(127,127,127,0.10);
+            color:var(--text-primary); border-radius:7px; padding:4px 7px;
+            font-size:9px; font-weight:800; cursor:pointer; white-space:nowrap;
+        }
+        .status-scan-control-btn:hover { background:rgba(127,127,127,0.18); }
+        .status-scan-control-btn.stop { color:var(--accent-red); border-color:rgba(217,48,37,0.35); background:rgba(217,48,37,0.08); }
+        .status-scan-control-btn.undo { color:var(--accent-gold); border-color:rgba(245,158,11,0.35); background:rgba(245,158,11,0.08); }
+        .status-scan-control-btn:disabled { opacity:.45; cursor:not-allowed; }
+        .status-scan-title {
+            font-weight: 800;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            white-space: nowrap;
+        }
+        .status-scan-counter { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+        .status-scan-progress-wrap {
+            height: 3px;
+            background: rgba(127,127,127,0.14);
+            overflow: hidden;
+            flex-shrink: 0;
+        }
         .status-scan-progress {
-            width: 0%; height: 100%; background: linear-gradient(90deg, #8b5cf6, #3b82f6);
-            transition: width 0.25s ease;
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #8b5cf6, #3b82f6);
+            transition: width 0.22s ease;
         }
-        .status-scan-body { padding: 8px; overflow-y: auto; overscroll-behavior: contain; flex: 1; min-height: 0; }
+        .status-scan-body {
+            padding: 4px 6px;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            flex: 1;
+            min-height: 0;
+            scrollbar-width: thin;
+        }
         .status-scan-row {
-            display: grid; grid-template-columns: 34px minmax(0,1fr) auto; align-items: center;
-            gap: 8px; padding: 9px 10px; margin-bottom: 6px;
-            border: 1px solid var(--glass-border); border-radius: 10px;
-            background: rgba(127,127,127,0.045);
+            display: grid;
+            grid-template-columns: 24px minmax(0,1fr) auto;
+            align-items: center;
+            gap: 6px;
+            min-height: 27px;
+            padding: 3px 6px;
+            margin-bottom: 3px;
+            border: 1px solid rgba(127,127,127,0.11);
+            border-radius: 7px;
+            background: rgba(127,127,127,0.03);
         }
         .status-scan-index {
-            width: 28px; height: 28px; border-radius: 8px;
-            display: flex; align-items: center; justify-content: center;
-            background: rgba(127,127,127,0.12); color: var(--text-secondary);
-            font: 700 11px/1 monospace;
+            width: 22px;
+            height: 22px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(127,127,127,0.10);
+            color: var(--text-secondary);
+            font: 700 9px/1 monospace;
         }
         .status-scan-url {
-            min-width: 0; direction: ltr; text-align: right; word-break: break-all;
-            font-size: 12px; line-height: 1.35;
+            min-width: 0;
+            direction: ltr;
+            text-align: right;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 10px;
+            line-height: 1.2;
         }
         .status-scan-state {
-            min-width: 78px; text-align: center; font-size: 11px; font-weight: 800;
-            padding: 5px 7px; border-radius: 999px; white-space: nowrap;
-            background: rgba(127,127,127,0.12); color: var(--text-secondary);
+            min-width: 60px;
+            text-align: center;
+            font-size: 9px;
+            font-weight: 800;
+            padding: 3px 5px;
+            border-radius: 999px;
+            white-space: nowrap;
+            background: rgba(127,127,127,0.10);
+            color: var(--text-secondary);
         }
-        .status-scan-state.checking { color: var(--primary-color); background: rgba(96,165,250,0.12); }
-        .status-scan-state.active { color: var(--accent-green); background: rgba(0,166,81,0.12); }
-        .status-scan-state.parked { color: var(--accent-gold); background: rgba(245,158,11,0.14); }
-        .status-scan-state.dead, .status-scan-state.error { color: var(--accent-red); background: rgba(217,48,37,0.12); }
+        .status-scan-state.checking { color: var(--primary-color); background: rgba(96,165,250,0.11); }
+        .status-scan-state.active { color: var(--accent-green); background: rgba(0,166,81,0.10); }
+        .status-scan-state.parked { color: var(--accent-gold); background: rgba(245,158,11,0.11); }
+        .status-scan-state.dead, .status-scan-state.error { color: var(--accent-red); background: rgba(217,48,37,0.10); }
         .status-scan-state.waiting { color: var(--text-secondary); }
         .status-scan-footer {
-            padding: 10px 12px; border-top: 1px solid var(--glass-border);
-            color: var(--text-secondary); font-size: 11px; display: flex;
-            justify-content: space-between; gap: 10px; flex-shrink: 0;
+            min-height: 28px;
+            padding: 4px 8px;
+            border-top: 1px solid var(--glass-border);
+            color: var(--text-secondary);
+            font-size: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            flex-shrink: 0;
         }
         @media (max-width: 700px) {
-            #statusScanPanel { top: 64px; right: 10px; width: calc(100vw - 20px); max-height: 67vh; }
+            #statusScanPanel {
+                left: 8px;
+                right: 8px;
+                bottom: 8px;
+                width: auto;
+                transform: none;
+                height: 104px;
+                max-height: 104px;
+                border-radius: 10px;
+            }
+            #statusScanPanel.open { animation: statusScanDockInMobile 0.18s ease; }
+            @keyframes statusScanDockInMobile {
+                from { opacity: 0; transform: translateY(8px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .status-scan-url { font-size: 9px; }
+            .status-scan-state { min-width: 56px; font-size: 8px; }
         }
         .spinner { border: 4px solid rgba(127, 127, 127, 0.2); border-top: 4px solid var(--primary-color); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
         .loading-title { color: var(--text-primary); margin: 0 0 10px 0; font-size: 1.5rem; text-align: center; }
@@ -468,7 +559,11 @@
     <div id="statusScanPanel" aria-live="polite" aria-label="סריקת סטטוס אתרים">
         <div class="status-scan-header">
             <div class="status-scan-title">🤖 בדיקת סטטוס אתרים</div>
-            <div class="status-scan-counter" id="statusScanCounter">מכין סריקה...</div>
+            <div class="status-scan-actions">
+                <div class="status-scan-counter" id="statusScanCounter">מכין סריקה...</div>
+                <button type="button" id="statusScanStopBtn" class="status-scan-control-btn stop" title="עצור את הבדיקה">עצור</button>
+                <button type="button" id="statusScanUndoBtn" class="status-scan-control-btn undo" title="בטל את כל שינויי הסטטוס שבוצעו בסריקה זו" disabled>UNDO</button>
+            </div>
         </div>
         <div class="status-scan-progress-wrap">
             <div class="status-scan-progress" id="statusScanProgress"></div>
@@ -746,7 +841,7 @@
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import {
             getFirestore, doc, setDoc, getDoc, collection, onSnapshot, getDocs,
-            deleteDoc, writeBatch, enableNetwork, disableNetwork,
+            deleteDoc, deleteField, writeBatch, enableNetwork, disableNetwork,
             initializeFirestore, persistentLocalCache, persistentSingleTabManager,
             terminate, clearIndexedDbPersistence
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -780,6 +875,10 @@
         let isServerDataArrived = false;
         let forceHideLockScreenTimer;
         window.__statusScanRunStarted = false;
+        window.__statusScanAbortController = null;
+        window.__statusScanStopRequested = false;
+        window.__statusScanUndoSnapshot = null;
+        window.__statusScanRunActive = false;
 
         function nowIso() { return new Date().toISOString(); }
 
@@ -1703,8 +1802,21 @@
                 const ctrl = new AbortController();
                 window.activeAiRequestController = ctrl;
                 const tid = setTimeout(() => ctrl.abort(), time);
+                const sharedSignal = statusOnly ? window.__statusScanAbortController?.signal : null;
+                let signal = ctrl.signal;
+
+                if (sharedSignal) {
+                    if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function') {
+                        signal = AbortSignal.any([ctrl.signal, sharedSignal]);
+                    } else if (sharedSignal.aborted) {
+                        ctrl.abort();
+                    } else {
+                        sharedSignal.addEventListener('abort', () => ctrl.abort(), { once: true });
+                    }
+                }
+
                 try {
-                    const res = await fetch(url, { ...options, signal: ctrl.signal });
+                    const res = await fetch(url, { ...options, signal });
                     clearTimeout(tid);
                     window.activeAiRequestController = null;
                     return res;
@@ -1737,11 +1849,21 @@ if (isWebsite && statusOnly) {
 
         const ctrl = new AbortController();
         const timeoutId = setTimeout(() => ctrl.abort(), 7000);
+        const sharedSignal = window.__statusScanAbortController?.signal || null;
+        let signal = ctrl.signal;
+
+        if (sharedSignal) {
+            if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function') {
+                signal = AbortSignal.any([ctrl.signal, sharedSignal]);
+            } else if (sharedSignal.aborted) {
+                ctrl.abort();
+            } else {
+                sharedSignal.addEventListener('abort', () => ctrl.abort(), { once: true });
+            }
+        }
 
         try {
-            const res = await fetch(proxyUrl, {
-                signal: ctrl.signal
-            });
+            const res = await fetch(proxyUrl, { signal });
 
             return {
                 proxy: proxyUrl.split('?')[0],
@@ -3180,13 +3302,21 @@ document.getElementById('deadLinksAlert')?.addEventListener('click', () => {
     }
 });
 
-      function getStatusScanRowState(status) {
+        function getStatusScanRowState(status) {
             if (status === 'active') return ['active', '🟢 פעיל'];
             if (status === 'parked') return ['parked', '🟠 חניה/בעיה'];
             if (status === 'dead') return ['dead', '🔴 לא פעיל'];
             if (status === 'error') return ['error', '⚠️ שגיאה'];
             if (status === 'checking') return ['checking', '🔎 בודק...'];
+            if (status === 'stopped') return ['waiting', '⏹ נעצר'];
             return ['waiting', 'ממתין'];
+        }
+
+        function setStatusScanButtons({ running = false, undoAvailable = false } = {}) {
+            const stopBtn = document.getElementById('statusScanStopBtn');
+            const undoBtn = document.getElementById('statusScanUndoBtn');
+            if (stopBtn) stopBtn.disabled = !running;
+            if (undoBtn) undoBtn.disabled = !undoAvailable;
         }
 
         function openStatusScanPanel(items) {
@@ -3194,11 +3324,9 @@ document.getElementById('deadLinksAlert')?.addEventListener('click', () => {
             const body = document.getElementById('statusScanBody');
             const counter = document.getElementById('statusScanCounter');
             const progress = document.getElementById('statusScanProgress');
-
             if (!panel || !body || !counter || !progress) return;
 
             body.innerHTML = '';
-
             items.forEach((item, index) => {
                 const row = document.createElement('div');
                 row.className = 'status-scan-row';
@@ -3224,19 +3352,16 @@ document.getElementById('deadLinksAlert')?.addEventListener('click', () => {
 
             counter.textContent = `0 / ${items.length}`;
             progress.style.width = '0%';
-
             const footerRight = document.getElementById('statusScanFooterRight');
             const footerLeft = document.getElementById('statusScanFooterLeft');
             if (footerRight) footerRight.textContent = '0%';
             if (footerLeft) footerLeft.textContent = `נבדק רק הסטטוס • ${items.length} קישורים`;
-
             panel.classList.add('open');
         }
 
         function updateStatusScanRow(itemId, status, labelOverride = null) {
             const stateEl = document.getElementById(`status-scan-state-${itemId}`);
             if (!stateEl) return;
-
             const [stateClass, defaultLabel] = getStatusScanRowState(status);
             stateEl.className = `status-scan-state ${stateClass}`;
             stateEl.textContent = labelOverride || defaultLabel;
@@ -3246,11 +3371,8 @@ document.getElementById('deadLinksAlert')?.addEventListener('click', () => {
             const counter = document.getElementById('statusScanCounter');
             const progress = document.getElementById('statusScanProgress');
             const footerRight = document.getElementById('statusScanFooterRight');
-
             if (!counter || !progress || !footerRight) return;
-
             const pct = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 100;
-
             counter.textContent = `${completed} / ${total}`;
             progress.style.width = `${pct}%`;
             footerRight.textContent = `${pct}%`;
@@ -3261,143 +3383,200 @@ document.getElementById('deadLinksAlert')?.addEventListener('click', () => {
             if (el) el.textContent = text;
         }
 
+        function createStatusScanUndoSnapshot(items) {
+            return items.map(item => ({
+                id: item.id,
+                hadStatus: Object.prototype.hasOwnProperty.call(item, 'siteStatus'),
+                siteStatus: item.siteStatus
+            }));
+        }
+
+        async function undoStatusScanChanges() {
+            const snapshot = window.__statusScanUndoSnapshot;
+            if (!Array.isArray(snapshot) || snapshot.length === 0) return;
+            if (!state.user || !db) {
+                showToast('❌ לא ניתן לבצע UNDO ללא התחברות.', null, 4000, null, true);
+                return;
+            }
+
+            const changed = snapshot.filter(saved => {
+                const current = state.items.find(item => item.id === saved.id);
+                if (!current) return false;
+                const currentHas = Object.prototype.hasOwnProperty.call(current, 'siteStatus');
+                return currentHas !== saved.hadStatus || current.siteStatus !== saved.siteStatus;
+            });
+
+            if (changed.length === 0) {
+                showToast('ℹ️ אין שינויי סטטוס לביטול.', null, 3000);
+                return;
+            }
+
+            showToast(`↩️ מחזיר ${changed.length} שינויי סטטוס...`, null, 0, 'status-undo-toast', false);
+            try {
+                const CHUNK_SIZE = 400;
+                for (let i = 0; i < changed.length; i += CHUNK_SIZE) {
+                    const chunk = changed.slice(i, i + CHUNK_SIZE);
+                    const batch = writeBatch(db);
+
+                    chunk.forEach(saved => {
+                        const item = state.items.find(it => it.id === saved.id);
+                        if (!item) return;
+                        const ref = doc(db, 'users', state.user.uid, 'items', item.id.toString());
+                        item.updatedAt = nowIso();
+                        if (saved.hadStatus) {
+                            item.siteStatus = saved.siteStatus;
+                            batch.set(ref, { siteStatus: saved.siteStatus, updatedAt: item.updatedAt }, { merge: true });
+                        } else {
+                            delete item.siteStatus;
+                            batch.update(ref, { updatedAt: item.updatedAt, siteStatus: deleteField() });
+                        }
+                    });
+
+                    await batch.commit();
+                }
+
+                renderList();
+                checkDeadLinksAlert();
+                changed.forEach(saved => {
+                    const item = state.items.find(it => it.id === saved.id);
+                    if (item?.siteStatus) updateStatusScanRow(saved.id, item.siteStatus);
+                    else updateStatusScanRow(saved.id, 'waiting', 'הוחזר');
+                });
+                setStatusScanFooter(`↩️ UNDO הושלם • בוטלו ${changed.length} שינויי סטטוס`);
+                showToast(`✅ UNDO הושלם — ${changed.length} שינויי סטטוס בוטלו`, null, 5000);
+            } catch (error) {
+                console.error('[AI Status Scan] Undo failed:', error);
+                showToast('❌ ה-UNDO נכשל: ' + (error?.message || 'שגיאה לא ידועה'), null, 5000, null, true);
+            } finally {
+                removeToast('status-undo-toast');
+            }
+        }
+
+        function stopBackgroundStatusScan() {
+            if (!window.__statusScanRunActive) return;
+            window.__statusScanStopRequested = true;
+            if (window.__statusScanAbortController) {
+                try { window.__statusScanAbortController.abort(); } catch (_) {}
+            }
+            if (window.activeAiRequestController) {
+                try { window.activeAiRequestController.abort(); } catch (_) {}
+            }
+            setStatusScanFooter('⏹ עוצר את הסריקה...');
+            setStatusScanButtons({ running: false, undoAvailable: Array.isArray(window.__statusScanUndoSnapshot) });
+        }
+
         async function runBackgroundStatusScan() {
             const panel = document.getElementById('statusScanPanel');
+            window.__statusScanRunActive = true;
+            window.__statusScanStopRequested = false;
+            window.__statusScanAbortController = new AbortController();
+            setStatusScanButtons({ running: true, undoAvailable: false });
 
             if (!navigator.onLine || !state.user) {
                 if (panel) panel.classList.add('open');
                 const body = document.getElementById('statusScanBody');
-                if (body) {
-                    body.innerHTML =
-                        '<div style="padding:18px;text-align:center;color:var(--accent-red);">❌ אין חיבור לאינטרנט — לא ניתן לבצע בדיקת סטטוס.</div>';
-                }
+                if (body) body.innerHTML = '<div style="padding:18px;text-align:center;color:var(--accent-red);">❌ אין חיבור לאינטרנט — לא ניתן לבצע בדיקת סטטוס.</div>';
                 setStatusScanFooter('הסריקה לא הופעלה');
+                window.__statusScanRunActive = false;
+                setStatusScanButtons({ running: false, undoAvailable: false });
                 return;
             }
 
-            const linksToScan = state.items.filter(item =>
-                item.type === 'link' &&
-                typeof item.content === 'string' &&
-                item.content.trim()
-            );
-
+            const linksToScan = state.items.filter(item => item.type === 'link' && typeof item.content === 'string' && item.content.trim());
+            window.__statusScanUndoSnapshot = createStatusScanUndoSnapshot(linksToScan);
+            setStatusScanButtons({ running: true, undoAvailable: true });
             openStatusScanPanel(linksToScan);
 
             if (linksToScan.length === 0) {
                 setStatusScanFooter('אין קישורים לבדיקה');
                 updateStatusScanProgress(0, 0);
+                window.__statusScanRunActive = false;
+                setStatusScanButtons({ running: false, undoAvailable: true });
                 return;
             }
 
             const settings = getAiSettings();
             const providerOrder = ['gemini', 'groq', 'openrouter'];
-
-            const availableProvider = providerOrder.find(provider =>
-                Array.isArray(settings.keys?.[provider]) &&
-                settings.keys[provider].some(key => key && String(key).trim())
-            );
+            const availableProvider = providerOrder.find(provider => Array.isArray(settings.keys?.[provider]) && settings.keys[provider].some(key => key && String(key).trim()));
 
             if (!availableProvider) {
                 setStatusScanFooter('לא נמצא מפתח API פעיל ל-AI');
-
                 const body = document.getElementById('statusScanBody');
-                if (body) {
-                    body.innerHTML =
-                        '<div style="padding:18px;text-align:center;color:var(--accent-red);line-height:1.6;">❌ לא נמצא מפתח API פעיל.<br>הסריקה דורשת מפתח AI אחד לפחות.</div>';
-                }
-
+                if (body) body.innerHTML = '<div style="padding:18px;text-align:center;color:var(--accent-red);line-height:1.6;">❌ לא נמצא מפתח API פעיל.<br>הסריקה דורשת מפתח AI אחד לפחות.</div>';
                 updateStatusScanProgress(0, linksToScan.length);
+                window.__statusScanRunActive = false;
+                setStatusScanButtons({ running: false, undoAvailable: true });
                 return;
             }
 
             setStatusScanFooter('בודק סטטוס בלבד • אינו משנה תיאורים או פרטים');
-
             let nextIndex = 0;
             let completed = 0;
             const WORKER_COUNT = Math.min(4, linksToScan.length);
 
             const worker = async () => {
                 while (true) {
+                    if (window.__statusScanStopRequested) return;
                     const index = nextIndex++;
-
                     if (index >= linksToScan.length) return;
-
                     const item = linksToScan[index];
-
                     updateStatusScanRow(item.id, 'checking');
                     setStatusScanFooter(`בודק עכשיו: ${item.content}`);
 
                     try {
                         await scanSingleItem(item.id, availableProvider, false, true);
-
-                        const updatedItem = state.items.find(it => it.id === item.id);
-                        const status = updatedItem?.siteStatus;
-
-                        if (status === 'active') updateStatusScanRow(item.id, 'active');
-                        else if (status === 'parked') updateStatusScanRow(item.id, 'parked');
-                        else if (status === 'dead') updateStatusScanRow(item.id, 'dead');
-                        else updateStatusScanRow(item.id, 'error', '⚠️ לא נקבע');
+                        if (window.__statusScanStopRequested) updateStatusScanRow(item.id, 'stopped');
+                        else {
+                            const updatedItem = state.items.find(it => it.id === item.id);
+                            const status = updatedItem?.siteStatus;
+                            if (status === 'active') updateStatusScanRow(item.id, 'active');
+                            else if (status === 'parked') updateStatusScanRow(item.id, 'parked');
+                            else if (status === 'dead') updateStatusScanRow(item.id, 'dead');
+                            else updateStatusScanRow(item.id, 'error', '⚠️ לא נקבע');
+                        }
                     } catch (error) {
-                        console.error('[AI Status Scan]', item.content, error);
-                        updateStatusScanRow(item.id, 'error');
+                        if (window.__statusScanStopRequested || error?.name === 'AbortError') updateStatusScanRow(item.id, 'stopped');
+                        else { console.error('[AI Status Scan]', item.content, error); updateStatusScanRow(item.id, 'error'); }
                     } finally {
                         completed++;
                         updateStatusScanProgress(completed, linksToScan.length);
-
-                        const inactiveCount = state.items.filter(it =>
-                            it.type === 'link' &&
-                            ['dead', 'parked'].includes(it.siteStatus)
-                        ).length;
-
                         checkDeadLinksAlert();
-
-                        if (completed === linksToScan.length) {
-                            setStatusScanFooter(
-                                `הסריקה הושלמה • נמצאו ${inactiveCount} אתרים לא פעילים/בבעיה`
-                            );
-                        } else {
-                            setStatusScanFooter(
-                                `הושלמו ${completed}/${linksToScan.length} • נמצאו עד כה ${inactiveCount} אתרים לא פעילים/בבעיה`
-                            );
-                        }
-
+                        const inactiveCount = state.items.filter(it => it.type === 'link' && ['dead', 'parked'].includes(it.siteStatus)).length;
+                        setStatusScanFooter(window.__statusScanStopRequested ? `⏹ נעצר • הושלמו ${completed}/${linksToScan.length} • ${inactiveCount} לא פעילים/בבעיה` : (completed === linksToScan.length ? `הסריקה הושלמה • נמצאו ${inactiveCount} אתרים לא פעילים/בבעיה` : `הושלמו ${completed}/${linksToScan.length} • ${inactiveCount} לא פעילים/בבעיה`));
                         renderList();
                     }
                 }
             };
 
-            await Promise.all(
-                Array.from({ length: WORKER_COUNT }, () => worker())
-            );
-
-            updateStatusScanProgress(linksToScan.length, linksToScan.length);
+            await Promise.all(Array.from({ length: WORKER_COUNT }, () => worker()));
+            const wasStopped = window.__statusScanStopRequested;
+            window.__statusScanRunActive = false;
+            window.__statusScanAbortController = null;
             checkDeadLinksAlert();
             renderList();
-            setStatusScanFooter(
-                `הסריקה הושלמה • ${linksToScan.length} קישורים נבדקו • החלון יישאר פתוח`
-            );
+
+            if (wasStopped) setStatusScanFooter(`⏹ הסריקה נעצרה • הושלמו ${completed}/${linksToScan.length} • ניתן לבצע UNDO`);
+            else { updateStatusScanProgress(linksToScan.length, linksToScan.length); setStatusScanFooter(`✅ הסריקה הושלמה • ${linksToScan.length} קישורים נבדקו • ניתן לבצע UNDO`); }
+            setStatusScanButtons({ running: false, undoAvailable: true });
         }
 
         function startBackgroundStatusScan() {
-            if (window.__statusScanRunStarted) return;
-
+            if (window.__statusScanRunStarted || window.__statusScanRunActive) return;
             window.__statusScanRunStarted = true;
-
             runBackgroundStatusScan().catch(error => {
                 console.error('[AI Status Scan] Fatal error:', error);
-
+                window.__statusScanRunActive = false;
+                window.__statusScanAbortController = null;
                 const panel = document.getElementById('statusScanPanel');
                 if (panel) panel.classList.add('open');
-
-                const body = document.getElementById('statusScanBody');
-                if (body) {
-                    body.innerHTML =
-                        `<div style="padding:18px;text-align:center;color:var(--accent-red);line-height:1.6;">❌ הסריקה נכשלה.<br>${escapeHtml(error?.message || 'שגיאה לא ידועה')}</div>`;
-                }
-
-                setStatusScanFooter('הסריקה הופסקה עקב שגיאה');
+                setStatusScanFooter('❌ הסריקה נכשלה — ניתן לבצע UNDO עבור שינויים שבוצעו');
+                setStatusScanButtons({ running: false, undoAvailable: Array.isArray(window.__statusScanUndoSnapshot) });
+                showToast('❌ סריקת הסטטוס נכשלה: ' + (error?.message || 'שגיאה לא ידועה'), null, 5000, null, true);
             });
         }
+
+        document.getElementById('statusScanStopBtn')?.addEventListener('click', stopBackgroundStatusScan);
+        document.getElementById('statusScanUndoBtn')?.addEventListener('click', undoStatusScanChanges);
 
     </script>
 </body>
