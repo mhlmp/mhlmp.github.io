@@ -329,6 +329,74 @@
             justify-content: center; align-items: center; z-index: 99999;
             transition: opacity 0.4s ease; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
         }
+
+        /* ==================== חלון סריקת סטטוסים חי ==================== */
+        #statusScanPanel {
+            position: fixed;
+            top: 78px;
+            right: 18px;
+            width: min(470px, calc(100vw - 36px));
+            max-height: min(72vh, 760px);
+            background: var(--glass-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            box-shadow: 0 18px 55px rgba(0,0,0,0.30);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            z-index: 9700;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #statusScanPanel.open { display: flex; animation: fadeIn 0.22s ease; }
+        .status-scan-header {
+            padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; border-bottom: 1px solid var(--glass-border);
+            background: rgba(127,127,127,0.08); flex-shrink: 0;
+        }
+        .status-scan-title { font-weight: 800; font-size: 15px; display: flex; align-items: center; gap: 7px; }
+        .status-scan-counter { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+        .status-scan-progress-wrap { height: 5px; background: rgba(127,127,127,0.15); overflow: hidden; flex-shrink: 0; }
+        .status-scan-progress {
+            width: 0%; height: 100%; background: linear-gradient(90deg, #8b5cf6, #3b82f6);
+            transition: width 0.25s ease;
+        }
+        .status-scan-body { padding: 8px; overflow-y: auto; overscroll-behavior: contain; flex: 1; min-height: 0; }
+        .status-scan-row {
+            display: grid; grid-template-columns: 34px minmax(0,1fr) auto; align-items: center;
+            gap: 8px; padding: 9px 10px; margin-bottom: 6px;
+            border: 1px solid var(--glass-border); border-radius: 10px;
+            background: rgba(127,127,127,0.045);
+        }
+        .status-scan-index {
+            width: 28px; height: 28px; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(127,127,127,0.12); color: var(--text-secondary);
+            font: 700 11px/1 monospace;
+        }
+        .status-scan-url {
+            min-width: 0; direction: ltr; text-align: right; word-break: break-all;
+            font-size: 12px; line-height: 1.35;
+        }
+        .status-scan-state {
+            min-width: 78px; text-align: center; font-size: 11px; font-weight: 800;
+            padding: 5px 7px; border-radius: 999px; white-space: nowrap;
+            background: rgba(127,127,127,0.12); color: var(--text-secondary);
+        }
+        .status-scan-state.checking { color: var(--primary-color); background: rgba(96,165,250,0.12); }
+        .status-scan-state.active { color: var(--accent-green); background: rgba(0,166,81,0.12); }
+        .status-scan-state.parked { color: var(--accent-gold); background: rgba(245,158,11,0.14); }
+        .status-scan-state.dead, .status-scan-state.error { color: var(--accent-red); background: rgba(217,48,37,0.12); }
+        .status-scan-state.waiting { color: var(--text-secondary); }
+        .status-scan-footer {
+            padding: 10px 12px; border-top: 1px solid var(--glass-border);
+            color: var(--text-secondary); font-size: 11px; display: flex;
+            justify-content: space-between; gap: 10px; flex-shrink: 0;
+        }
+        @media (max-width: 700px) {
+            #statusScanPanel { top: 64px; right: 10px; width: calc(100vw - 20px); max-height: 67vh; }
+        }
         .spinner { border: 4px solid rgba(127, 127, 127, 0.2); border-top: 4px solid var(--primary-color); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
         .loading-title { color: var(--text-primary); margin: 0 0 10px 0; font-size: 1.5rem; text-align: center; }
         .loading-text { color: var(--text-secondary); font-size: 1rem; margin: 0; text-align: center; direction: rtl; }
@@ -395,6 +463,21 @@
         <div class="spinner"></div>
         <h3 class="loading-title">מתחבר לענן וטוען נתונים...</h3>
         <p class="loading-text">מוודא שהכל מעודכן ומאובטח, זה ייקח רק רגע.</p>
+    </div>
+
+    <div id="statusScanPanel" aria-live="polite" aria-label="סריקת סטטוס אתרים">
+        <div class="status-scan-header">
+            <div class="status-scan-title">🤖 בדיקת סטטוס אתרים</div>
+            <div class="status-scan-counter" id="statusScanCounter">מכין סריקה...</div>
+        </div>
+        <div class="status-scan-progress-wrap">
+            <div class="status-scan-progress" id="statusScanProgress"></div>
+        </div>
+        <div class="status-scan-body" id="statusScanBody"></div>
+        <div class="status-scan-footer">
+            <span id="statusScanFooterLeft">נבדק רק הסטטוס</span>
+            <span id="statusScanFooterRight">0%</span>
+        </div>
     </div>
 
    <header>
@@ -696,6 +779,7 @@
         
         let isServerDataArrived = false;
         let forceHideLockScreenTimer;
+        window.__statusScanRunStarted = false;
 
         function nowIso() { return new Date().toISOString(); }
 
@@ -1002,6 +1086,13 @@
                             renderList();
                             updateCategoryDropdowns();
                         }
+
+                        // טריגר בטוח לאחר הגעת נתוני הקישורים בפועל.
+                        // guard בתוך startBackgroundStatusScan מונע הפעלה כפולה.
+                        if (isServerDataArrived && state.user) {
+                            setTimeout(() => startBackgroundStatusScan(), 0);
+                        }
+
                         updateSyncStatus(navigator.onLine ? 'online' : 'offline', navigator.onLine ? 'מחובר ✓' : 'מקומי');
                     }, (err) => {
                         console.error('[Sync] onSnapshot items error:', err);
@@ -1073,17 +1164,17 @@
                 return;
             }
 
-            if (state.user && ADMIN_EMAILS.includes(state.user.email)) {
-                welcomeScreen.style.display = 'none';
-                welcomeScreen.classList.remove('visible');
-                protectedContent.classList.remove('locked');
-                return;
-            }
-
             welcomeScreen.style.display = 'flex';
             welcomeScreen.classList.add('visible');
             protectedContent.classList.add('locked');
             document.getElementById('itemCount').textContent = 'מוריד נתונים מהענן...';
+
+            // מציגים את חלון הסריקה מיד לאחר ההתחברות, גם לפני שהנתונים הגיעו.
+            // הוא יתמלא אוטומטית ברגע ש-Firestore יספק את רשימת הקישורים.
+            if (typeof openStatusScanPanel === 'function') {
+                openStatusScanPanel([]);
+                setStatusScanFooter('ממתין לטעינת הקישורים מהענן...');
+            }
             
             if (progressCircle) {
                 progressCircle.style.transition = 'stroke-dashoffset 2s linear';
@@ -1098,7 +1189,7 @@
                     welcomeScreen.classList.remove('visible');
                     protectedContent.classList.remove('locked');
                     renderList();
-                    runBackgroundStatusScan();
+                    startBackgroundStatusScan();
                 }
             }, 300);
 
@@ -1108,7 +1199,7 @@
                 welcomeScreen.classList.remove('visible');
                 protectedContent.classList.remove('locked');
                 renderList();
-                runBackgroundStatusScan();
+                startBackgroundStatusScan();
             }, 8000); 
         }
 
@@ -1575,13 +1666,30 @@
             const item = state.items.find(i => i.id === id);
             if (!item) return;
 
-            const settings       = getAiSettings();
-            
-            const currentProvider = overrideProvider || settings.provider;
+            const settings = getAiSettings();
+
+            let currentProvider = overrideProvider || settings.provider;
+
+            if (
+                statusOnly &&
+                !((settings.keys[currentProvider] || []).some(k => k && String(k).trim()))
+            ) {
+                currentProvider =
+                    ['gemini', 'groq', 'openrouter']
+                        .find(provider =>
+                            Array.isArray(settings.keys[provider]) &&
+                            settings.keys[provider].some(k => k && String(k).trim())
+                        ) || currentProvider;
+            }
+
             const pKeys = settings.keys[currentProvider] || [];
             const fallbackChain = (Array.isArray(pKeys) ? pKeys : [pKeys])
-                .filter(k => k && k.trim())
-                .map((k, idx) => ({ provider: currentProvider, key: k, keyIndex: idx + 1 }));
+                .filter(k => k && String(k).trim())
+                .map((k, idx) => ({
+                    provider: currentProvider,
+                    key: k,
+                    keyIndex: idx + 1
+                }));
 
             if (fallbackChain.length === 0) {
                 const providerNames = { 'gemini': 'Google Gemini', 'groq': 'Groq', 'openrouter': 'OpenRouter' };
@@ -1747,7 +1855,7 @@ Only if you have ABSOLUTELY ZERO knowledge of it, state: "האתר חסום לס
                 }
 
                 const isTelegramUrl = /(?:t\.me|telegram\.me)\//i.test(cleanContent);
-                if (isTelegramUrl && !forceUrlOnly) {
+                if (isTelegramUrl && !forceUrlOnly && !statusOnly) {
                     const lc = contentToAnalyze.toLowerCase();
                     const isInviteLink = /t\.me\/\+/i.test(cleanContent);
                     const EXPLICIT_DEAD_SIGNALS = [
@@ -3072,81 +3180,225 @@ document.getElementById('deadLinksAlert')?.addEventListener('click', () => {
     }
 });
 
-      async function runBackgroundStatusScan() {
-    if (!navigator.onLine || !state.user) return;
-
-    const settings = getAiSettings();
-
-    const hasAnyAiKey =
-        (Array.isArray(settings.keys?.gemini) && settings.keys.gemini.some(k => k && k.trim())) ||
-        (Array.isArray(settings.keys?.groq) && settings.keys.groq.some(k => k && k.trim())) ||
-        (Array.isArray(settings.keys?.openrouter) && settings.keys.openrouter.some(k => k && k.trim()));
-
-    if (!hasAnyAiKey) {
-        console.warn('[AI Status Scan] אין מפתח AI פעיל — הסריקה האוטומטית לא הופעלה.');
-        return;
-    }
-
-    const linksToScan = state.items.filter(i =>
-        i.type === 'link' &&
-        typeof i.content === 'string' &&
-        i.content.trim()
-    );
-
-    if (linksToScan.length === 0) return;
-
-    console.log(`[AI Status Scan] מתחיל לבדוק ${linksToScan.length} אתרים.`);
-
-    let nextIndex = 0;
-    let changedCount = 0;
-
-    const worker = async () => {
-        while (true) {
-            const currentIndex = nextIndex++;
-
-            if (currentIndex >= linksToScan.length) return;
-
-            const item = linksToScan[currentIndex];
-            if (!item) continue;
-
-            try {
-                await scanSingleItem(item.id, null, false, true);
-
-                const updatedItem = state.items.find(i => i.id === item.id);
-
-                if (
-                    updatedItem &&
-                    ['active', 'parked', 'dead'].includes(updatedItem.siteStatus)
-                ) {
-                    changedCount++;
-                }
-            } catch (error) {
-                console.error(
-                    `[AI Status Scan] שגיאה בבדיקת ${item.content}:`,
-                    error
-                );
-            }
+      function getStatusScanRowState(status) {
+            if (status === 'active') return ['active', '🟢 פעיל'];
+            if (status === 'parked') return ['parked', '🟠 חניה/בעיה'];
+            if (status === 'dead') return ['dead', '🔴 לא פעיל'];
+            if (status === 'error') return ['error', '⚠️ שגיאה'];
+            if (status === 'checking') return ['checking', '🔎 בודק...'];
+            return ['waiting', 'ממתין'];
         }
-    };
 
-    const WORKER_COUNT = Math.min(4, linksToScan.length);
+        function openStatusScanPanel(items) {
+            const panel = document.getElementById('statusScanPanel');
+            const body = document.getElementById('statusScanBody');
+            const counter = document.getElementById('statusScanCounter');
+            const progress = document.getElementById('statusScanProgress');
 
-    renderList();
+            if (!panel || !body || !counter || !progress) return;
 
-    await Promise.all(
-        Array.from(
-            { length: WORKER_COUNT },
-            () => worker()
-        )
-    );
+            body.innerHTML = '';
 
-    renderList();
-    checkDeadLinksAlert();
+            items.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = 'status-scan-row';
+                row.id = `status-scan-row-${item.id}`;
 
-    console.log(
-        `[AI Status Scan] הסריקה הסתיימה. נבדקו ${linksToScan.length} אתרים.`
-    );
-}
+                const indexEl = document.createElement('div');
+                indexEl.className = 'status-scan-index';
+                indexEl.textContent = String(index + 1);
+
+                const urlEl = document.createElement('div');
+                urlEl.className = 'status-scan-url';
+                urlEl.title = item.content || '';
+                urlEl.textContent = item.content || '';
+
+                const stateEl = document.createElement('div');
+                stateEl.className = 'status-scan-state waiting';
+                stateEl.id = `status-scan-state-${item.id}`;
+                stateEl.textContent = 'ממתין';
+
+                row.append(indexEl, urlEl, stateEl);
+                body.appendChild(row);
+            });
+
+            counter.textContent = `0 / ${items.length}`;
+            progress.style.width = '0%';
+
+            const footerRight = document.getElementById('statusScanFooterRight');
+            const footerLeft = document.getElementById('statusScanFooterLeft');
+            if (footerRight) footerRight.textContent = '0%';
+            if (footerLeft) footerLeft.textContent = `נבדק רק הסטטוס • ${items.length} קישורים`;
+
+            panel.classList.add('open');
+        }
+
+        function updateStatusScanRow(itemId, status, labelOverride = null) {
+            const stateEl = document.getElementById(`status-scan-state-${itemId}`);
+            if (!stateEl) return;
+
+            const [stateClass, defaultLabel] = getStatusScanRowState(status);
+            stateEl.className = `status-scan-state ${stateClass}`;
+            stateEl.textContent = labelOverride || defaultLabel;
+        }
+
+        function updateStatusScanProgress(completed, total) {
+            const counter = document.getElementById('statusScanCounter');
+            const progress = document.getElementById('statusScanProgress');
+            const footerRight = document.getElementById('statusScanFooterRight');
+
+            if (!counter || !progress || !footerRight) return;
+
+            const pct = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 100;
+
+            counter.textContent = `${completed} / ${total}`;
+            progress.style.width = `${pct}%`;
+            footerRight.textContent = `${pct}%`;
+        }
+
+        function setStatusScanFooter(text) {
+            const el = document.getElementById('statusScanFooterLeft');
+            if (el) el.textContent = text;
+        }
+
+        async function runBackgroundStatusScan() {
+            const panel = document.getElementById('statusScanPanel');
+
+            if (!navigator.onLine || !state.user) {
+                if (panel) panel.classList.add('open');
+                const body = document.getElementById('statusScanBody');
+                if (body) {
+                    body.innerHTML =
+                        '<div style="padding:18px;text-align:center;color:var(--accent-red);">❌ אין חיבור לאינטרנט — לא ניתן לבצע בדיקת סטטוס.</div>';
+                }
+                setStatusScanFooter('הסריקה לא הופעלה');
+                return;
+            }
+
+            const linksToScan = state.items.filter(item =>
+                item.type === 'link' &&
+                typeof item.content === 'string' &&
+                item.content.trim()
+            );
+
+            openStatusScanPanel(linksToScan);
+
+            if (linksToScan.length === 0) {
+                setStatusScanFooter('אין קישורים לבדיקה');
+                updateStatusScanProgress(0, 0);
+                return;
+            }
+
+            const settings = getAiSettings();
+            const providerOrder = ['gemini', 'groq', 'openrouter'];
+
+            const availableProvider = providerOrder.find(provider =>
+                Array.isArray(settings.keys?.[provider]) &&
+                settings.keys[provider].some(key => key && String(key).trim())
+            );
+
+            if (!availableProvider) {
+                setStatusScanFooter('לא נמצא מפתח API פעיל ל-AI');
+
+                const body = document.getElementById('statusScanBody');
+                if (body) {
+                    body.innerHTML =
+                        '<div style="padding:18px;text-align:center;color:var(--accent-red);line-height:1.6;">❌ לא נמצא מפתח API פעיל.<br>הסריקה דורשת מפתח AI אחד לפחות.</div>';
+                }
+
+                updateStatusScanProgress(0, linksToScan.length);
+                return;
+            }
+
+            setStatusScanFooter('בודק סטטוס בלבד • אינו משנה תיאורים או פרטים');
+
+            let nextIndex = 0;
+            let completed = 0;
+            const WORKER_COUNT = Math.min(4, linksToScan.length);
+
+            const worker = async () => {
+                while (true) {
+                    const index = nextIndex++;
+
+                    if (index >= linksToScan.length) return;
+
+                    const item = linksToScan[index];
+
+                    updateStatusScanRow(item.id, 'checking');
+                    setStatusScanFooter(`בודק עכשיו: ${item.content}`);
+
+                    try {
+                        await scanSingleItem(item.id, availableProvider, false, true);
+
+                        const updatedItem = state.items.find(it => it.id === item.id);
+                        const status = updatedItem?.siteStatus;
+
+                        if (status === 'active') updateStatusScanRow(item.id, 'active');
+                        else if (status === 'parked') updateStatusScanRow(item.id, 'parked');
+                        else if (status === 'dead') updateStatusScanRow(item.id, 'dead');
+                        else updateStatusScanRow(item.id, 'error', '⚠️ לא נקבע');
+                    } catch (error) {
+                        console.error('[AI Status Scan]', item.content, error);
+                        updateStatusScanRow(item.id, 'error');
+                    } finally {
+                        completed++;
+                        updateStatusScanProgress(completed, linksToScan.length);
+
+                        const inactiveCount = state.items.filter(it =>
+                            it.type === 'link' &&
+                            ['dead', 'parked'].includes(it.siteStatus)
+                        ).length;
+
+                        checkDeadLinksAlert();
+
+                        if (completed === linksToScan.length) {
+                            setStatusScanFooter(
+                                `הסריקה הושלמה • נמצאו ${inactiveCount} אתרים לא פעילים/בבעיה`
+                            );
+                        } else {
+                            setStatusScanFooter(
+                                `הושלמו ${completed}/${linksToScan.length} • נמצאו עד כה ${inactiveCount} אתרים לא פעילים/בבעיה`
+                            );
+                        }
+
+                        renderList();
+                    }
+                }
+            };
+
+            await Promise.all(
+                Array.from({ length: WORKER_COUNT }, () => worker())
+            );
+
+            updateStatusScanProgress(linksToScan.length, linksToScan.length);
+            checkDeadLinksAlert();
+            renderList();
+            setStatusScanFooter(
+                `הסריקה הושלמה • ${linksToScan.length} קישורים נבדקו • החלון יישאר פתוח`
+            );
+        }
+
+        function startBackgroundStatusScan() {
+            if (window.__statusScanRunStarted) return;
+
+            window.__statusScanRunStarted = true;
+
+            runBackgroundStatusScan().catch(error => {
+                console.error('[AI Status Scan] Fatal error:', error);
+
+                const panel = document.getElementById('statusScanPanel');
+                if (panel) panel.classList.add('open');
+
+                const body = document.getElementById('statusScanBody');
+                if (body) {
+                    body.innerHTML =
+                        `<div style="padding:18px;text-align:center;color:var(--accent-red);line-height:1.6;">❌ הסריקה נכשלה.<br>${escapeHtml(error?.message || 'שגיאה לא ידועה')}</div>`;
+                }
+
+                setStatusScanFooter('הסריקה הופסקה עקב שגיאה');
+            });
+        }
+
     </script>
 </body>
 </html>
