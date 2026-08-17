@@ -403,9 +403,14 @@
             <span style="background: linear-gradient(135deg, #60a5fa, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">MH Link Manager Pro</span>
             <img src="/icon.png" alt="Logo" class="header-logo" style="transform: scaleX(-1);" decoding="async" loading="eager">
         </h1>
-        <button id="installAppBtn">⬇️ התקן אפליקציה</button>
+       <button id="installAppBtn">⬇️ התקן אפליקציה</button>
         <div id="itemCount">ממתין להתחברות...</div>
     </header>
+
+    <div id="deadLinksAlert" style="display: none; background: rgba(217, 48, 37, 0.15); border: 1px solid var(--accent-red); margin: 0 10px 10px 10px; padding: 10px; border-radius: var(--radius); text-align: center; cursor: pointer; color: #fca5a5; font-weight: bold; box-shadow: 0 4px 10px rgba(217, 48, 37, 0.2); animation: fadeIn 0.5s ease; flex-direction: column; gap: 5px;">
+        <span style="font-size: 1.1rem;">⚠️ שים לב, נמצאו קישורים לא פעילים!</span>
+        <span style="font-size: 0.85rem; opacity: 0.9;">לחץ כאן כדי לראות ולטפל בהם (ההודעה תישאר עד שתמחק/תתקן אותם).</span>
+    </div>
 
     <div id="userSection" class="glass-panel">
         <div id="loggedOutView" style="display:flex; width:100%; justify-content:center;">
@@ -1093,6 +1098,7 @@
                     welcomeScreen.classList.remove('visible');
                     protectedContent.classList.remove('locked');
                     renderList();
+                    runBackgroundStatusScan();
                 }
             }, 300);
 
@@ -1102,6 +1108,7 @@
                 welcomeScreen.classList.remove('visible');
                 protectedContent.classList.remove('locked');
                 renderList();
+                runBackgroundStatusScan();
             }, 8000); 
         }
 
@@ -1263,7 +1270,9 @@
                 }).forEach(cat => renderGroup(mainFragment, cat, groups[cat], false, visualMetaMap));
             }
             
-            container.appendChild(mainFragment);
+           container.appendChild(mainFragment);
+            
+            if (typeof checkDeadLinksAlert === 'function') checkDeadLinksAlert();
         }
 
         function renderGroup(containerFragment, title, items, isPinned, visualMetaMap) {
@@ -2897,11 +2906,99 @@ ${contentToAnalyze}`;
             if (!state.isSelectionMode && !e.target.closest('.card-actions')) e.preventDefault();
         });
 
-        document.addEventListener('keydown', e => {
+       document.addEventListener('keydown', e => {
             if (state.isOffline || (state.user && ADMIN_EMAILS.includes(state.user.email))) return;
             if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I','J','C'].includes(e.key)) || (e.ctrlKey && e.key === 'u'))
                 e.preventDefault();
         });
+
+        // ==================== מערכת סריקת קישורים חיה (ללא AI וללא תיאורים) ====================
+
+        function checkDeadLinksAlert() {
+            const deadCount = state.items.filter(i => i.siteStatus === 'dead').length;
+            const alertBox = document.getElementById('deadLinksAlert');
+            if (!alertBox) return;
+            
+            if (deadCount > 0 && !state.showOnlyDead) {
+                alertBox.style.display = 'flex';
+                alertBox.querySelector('span').innerHTML = `⚠️ שים לב, נמצאו ${deadCount} קישורים לא פעילים!`;
+            } else {
+                alertBox.style.display = 'none';
+            }
+        }
+
+        document.getElementById('deadLinksAlert')?.addEventListener('click', () => {
+            document.getElementById('deadLinksAlert').style.display = 'none';
+            if (!state.showOnlyDead) toggleDeadFilter();
+        });
+
+        async function runBackgroundStatusScan() {
+            if (!navigator.onLine || !state.user) return;
+            
+            // סורק אך ורק את סטטוס האתר ברקע, ללא חיפוש תיאורים וללא שינוי תוכן קודם
+            const linksToScan = state.items.filter(i => i.type === 'link');
+            
+            const fetchWithTimeoutScan = async (url, time = 5000) => {
+                const ctrl = new AbortController();
+                const tid = setTimeout(() => ctrl.abort(), time);
+                try {
+                    const res = await fetch(url, { signal: ctrl.signal });
+                    clearTimeout(tid);
+                    return res;
+                } catch (err) {
+                    clearTimeout(tid);
+                    throw err;
+                }
+            };
+
+            const proxies = [
+                u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+                u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`
+            ];
+
+            let foundChanges = false;
+
+            for (let i = 0; i < linksToScan.length; i++) {
+                const item = linksToScan[i];
+                let contentUrl = item.content.trim();
+                if (!/^https?:\/\//i.test(contentUrl)) contentUrl = 'https://' + contentUrl;
+                
+                let isAlive = false;
+                
+                try {
+                    const proxyPromises = proxies.map(async (proxyFn) => {
+                        const proxyUrl = proxyFn(contentUrl);
+                        const res = await fetchWithTimeoutScan(proxyUrl, 7000);
+                        if (res.ok) return true;
+                        throw new Error('Dead');
+                    });
+                    
+                    isAlive = await Promise.any(proxyPromises);
+                } catch (e) {
+                    // קישורי טלגרם חוסמים בקשות פשוטות מפרוקסים ולכן ניתן ל-AI לטפל בהם בנפרד
+                    if (contentUrl.includes('t.me') || contentUrl.includes('telegram.me')) {
+                         continue; 
+                    }
+                    isAlive = false;
+                }
+
+                const newStatus = isAlive ? 'active' : 'dead';
+                
+                if (item.siteStatus !== newStatus) {
+                    item.siteStatus = newStatus;
+                    item.updatedAt = nowIso();
+                    await saveItemToCloud(item);
+                    foundChanges = true;
+                }
+                
+                // השהייה שקטה של שנייה כדי לא להעמיס על הדפדפן ברקע
+                await new Promise(r => setTimeout(r, 1000));
+            }
+            
+            if (foundChanges) {
+                renderList();
+            }
+        }
     </script>
 </body>
 </html>
