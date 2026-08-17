@@ -2932,72 +2932,138 @@ ${contentToAnalyze}`;
             if (!state.showOnlyDead) toggleDeadFilter();
         });
 
-        async function runBackgroundStatusScan() {
+       async function runBackgroundStatusScan() {
             if (!navigator.onLine || !state.user) return;
-            
-            // סורק אך ורק את סטטוס האתר ברקע, ללא חיפוש תיאורים וללא שינוי תוכן קודם
             const linksToScan = state.items.filter(i => i.type === 'link');
-            
-            const fetchWithTimeoutScan = async (url, time = 5000) => {
-                const ctrl = new AbortController();
-                const tid = setTimeout(() => ctrl.abort(), time);
-                try {
-                    const res = await fetch(url, { signal: ctrl.signal });
-                    clearTimeout(tid);
-                    return res;
-                } catch (err) {
-                    clearTimeout(tid);
-                    throw err;
-                }
-            };
+            if (linksToScan.length === 0) return;
 
+            const settings = getAiSettings();
+            const provider = settings.provider || 'gemini';
+            const keys = settings.keys[provider] || [];
+            
+            // אם אין מפתחות AI מוגדרים, נעבור לבדיקת פרוקסי שקטה כגיבוי
+            if (!keys.length) {
+                runProxyStatusFallback(linksToScan);
+                return;
+            }
+
+            let foundChanges = false;
+            const activeKey = keys[0];
+
+            for (let i = 0; i < linksToScan.length; i++) {
+                if (!navigator.onLine) break;
+                const item = linksToScan[i];
+                let cleanContent = (item.content || '').trim().replace(/^[\/\\]+/, '');
+                if (!/^https?:\/\//i.test(cleanContent)) cleanContent = 'https://' + cleanContent;
+
+                try {
+                    const statusPrompt = `Analyze website URL: ${cleanContent}.
+Task: Determine if this website/link is currently active, parked/domain for sale, or dead/inaccessible.
+CRITICAL: Do not modify any description or summary. Return ONLY valid JSON: {"status": "active|parked|dead"}`;
+
+                    let newStatus = item.siteStatus || 'active';
+
+                    if (provider === 'gemini') {
+                        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${activeKey}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{ parts: [{ text: statusPrompt }] }],
+                                generationConfig: { response_mime_type: 'application/json', temperature: 0.1 }
+                            })
+                        });
+                        const rd = await res.json();
+                        if (rd.candidates?.[0]?.content?.parts?.[0]?.text) {
+                            const raw = rd.candidates[0].content.parts[0].text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+                            const parsed = JSON.parse(raw);
+                            if (parsed.status) newStatus = parsed.status;
+                        }
+                    } else if (provider === 'groq') {
+                        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                model: 'llama-3.1-8b-instant',
+                                temperature: 0.1,
+                                messages: [{ role: 'user', content: statusPrompt }],
+                                response_format: { type: 'json_object' }
+                            })
+                        });
+                        const rd = await res.json();
+                        if (rd.choices?.[0]?.message?.content) {
+                            const parsed = JSON.parse(rd.choices[0].message.content);
+                            if (parsed.status) newStatus = parsed.status;
+                        }
+                    } else {
+                        // ברירת מחדל ל-OpenRouter
+                        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${activeKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': window.location.origin },
+                            body: JSON.stringify({
+                                model: 'meta-llama/llama-3.3-70b-instruct:free',
+                                temperature: 0.1,
+                                messages: [{ role: 'user', content: statusPrompt }],
+                                response_format: { type: 'json_object' }
+                            })
+                        });
+                        const rd = await res.json();
+                        if (rd.choices?.[0]?.message?.content) {
+                            const parsed = JSON.parse(rd.choices[0].message.content);
+                            if (parsed.status) newStatus = parsed.status;
+                        }
+                    }
+
+                    // עדכון הסטטוס אך ורק אם השתנה, בלי לגעת בשאר הנתונים
+                    if (item.siteStatus !== newStatus) {
+                        item.siteStatus = newStatus;
+                        item.updatedAt = nowIso();
+                        await saveItemToCloud(item);
+                        foundChanges = true;
+                    }
+                } catch (e) {
+                    console.warn('AI status check skipped for:', cleanContent);
+                }
+
+                await new Promise(r => setTimeout(r, 600));
+            }
+
+            if (foundChanges) {
+                renderList();
+            }
+        }
+
+        // פונקציית גיבוי שקטה במידה ואין מפתחות AI מוגדרים
+        async function runProxyStatusFallback(linksToScan) {
             const proxies = [
                 u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
                 u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`
             ];
-
             let foundChanges = false;
-
             for (let i = 0; i < linksToScan.length; i++) {
                 const item = linksToScan[i];
                 let contentUrl = item.content.trim();
                 if (!/^https?:\/\//i.test(contentUrl)) contentUrl = 'https://' + contentUrl;
-                
                 let isAlive = false;
-                
                 try {
                     const proxyPromises = proxies.map(async (proxyFn) => {
-                        const proxyUrl = proxyFn(contentUrl);
-                        const res = await fetchWithTimeoutScan(proxyUrl, 7000);
+                        const res = await fetch(proxyFn(contentUrl), { signal: AbortSignal.timeout(5000) });
                         if (res.ok) return true;
                         throw new Error('Dead');
                     });
-                    
                     isAlive = await Promise.any(proxyPromises);
                 } catch (e) {
-                    // קישורי טלגרם חוסמים בקשות פשוטות מפרוקסים ולכן ניתן ל-AI לטפל בהם בנפרד
-                    if (contentUrl.includes('t.me') || contentUrl.includes('telegram.me')) {
-                         continue; 
-                    }
-                    isAlive = false;
+                    isAlive = contentUrl.includes('t.me');
                 }
-
                 const newStatus = isAlive ? 'active' : 'dead';
-                
                 if (item.siteStatus !== newStatus) {
                     item.siteStatus = newStatus;
                     item.updatedAt = nowIso();
                     await saveItemToCloud(item);
                     foundChanges = true;
                 }
-                
-                // השהייה שקטה של שנייה כדי לא להעמיס על הדפדפן ברקע
-                await new Promise(r => setTimeout(r, 1000));
+                await new Promise(r => setTimeout(r, 800));
             }
-            
-            if (foundChanges) {
-                renderList();
-            }
+            if (foundChanges) renderList();
         }
     </script>
 </body>
