@@ -1924,10 +1924,13 @@
 
 if (isWebsite && statusOnly) {
     // ================================================================
-    // STATUS-ONLY EVIDENCE COLLECTION
-    // The AI is a validator only. It must NEVER override strong HTTP/content evidence.
-    // Unknown/inconclusive evidence never changes an existing status.
+    // STATUS-ONLY VERIFICATION ENGINE — CONSERVATIVE / FALSE-POSITIVE SAFE
     // ================================================================
+    // The AI is never allowed to invent a failure. Deterministic web
+    // evidence is collected first, then independently re-checked before
+    // a negative status is accepted. Inconclusive evidence keeps the
+    // previous status unchanged and does NOT refresh the 14-day timer.
+
     const statusProxies = [
         { name: 'corsproxy', build: u => `https://corsproxy.io/?${encodeURIComponent(u)}` },
         { name: 'allorigins', build: u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}` },
@@ -1935,36 +1938,56 @@ if (isWebsite && statusOnly) {
     ];
 
     const DEAD_MARKERS = [
-        '404 not found', '404 error', '410 gone', 'page not found',
-        'this page is not available', 'this site can’t be reached',
-        'this site can\\'t be reached', 'site cannot be reached',
-        'server not found', 'domain not found', 'dns_probe_finished_nxdomain',
-        'err_name_not_resolved', 'no such host', 'no such domain',
-        'domain has expired', 'domain is expired', 'account suspended',
-        'this link is no longer valid', 'this link has expired'
+        '404 not found', '404 error', 'error 404', '410 gone',
+        'page not found', 'page cannot be found', 'this page is not available',
+        'the page you requested could not be found', 'this site can’t be reached',
+        "this site can't be reached", 'site cannot be reached', 'server not found',
+        'domain not found', 'dns_probe_finished_nxdomain', 'err_name_not_resolved',
+        'no such host', 'no such domain', 'domain has expired', 'domain is expired',
+        'account suspended', 'this link is no longer valid', 'this link has expired',
+        'requested page was not found', 'the requested url was not found'
     ];
+
     const PARKED_MARKERS = [
         'domain for sale', 'this domain is for sale', 'buy this domain',
         'domain parking', 'parked domain', 'parked free', 'domain parked',
-        'this domain has been parked', 'coming soon', 'under construction',
+        'this domain has been parked', 'domain name is for sale',
+        'this domain may be for sale', 'coming soon', 'under construction',
         'website coming soon', 'future home of something quite cool',
         'hugedomains', 'sedo.com', 'afternic', 'parkingcrew', 'dan.com'
     ];
+
     const BLOCK_MARKERS = [
         'just a moment', 'enable javascript and cookies', 'checking your browser',
-        'verify you are human', 'access denied', 'security check', 'cloudflare'
+        'verify you are human', 'access denied', 'security check', 'cloudflare',
+        'cf-chl-', 'attention required'
     ];
 
     const normalizeEvidenceText = (value) =>
-        String(value || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+        String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
     const countMarkers = (text, markers) =>
-        markers.filter(marker => text.includes(marker)).length;
+        markers.reduce((count, marker) => count + (text.includes(marker) ? 1 : 0), 0);
+
+    const getDomainName = (url) => {
+        try { return new URL(url).hostname; } catch { return url.replace(/^https?:\/\//i, '').split('/')[0]; }
+    };
+
+    const isLikelyHtml = (body) => {
+        const sample = String(body || '').slice(0, 16000).toLowerCase();
+        return sample.includes('<!doctype html') ||
+               sample.includes('<html') ||
+               sample.includes('<head') ||
+               sample.includes('<body') ||
+               sample.includes('<title') ||
+               sample.includes('<main') ||
+               sample.includes('<article');
+    };
 
     const statusProbe = async ({ name, build }) => {
         const proxyUrl = build(cleanContent);
         const ctrl = new AbortController();
-        const timeoutId = setTimeout(() => ctrl.abort(), 8000);
+        const timeoutId = setTimeout(() => ctrl.abort(), 9000);
         const sharedSignal = window.__statusScanAbortController?.signal || null;
         let signal = ctrl.signal;
 
@@ -1979,49 +2002,60 @@ if (isWebsite && statusOnly) {
         }
 
         try {
-            const res = await fetch(proxyUrl, {
-                signal,
-                cache: 'no-store'
-            });
+            const res = await fetch(proxyUrl, { signal, cache: 'no-store' });
 
-            let targetStatus = res.status;
+            let targetStatus = null;
             let body = '';
             let targetUrl = cleanContent;
+            let targetStatusKnown = false;
 
             if (name === 'allorigins') {
                 const data = await res.json().catch(() => null);
                 body = data?.contents || '';
-                if (Number.isFinite(data?.status?.http_code)) targetStatus = Number(data.status.http_code);
+                if (Number.isFinite(data?.status?.http_code)) {
+                    targetStatus = Number(data.status.http_code);
+                    targetStatusKnown = true;
+                }
                 if (data?.status?.url) targetUrl = data.status.url;
             } else {
+                // For generic proxies, the HTTP code belongs to the proxy itself,
+                // so it is NOT treated as definitive target HTTP evidence.
                 body = await res.text().catch(() => '');
             }
 
             const lowerBody = normalizeEvidenceText(body);
-            const bodySample = lowerBody.slice(0, 12000);
+            const bodySample = lowerBody.slice(0, 16000);
             const deadHits = countMarkers(bodySample, DEAD_MARKERS);
             const parkedHits = countMarkers(bodySample, PARKED_MARKERS);
             const blockHits = countMarkers(bodySample, BLOCK_MARKERS);
-            const hasUsableBody = bodySample.length >= 80;
-            const httpDefinitiveDead = targetStatus === 404 || targetStatus === 410;
-            const httpSuccess = targetStatus >= 200 && targetStatus < 400;
-            const proxyError = targetStatus >= 500 && targetStatus <= 599;
-            const activeEvidence = httpSuccess && hasUsableBody && deadHits === 0 && parkedHits === 0 && blockHits === 0;
+            const hasUsableBody = isLikelyHtml(bodySample);
+
+            const targetDefinitiveDead = targetStatusKnown && (targetStatus === 404 || targetStatus === 410);
+            const targetSuccess = targetStatusKnown && targetStatus >= 200 && targetStatus < 400;
+            const targetServerError = targetStatusKnown && targetStatus >= 500 && targetStatus <= 599;
+
+            const bodyLooksAlive = hasUsableBody && deadHits === 0 && parkedHits === 0 && blockHits === 0;
+            const strongActive = targetSuccess && bodyLooksAlive;
+            const strongParked = parkedHits >= 2 && blockHits === 0;
+            const strongBodyDead = deadHits >= 2 && blockHits === 0;
 
             return {
                 proxy: name,
-                ok: res.ok,
+                proxyOk: res.ok,
                 targetStatus,
+                targetStatusKnown,
                 targetUrl,
                 bodyLength: bodySample.length,
                 deadHits,
                 parkedHits,
                 blockHits,
                 hasUsableBody,
-                httpDefinitiveDead,
-                httpSuccess,
-                proxyError,
-                activeEvidence,
+                targetDefinitiveDead,
+                targetSuccess,
+                targetServerError,
+                strongActive,
+                strongParked,
+                strongBodyDead,
                 sample: bodySample.slice(0, 2500)
             };
         } finally {
@@ -2029,59 +2063,150 @@ if (isWebsite && statusOnly) {
         }
     };
 
-    const probeResults = await Promise.allSettled(statusProxies.map(statusProbe));
-    const evidence = probeResults
-        .filter(result => result.status === 'fulfilled')
-        .map(result => result.value);
+    const runStatusProbeRound = async () => {
+        const results = await Promise.allSettled(statusProxies.map(statusProbe));
+        return results.filter(r => r.status === 'fulfilled').map(r => r.value);
+    };
 
-    if (window.__statusScanStopRequested) throw new DOMException('Status scan stopped', 'AbortError');
+    const round1 = await runStatusProbeRound();
 
-    const successfulEvidence = evidence.filter(e => !e.proxyError);
-    const activeSources = successfulEvidence.filter(e => e.activeEvidence);
-    const explicitDeadSources = successfulEvidence.filter(e => e.httpDefinitiveDead || e.deadHits >= 2);
-    const parkedSources = successfulEvidence.filter(e => e.parkedHits >= 2);
-
-    // Conservative deterministic classification.
-    // ACTIVE wins over weak failure signals. DEAD/PARKED require strong evidence.
-    let deterministicStatus = 'uncertain';
-
-    if (activeSources.length >= 1) {
-        deterministicStatus = 'active';
-    } else if (explicitDeadSources.length >= 2 || explicitDeadSources.some(e => e.httpDefinitiveDead)) {
-        deterministicStatus = 'dead';
-    } else if (parkedSources.length >= 2) {
-        deterministicStatus = 'parked';
+    if (window.__statusScanStopRequested) {
+        throw new DOMException('Status scan stopped', 'AbortError');
     }
 
-    const evidenceText = successfulEvidence.length
-        ? successfulEvidence.map(e =>
-            `SOURCE=${e.proxy}; HTTP=${e.targetStatus}; activeEvidence=${e.activeEvidence}; deadHits=${e.deadHits}; parkedHits=${e.parkedHits}; blockHits=${e.blockHits}; bodyLength=${e.bodyLength}; URL=${e.targetUrl}`
+    const summarize = (results) => {
+        const knownTarget = results.filter(e => e.targetStatusKnown && !e.targetServerError);
+        const activeSources = results.filter(e => e.strongActive);
+        const parkedSources = results.filter(e => e.strongParked);
+        const targetDeadSources = results.filter(e => e.targetDefinitiveDead);
+        const bodyDeadSources = results.filter(e => e.strongBodyDead);
+        const blockedSources = results.filter(e => e.blockHits > 0);
+        const anyUsable = results.some(e => e.hasUsableBody || e.targetStatusKnown);
+
+        return {
+            results,
+            knownTargetCount: knownTarget.length,
+            activeSources,
+            parkedSources,
+            targetDeadSources,
+            bodyDeadSources,
+            blockedSources,
+            anyUsable
+        };
+    };
+
+    let evidence1 = summarize(round1);
+    let deterministicStatus = 'uncertain';
+    let verificationLevel = 'inconclusive';
+
+    // Positive result: one strong, coherent 2xx/3xx response with usable
+    // content is enough to confidently classify ACTIVE.
+    if (evidence1.activeSources.length >= 1) {
+        deterministicStatus = 'active';
+        verificationLevel = 'strong-active';
+    }
+
+    // Negative/parked results ALWAYS get a second independent round unless
+    // there is already overwhelming multi-source evidence.
+    const negativeNeedsSecondRound = deterministicStatus !== 'active' &&
+        (evidence1.targetDeadSources.length > 0 ||
+         evidence1.bodyDeadSources.length > 0 ||
+         evidence1.parkedSources.length > 0 ||
+         evidence1.blockedSources.length > 0 ||
+         !evidence1.anyUsable);
+
+    let round2 = [];
+    if (negativeNeedsSecondRound) {
+        await new Promise(resolve => setTimeout(resolve, 650));
+        if (window.__statusScanStopRequested) {
+            throw new DOMException('Status scan stopped', 'AbortError');
+        }
+        round2 = await runStatusProbeRound();
+    }
+
+    const evidence2 = summarize(round2);
+
+    if (deterministicStatus !== 'active') {
+        const allResults = [...round1, ...round2];
+        const deadUniqueProxies = new Set(allResults.filter(e => e.targetDefinitiveDead).map(e => e.proxy));
+        const bodyDeadUniqueProxies = new Set(allResults.filter(e => e.strongBodyDead).map(e => e.proxy));
+        const parkedCount = allResults.filter(e => e.strongParked).length;
+        const blockedCount = allResults.filter(e => e.blockHits > 0).length;
+        const target404Count = allResults.filter(e => e.targetDefinitiveDead).length;
+        const bodyDeadCount = allResults.filter(e => e.strongBodyDead).length;
+
+        // DEAD requires corroboration. A single proxy 404 or a single
+        // "page not found" marker is NEVER enough. Require either:
+        // 1) two independent proxy confirmations,
+        // 2) repeated target 404/410 confirmation across rounds, or
+        // 3) repeated strong dead-page evidence across independent proxies.
+        const deadConfirmed =
+            deadUniqueProxies.size >= 2 ||
+            target404Count >= 2 ||
+            (round2.length > 0 &&
+             evidence1.targetDeadSources.some(a =>
+                 evidence2.targetDeadSources.some(b => b.proxy === a.proxy)
+             )) ||
+            bodyDeadUniqueProxies.size >= 2 ||
+            (round2.length > 0 &&
+             evidence1.bodyDeadSources.some(a =>
+                 evidence2.bodyDeadSources.some(b => b.proxy === a.proxy)
+             ));
+
+        // Parked requires corroborated parking content and no active evidence.
+        const parkedConfirmed = !deadConfirmed &&
+            parkedCount >= 2 &&
+            blockedCount === 0;
+
+        // Do not classify on transient server errors, Cloudflare/challenge
+        // pages, a single dead-looking marker, or a single proxy timeout.
+        if (deadConfirmed && evidence1.activeSources.length === 0 && evidence2.activeSources.length === 0) {
+            deterministicStatus = 'dead';
+            verificationLevel = 'corroborated-dead';
+        } else if (parkedConfirmed && evidence1.activeSources.length === 0 && evidence2.activeSources.length === 0) {
+            deterministicStatus = 'parked';
+            verificationLevel = 'corroborated-parked';
+        } else {
+            deterministicStatus = 'uncertain';
+            verificationLevel = 'inconclusive';
+        }
+    }
+
+    const allEvidence = [...round1, ...round2];
+    const evidenceText = allEvidence.length
+        ? allEvidence.map((e, idx) =>
+            `E${idx + 1}: SOURCE=${e.proxy}; targetHTTP=${e.targetStatus ?? 'unknown'}; targetHTTPKnown=${e.targetStatusKnown}; active=${e.strongActive}; parked=${e.strongParked}; deadTarget=${e.targetDefinitiveDead}; deadBody=${e.strongBodyDead}; block=${e.blockHits > 0}; bodyLength=${e.bodyLength}; finalURL=${e.targetUrl}`
         ).join('\n')
         : 'No trustworthy target response was obtained from the status proxies.';
 
     contentToAnalyze = `[STATUS-ONLY EVIDENCE]
 Target URL: ${cleanContent}
+Domain: ${getDomainName(cleanContent)}
 
 ${evidenceText}
 
-DETERMINISTIC PRE-CHECK: ${deterministicStatus}
+DETERMINISTIC FINAL PRE-CHECK: ${deterministicStatus}
+VERIFICATION LEVEL: ${verificationLevel}
 
 Rules:
 - Never invent a failure.
-- A proxy failure (5xx/timeout) is NOT proof that the target site is dead.
-- A single weak/ambiguous signal is NOT enough to mark a reachable site dead.
-- Strong 2xx/3xx evidence with real page content and no failure markers is strong ACTIVE evidence.
-- HTTP 404/410 from the actual target response is strong DEAD evidence.
-- Parking/placeholder signals require corroboration before PARKED is used.
-- When evidence is insufficient, return UNCERTAIN. Do not guess.`;
+- A proxy failure, timeout, 5xx, Cloudflare challenge, or access-denied page is NOT proof that the target site is dead.
+- A single 404/410 seen through one proxy is NOT enough to mark the target dead.
+- A strong 2xx/3xx target response with real non-placeholder content is strong ACTIVE evidence.
+- Parking requires corroborated parking/placeholder evidence.
+- A negative status requires corroboration from independent evidence or repeated target confirmation.
+- When evidence is insufficient or contradictory, return UNCERTAIN.
+- Do not guess.`;
 
     // Save the deterministic result for the final safety gate after AI validation.
     window.__lastStatusEvidenceResult = {
         deterministicStatus,
-        activeSources: activeSources.length,
-        explicitDeadSources: explicitDeadSources.length,
-        parkedSources: parkedSources.length,
-        evidence: successfulEvidence
+        verificationLevel,
+        activeSources: evidence1.activeSources.length + evidence2.activeSources.length,
+        deadSources: evidence1.targetDeadSources.length + evidence2.targetDeadSources.length,
+        parkedSources: evidence1.parkedSources.length + evidence2.parkedSources.length,
+        blockedSources: evidence1.blockedSources.length + evidence2.blockedSources.length,
+        evidence: allEvidence
     };
 
 } else if (isWebsite && forceUrlOnly) {
@@ -2428,9 +2553,9 @@ ${contentToAnalyze}`;
                         ? parsed.status
                         : 'uncertain';
 
-                    // Final safety gate: AI can refine an inconclusive result, but it can NEVER
-                    // downgrade strong ACTIVE evidence to DEAD. Likewise, AI cannot create DEAD
-                    // or PARKED without deterministic evidence supporting it.
+                    // Final safety gate: the AI is an auditor only. It can NEVER create
+                    // DEAD/PARKED, and it can NEVER downgrade strong ACTIVE evidence.
+                    // Only the corroborated deterministic evidence engine is authoritative.
                     if (deterministic === 'active') {
                         finalStatus = 'active';
                     } else if (deterministic === 'dead') {
@@ -3755,10 +3880,10 @@ ${contentToAnalyze}`;
                             const updatedItem = state.items.find(it => it.id === item.id);
                             const status = updatedItem?.siteStatus;
 
-                            if (status === 'active') updateStatusScanRow(item.id, 'active');
-                            else if (status === 'parked') updateStatusScanRow(item.id, 'parked');
-                            else if (status === 'dead') updateStatusScanRow(item.id, 'dead');
-                            else updateStatusScanRow(item.id, 'uncertain', '⚠️ לא ודאי');
+                            if (status === 'active') updateStatusScanRow(item.id, 'active', '🟢 פעיל');
+                            else if (status === 'parked') updateStatusScanRow(item.id, 'parked', '🟠 חניה/בעיה');
+                            else if (status === 'dead') updateStatusScanRow(item.id, 'dead', '🔴 לא פעיל');
+                            else updateStatusScanRow(item.id, 'uncertain', '⚠️ לא ודאי — לא שונה');
                         }
                     } catch (error) {
                         if (window.__statusScanStopRequested || error?.name === 'AbortError') {
