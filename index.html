@@ -165,6 +165,44 @@
             border-color: var(--accent-red) !important;
             box-shadow: 0 0 8px rgba(217,48,37,0.4);
         }
+        .dead-status-filter-btn {
+            position: relative;
+            overflow: visible !important;
+        }
+        .dead-filter-icon {
+            line-height: 1;
+        }
+        .dead-count-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            border-radius: 999px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: var(--accent-red);
+            color: #fff;
+            border: 2px solid var(--glass-bg);
+            box-shadow: 0 2px 7px rgba(217,48,37,0.45);
+            font-size: 9px;
+            line-height: 1;
+            font-weight: 900;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            z-index: 20;
+        }
+        .dead-count-badge-pulse {
+            animation: deadCountPulse 0.85s ease;
+        }
+        @keyframes deadCountPulse {
+            0% { transform: scale(1); }
+            25% { transform: scale(1.28); }
+            55% { transform: scale(0.92); }
+            100% { transform: scale(1); }
+        }
+
 
         .dropdown-content {
             display: none; position: absolute;
@@ -456,6 +494,7 @@
         .status-scan-state.active { color: var(--accent-green); background: rgba(0,166,81,0.10); }
         .status-scan-state.parked { color: var(--accent-gold); background: rgba(245,158,11,0.11); }
         .status-scan-state.dead, .status-scan-state.error { color: var(--accent-red); background: rgba(217,48,37,0.10); }
+        .status-scan-state.fresh { color: var(--accent-green); background: rgba(0,166,81,0.07); }
         .status-scan-state.waiting { color: var(--text-secondary); }
         .status-scan-footer {
             min-height: 28px;
@@ -487,6 +526,14 @@
             }
             .status-scan-url { font-size: 9px; }
             .status-scan-state { min-width: 56px; font-size: 8px; }
+            .dead-count-badge {
+                top: -4px;
+                right: -4px;
+                min-width: 17px;
+                height: 17px;
+                font-size: 8px;
+                padding: 0 4px;
+            }
         }
         .spinner { border: 4px solid rgba(127, 127, 127, 0.2); border-top: 4px solid var(--primary-color); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
         .loading-title { color: var(--text-primary); margin: 0 0 10px 0; font-size: 1.5rem; text-align: center; }
@@ -585,10 +632,7 @@
         <div id="itemCount">ממתין להתחברות...</div>
     </header>
 
-   <div id="deadLinksAlert" style="display: none; background: rgba(217, 48, 37, 0.15); border: 1px solid var(--accent-red); margin: 0 10px 10px 10px; padding: 10px; border-radius: var(--radius); text-align: center; cursor: pointer; color: #fca5a5; font-weight: bold; box-shadow: 0 4px 10px rgba(217, 48, 37, 0.2); animation: fadeIn 0.5s ease; flex-direction: column; gap: 5px;">
-    <span style="font-size: 1.1rem;">⚠️ נמצאו אתרים לא פעילים או בבעיה!</span>
-    <span style="font-size: 0.85rem; opacity: 0.9;">לחץ כאן כדי להציג רק את האתרים שנמצאו כלא פעילים או בעייתיים.</span>
-</div>
+
 
     <div id="userSection" class="glass-panel">
         <div id="loggedOutView" style="display:flex; width:100%; justify-content:center;">
@@ -695,7 +739,10 @@
                     </div>
                 </div>
                 <button id="trashBtn" class="action-btn btn-trash-view" title="סל מחזור" style="flex-grow:0; width:42px; font-size:1.1rem;">🗑️</button>
-                <button id="toggleDeadBtn" class="action-btn btn-toggle" title="הצג רק אתרים לא זמינים">🔴</button>
+                <button id="toggleDeadBtn" class="action-btn btn-toggle dead-status-filter-btn" title="הצג רק אתרים לא פעילים או בעייתיים" aria-label="הצג רק אתרים לא פעילים או בעייתיים">
+                    <span class="dead-filter-icon">🔴</span>
+                    <span id="deadCountBadge" class="dead-count-badge" aria-hidden="true">0</span>
+                </button>
                 <button id="toggleDuplicatesBtn" class="action-btn btn-toggle" title="הצג כפילויות">👥</button>
                 <button id="toggleDarkModeBtn" class="action-btn btn-toggle" title="מצב לילה">☀️</button>
             </div>
@@ -879,6 +926,10 @@
         window.__statusScanStopRequested = false;
         window.__statusScanUndoSnapshot = null;
         window.__statusScanRunActive = false;
+        // אתר שנבדק בהצלחה במהלך 14 הימים האחרונים לא ייסרק שוב.
+        // הערך נשמר בכל פריט בשדה statusCheckedAt.
+        const STATUS_RECHECK_DAYS = 14;
+        const STATUS_RECHECK_MS = STATUS_RECHECK_DAYS * 24 * 60 * 60 * 1000;
 
         function nowIso() { return new Date().toISOString(); }
 
@@ -917,6 +968,7 @@
                 }
             } catch(e) {}
 
+            updateDeadCountBadge();
             initServiceWorker();
             initTheme();
             setupEventListeners();
@@ -1781,14 +1833,43 @@
                         ) || currentProvider;
             }
 
-            const pKeys = settings.keys[currentProvider] || [];
-            const fallbackChain = (Array.isArray(pKeys) ? pKeys : [pKeys])
-                .filter(k => k && String(k).trim())
-                .map((k, idx) => ({
-                    provider: currentProvider,
-                    key: k,
-                    keyIndex: idx + 1
-                }));
+            let fallbackChain = [];
+
+            if (statusOnly) {
+                // Status Scan: נסה את כל המפתחות, ובמידת הצורך עבור גם לספק הבא.
+                // הספק שנבחר בהגדרות מקבל עדיפות, אחריו שאר הספקים.
+                const providerOrder = [
+                    currentProvider,
+                    'gemini',
+                    'groq',
+                    'openrouter'
+                ].filter((provider, index, arr) => arr.indexOf(provider) === index);
+
+                providerOrder.forEach(provider => {
+                    const keys = Array.isArray(settings.keys?.[provider])
+                        ? settings.keys[provider]
+                        : (settings.keys?.[provider] ? [settings.keys[provider]] : []);
+
+                    keys
+                        .filter(k => k && String(k).trim())
+                        .forEach((key, idx) => {
+                            fallbackChain.push({
+                                provider,
+                                key,
+                                keyIndex: idx + 1
+                            });
+                        });
+                });
+            } else {
+                const pKeys = settings.keys[currentProvider] || [];
+                fallbackChain = (Array.isArray(pKeys) ? pKeys : [pKeys])
+                    .filter(k => k && String(k).trim())
+                    .map((k, idx) => ({
+                        provider: currentProvider,
+                        key: k,
+                        keyIndex: idx + 1
+                    }));
+            }
 
             if (fallbackChain.length === 0) {
                 const providerNames = { 'gemini': 'Google Gemini', 'groq': 'Groq', 'openrouter': 'OpenRouter' };
@@ -2075,6 +2156,7 @@ ${contentToAnalyze}`;
                     const activeKey = rawKey.trim(); 
                     let shouldTryNextKey = false;
 
+                    if (statusOnly) setStatusScanFooter(`🔑 מנסה Gemini — מפתח ${keyIndex}`);
                     if (currentProvider === 'gemini') {
                         let models = window.dynamicGeminiModels;
                         if (!models) {
@@ -2114,7 +2196,7 @@ ${contentToAnalyze}`;
                                 break;
                             } catch (err) {
                                 lastError = err.message;
-                                if (isRecoverableError(err.message)) { shouldTryNextKey = true; window.dynamicGeminiModels = null; }
+                                if (statusOnly || isRecoverableError(err.message)) { shouldTryNextKey = true; window.dynamicGeminiModels = null; }
                                 console.warn(`Gemini [${model}]:`, err.message);
                             }
                         }
@@ -2127,6 +2209,7 @@ ${contentToAnalyze}`;
                     }
 
                    else if (currentProvider === 'groq') {
+                        if (statusOnly) setStatusScanFooter(`🔑 מנסה Groq — מפתח ${keyIndex}`);
                         let models = window.dynamicGroqModels;
                         const safeGroqKey = activeKey.replace(/\s+/g, '');
                         if (!models) {
@@ -2164,7 +2247,7 @@ ${contentToAnalyze}`;
                                 break;
                             } catch (err) {
                                 lastError = err.message;
-                                if (isRecoverableError(err.message)) { shouldTryNextKey = true; window.dynamicGroqModels = null; }
+                                if (statusOnly || isRecoverableError(err.message)) { shouldTryNextKey = true; window.dynamicGroqModels = null; }
                                 console.warn(`Groq [${model}]:`, err.message);
                             }
                         }
@@ -2177,6 +2260,7 @@ ${contentToAnalyze}`;
                     }
 
                    else if (currentProvider === 'openrouter') {
+                        if (statusOnly) setStatusScanFooter(`🔑 מנסה OpenRouter — מפתח ${keyIndex}`);
                         let models = window.dynamicOpenRouterModels;
                         if (!models) {
                             try {
@@ -2215,7 +2299,7 @@ ${contentToAnalyze}`;
                                 break;
                             } catch (err) {
                                 lastError = err.message;
-                                if (isRecoverableError(err.message)) shouldTryNextKey = true;
+                                if (statusOnly || isRecoverableError(err.message)) shouldTryNextKey = true;
                                 console.warn(`OpenRouter [${model}]:`, err.message);
                             }
                         }
@@ -2250,8 +2334,10 @@ if (ci) {
 
     if (statusOnly && isWebsite) {
         if (validStatus) {
+            const statusStamp = nowIso();
             ci.siteStatus = validStatus;
-            ci.updatedAt = nowIso();
+            ci.statusCheckedAt = statusStamp;
+            ci.updatedAt = statusStamp;
         }
 
         // במצב Status Only:
@@ -2576,13 +2662,12 @@ if (ci) {
                 document.getElementById('toggleDuplicatesBtn').style.background  = '';
                 document.getElementById('toggleDuplicatesBtn').style.borderColor = '';
                 btn.classList.add('dead-active');
-                showToast('🔴 מציג רק אתרים לא זמינים');
             } else {
                 btn.classList.remove('dead-active');
-                showToast('הוסר פילטר');
             }
             saveUiSettings();
             renderList();
+            updateDeadCountBadge();
         }
 
        async function importJson(e) {
@@ -3276,31 +3361,52 @@ if (ci) {
 
         // ==================== מערכת סריקת קישורים חיה (ללא AI וללא תיאורים) ====================
 
-       function checkDeadLinksAlert() {
-    const inactiveCount = state.items.filter(i =>
-        i.type === 'link' &&
-        ['dead', 'parked'].includes(i.siteStatus)
-    ).length;
+        function getInactiveStatusCount() {
+            return state.items.filter(item =>
+                item.type === 'link' &&
+                ['dead', 'parked'].includes(item.siteStatus)
+            ).length;
+        }
 
-    const alertBox = document.getElementById('deadLinksAlert');
-    if (!alertBox) return;
+        function updateDeadCountBadge(previousCount = null) {
+            const btn = document.getElementById('toggleDeadBtn');
+            const badge = document.getElementById('deadCountBadge');
+            if (!btn || !badge) return;
 
-    if (inactiveCount > 0 && !state.showOnlyDead) {
-        alertBox.style.display = 'flex';
-        alertBox.querySelector('span').innerHTML =
-            `⚠️ שים לב, נמצאו ${inactiveCount} אתרים לא פעילים או בבעיה!`;
-    } else {
-        alertBox.style.display = 'none';
-    }
-}
+            const count = getInactiveStatusCount();
+            badge.textContent = String(count);
+            badge.style.display = count > 0 ? 'flex' : 'none';
+            btn.setAttribute(
+                'title',
+                count > 0
+                    ? `הצג רק אתרים לא פעילים או בעייתיים • ${count} נמצאו`
+                    : 'הצג רק אתרים לא פעילים או בעייתיים'
+            );
+            btn.setAttribute(
+                'aria-label',
+                count > 0
+                    ? `הצג רק אתרים לא פעילים או בעייתיים. נמצאו ${count}`
+                    : 'הצג רק אתרים לא פעילים או בעייתיים'
+            );
 
-document.getElementById('deadLinksAlert')?.addEventListener('click', () => {
-    document.getElementById('deadLinksAlert').style.display = 'none';
+            if (previousCount !== null && count > previousCount) {
+                badge.classList.remove('dead-count-badge-pulse');
+                void badge.offsetWidth;
+                badge.classList.add('dead-count-badge-pulse');
+                setTimeout(() => badge.classList.remove('dead-count-badge-pulse'), 900);
+            }
 
-    if (!state.showOnlyDead) {
-        toggleDeadFilter();
-    }
-});
+            if (state.showOnlyDead) {
+                btn.classList.add('dead-active');
+            } else {
+                btn.classList.remove('dead-active');
+            }
+        }
+
+        function checkDeadLinksAlert(previousCount = null) {
+            // אין יותר הודעת Popup. המספר מוצג ישירות על כפתור 🔴.
+            updateDeadCountBadge(previousCount);
+        }
 
         function getStatusScanRowState(status) {
             if (status === 'active') return ['active', '🟢 פעיל'];
@@ -3387,8 +3493,31 @@ document.getElementById('deadLinksAlert')?.addEventListener('click', () => {
             return items.map(item => ({
                 id: item.id,
                 hadStatus: Object.prototype.hasOwnProperty.call(item, 'siteStatus'),
-                siteStatus: item.siteStatus
+                siteStatus: item.siteStatus,
+                hadStatusCheckedAt: Object.prototype.hasOwnProperty.call(item, 'statusCheckedAt'),
+                statusCheckedAt: item.statusCheckedAt
             }));
+        }
+
+        function getRecentStatusCheckInfo(item) {
+            const stamp = item?.statusCheckedAt;
+            if (!stamp) return null;
+
+            const checkedAt = Date.parse(stamp);
+            if (!Number.isFinite(checkedAt)) return null;
+
+            const ageMs = Date.now() - checkedAt;
+            if (ageMs < 0 || ageMs >= STATUS_RECHECK_MS) return null;
+
+            const ageMinutes = Math.floor(ageMs / 60000);
+            if (ageMinutes < 1) return 'נבדק לפני רגע';
+            if (ageMinutes < 60) return `נבדק לפני ${ageMinutes} דק'`;
+
+            const ageHours = Math.floor(ageMinutes / 60);
+            if (ageHours < 24) return `נבדק לפני ${ageHours} שעות`;
+
+            const ageDays = Math.floor(ageHours / 24);
+            return `נבדק לפני ${ageDays} ${ageDays === 1 ? 'יום' : 'ימים'}`;
         }
 
         async function undoStatusScanChanges() {
@@ -3403,7 +3532,11 @@ document.getElementById('deadLinksAlert')?.addEventListener('click', () => {
                 const current = state.items.find(item => item.id === saved.id);
                 if (!current) return false;
                 const currentHas = Object.prototype.hasOwnProperty.call(current, 'siteStatus');
-                return currentHas !== saved.hadStatus || current.siteStatus !== saved.siteStatus;
+                const currentCheckedHas = Object.prototype.hasOwnProperty.call(current, 'statusCheckedAt');
+                return currentHas !== saved.hadStatus ||
+                    current.siteStatus !== saved.siteStatus ||
+                    currentCheckedHas !== saved.hadStatusCheckedAt ||
+                    current.statusCheckedAt !== saved.statusCheckedAt;
             });
 
             if (changed.length === 0) {
@@ -3423,13 +3556,25 @@ document.getElementById('deadLinksAlert')?.addEventListener('click', () => {
                         if (!item) return;
                         const ref = doc(db, 'users', state.user.uid, 'items', item.id.toString());
                         item.updatedAt = nowIso();
+                        const restorePayload = { updatedAt: item.updatedAt };
+
                         if (saved.hadStatus) {
                             item.siteStatus = saved.siteStatus;
-                            batch.set(ref, { siteStatus: saved.siteStatus, updatedAt: item.updatedAt }, { merge: true });
+                            restorePayload.siteStatus = saved.siteStatus;
                         } else {
                             delete item.siteStatus;
-                            batch.update(ref, { updatedAt: item.updatedAt, siteStatus: deleteField() });
+                            restorePayload.siteStatus = deleteField();
                         }
+
+                        if (saved.hadStatusCheckedAt) {
+                            item.statusCheckedAt = saved.statusCheckedAt;
+                            restorePayload.statusCheckedAt = saved.statusCheckedAt;
+                        } else {
+                            delete item.statusCheckedAt;
+                            restorePayload.statusCheckedAt = deleteField();
+                        }
+
+                        batch.set(ref, restorePayload, { merge: true });
                     });
 
                     await batch.commit();
@@ -3482,12 +3627,18 @@ document.getElementById('deadLinksAlert')?.addEventListener('click', () => {
                 return;
             }
 
-            const linksToScan = state.items.filter(item => item.type === 'link' && typeof item.content === 'string' && item.content.trim());
-            window.__statusScanUndoSnapshot = createStatusScanUndoSnapshot(linksToScan);
-            setStatusScanButtons({ running: true, undoAvailable: true });
-            openStatusScanPanel(linksToScan);
+            const allLinks = state.items.filter(item =>
+                item.type === 'link' &&
+                typeof item.content === 'string' &&
+                item.content.trim()
+            );
 
-            if (linksToScan.length === 0) {
+            // ה-UNDO חייב לזכור את המצב לפני הסריקה, כולל חותמת זמן הבדיקה.
+            window.__statusScanUndoSnapshot = createStatusScanUndoSnapshot(allLinks);
+            setStatusScanButtons({ running: true, undoAvailable: true });
+            openStatusScanPanel(allLinks);
+
+            if (allLinks.length === 0) {
                 setStatusScanFooter('אין קישורים לבדיקה');
                 updateStatusScanProgress(0, 0);
                 window.__statusScanRunActive = false;
@@ -3495,68 +3646,148 @@ document.getElementById('deadLinksAlert')?.addEventListener('click', () => {
                 return;
             }
 
-            const settings = getAiSettings();
-            const providerOrder = ['gemini', 'groq', 'openrouter'];
-            const availableProvider = providerOrder.find(provider => Array.isArray(settings.keys?.[provider]) && settings.keys[provider].some(key => key && String(key).trim()));
+            const recentLinks = [];
+            const linksToScan = [];
 
-            if (!availableProvider) {
+            allLinks.forEach(item => {
+                const recentLabel = getRecentStatusCheckInfo(item);
+                if (recentLabel) {
+                    recentLinks.push(item);
+                    updateStatusScanRow(item.id, 'fresh', `✓ ${recentLabel}`);
+                } else {
+                    linksToScan.push(item);
+                }
+            });
+
+            const skippedCount = recentLinks.length;
+            const totalCount = allLinks.length;
+            let completed = skippedCount;
+
+            updateStatusScanProgress(completed, totalCount);
+            setStatusScanFooter(
+                skippedCount > 0
+                    ? `⏭️ דולגו ${skippedCount} קישורים — נבדקו בהצלחה במהלך ${STATUS_RECHECK_DAYS} הימים האחרונים`
+                    : `נבדק רק הסטטוס • ${totalCount} קישורים`
+            );
+
+            if (linksToScan.length === 0) {
+                window.__statusScanRunActive = false;
+                checkDeadLinksAlert();
+                renderList();
+                setStatusScanFooter(`✅ אין צורך בסריקה נוספת • כל ${totalCount} הקישורים נבדקו במהלך ${STATUS_RECHECK_DAYS} הימים האחרונים`);
+                setStatusScanButtons({ running: false, undoAvailable: true });
+                return;
+            }
+
+            const settings = getAiSettings();
+            const configuredProviders = ['gemini', 'groq', 'openrouter'];
+            const hasAnyAiKey = configuredProviders.some(provider =>
+                Array.isArray(settings.keys?.[provider]) &&
+                settings.keys[provider].some(key => key && String(key).trim())
+            );
+
+            if (!hasAnyAiKey) {
                 setStatusScanFooter('לא נמצא מפתח API פעיל ל-AI');
                 const body = document.getElementById('statusScanBody');
-                if (body) body.innerHTML = '<div style="padding:18px;text-align:center;color:var(--accent-red);line-height:1.6;">❌ לא נמצא מפתח API פעיל.<br>הסריקה דורשת מפתח AI אחד לפחות.</div>';
-                updateStatusScanProgress(0, linksToScan.length);
+                if (body) {
+                    const skippedText = skippedCount > 0
+                        ? `<div style="padding:12px 18px;text-align:center;color:var(--text-secondary);">⏭️ ${skippedCount} קישורים דולגו כי נבדקו לאחרונה.</div>`
+                        : '';
+                    body.insertAdjacentHTML('afterbegin', skippedText + '<div style="padding:12px 18px;text-align:center;color:var(--accent-red);line-height:1.6;">❌ לא נמצא מפתח API פעיל.<br>הסריקה דורשת מפתח AI אחד לפחות.</div>');
+                }
+                updateStatusScanProgress(completed, totalCount);
                 window.__statusScanRunActive = false;
                 setStatusScanButtons({ running: false, undoAvailable: true });
                 return;
             }
 
-            setStatusScanFooter('בודק סטטוס בלבד • אינו משנה תיאורים או פרטים');
+            setStatusScanFooter(
+                `בודק ${linksToScan.length} קישורים • מדלג על בדיקות בנות פחות מ-${STATUS_RECHECK_DAYS} ימים`
+            );
+
             let nextIndex = 0;
-            let completed = 0;
+            let inactiveCount = state.items.filter(it =>
+                it.type === 'link' && ['dead', 'parked'].includes(it.siteStatus)
+            ).length;
+
+            // 4 workers במקביל, וכל אחד עובר דרך כל המפתחות והספקים הזמינים עד להצלחה.
             const WORKER_COUNT = Math.min(4, linksToScan.length);
 
             const worker = async () => {
                 while (true) {
                     if (window.__statusScanStopRequested) return;
+
                     const index = nextIndex++;
                     if (index >= linksToScan.length) return;
+
                     const item = linksToScan[index];
                     updateStatusScanRow(item.id, 'checking');
-                    setStatusScanFooter(`בודק עכשיו: ${item.content}`);
+                    setStatusScanFooter(`🔎 בודק: ${item.content}`);
 
                     try {
-                        await scanSingleItem(item.id, availableProvider, false, true);
-                        if (window.__statusScanStopRequested) updateStatusScanRow(item.id, 'stopped');
-                        else {
+                        // null מאפשר ל-scanSingleItem לבחור את הספק המועדף ולהמשיך אוטומטית
+                        // לכל המפתחות והספקים הזמינים במקרה של כשל.
+                        await scanSingleItem(item.id, null, false, true);
+
+                        if (window.__statusScanStopRequested) {
+                            updateStatusScanRow(item.id, 'stopped');
+                        } else {
                             const updatedItem = state.items.find(it => it.id === item.id);
                             const status = updatedItem?.siteStatus;
+
                             if (status === 'active') updateStatusScanRow(item.id, 'active');
                             else if (status === 'parked') updateStatusScanRow(item.id, 'parked');
                             else if (status === 'dead') updateStatusScanRow(item.id, 'dead');
                             else updateStatusScanRow(item.id, 'error', '⚠️ לא נקבע');
                         }
                     } catch (error) {
-                        if (window.__statusScanStopRequested || error?.name === 'AbortError') updateStatusScanRow(item.id, 'stopped');
-                        else { console.error('[AI Status Scan]', item.content, error); updateStatusScanRow(item.id, 'error'); }
+                        if (window.__statusScanStopRequested || error?.name === 'AbortError') {
+                            updateStatusScanRow(item.id, 'stopped');
+                        } else {
+                            console.error('[AI Status Scan]', item.content, error);
+                            updateStatusScanRow(item.id, 'error');
+                        }
                     } finally {
                         completed++;
-                        updateStatusScanProgress(completed, linksToScan.length);
-                        checkDeadLinksAlert();
-                        const inactiveCount = state.items.filter(it => it.type === 'link' && ['dead', 'parked'].includes(it.siteStatus)).length;
-                        setStatusScanFooter(window.__statusScanStopRequested ? `⏹ נעצר • הושלמו ${completed}/${linksToScan.length} • ${inactiveCount} לא פעילים/בבעיה` : (completed === linksToScan.length ? `הסריקה הושלמה • נמצאו ${inactiveCount} אתרים לא פעילים/בבעיה` : `הושלמו ${completed}/${linksToScan.length} • ${inactiveCount} לא פעילים/בבעיה`));
+                        updateStatusScanProgress(completed, totalCount);
+
+                        const previousInactiveCount = inactiveCount;
+                        inactiveCount = getInactiveStatusCount();
+
+                        checkDeadLinksAlert(previousInactiveCount);
+
+                        setStatusScanFooter(
+                            window.__statusScanStopRequested
+                                ? `⏹ נעצר • הושלמו ${completed}/${totalCount} • ${inactiveCount} לא פעילים/בבעיה • ${skippedCount} דולגו`
+                                : `הושלמו ${completed}/${totalCount} • ${inactiveCount} לא פעילים/בבעיה • ${skippedCount} דולגו`
+                        );
+
                         renderList();
                     }
                 }
             };
 
-            await Promise.all(Array.from({ length: WORKER_COUNT }, () => worker()));
+            await Promise.all(
+                Array.from({ length: WORKER_COUNT }, () => worker())
+            );
+
             const wasStopped = window.__statusScanStopRequested;
             window.__statusScanRunActive = false;
             window.__statusScanAbortController = null;
             checkDeadLinksAlert();
             renderList();
 
-            if (wasStopped) setStatusScanFooter(`⏹ הסריקה נעצרה • הושלמו ${completed}/${linksToScan.length} • ניתן לבצע UNDO`);
-            else { updateStatusScanProgress(linksToScan.length, linksToScan.length); setStatusScanFooter(`✅ הסריקה הושלמה • ${linksToScan.length} קישורים נבדקו • ניתן לבצע UNDO`); }
+            if (wasStopped) {
+                setStatusScanFooter(
+                    `⏹ הסריקה נעצרה • הושלמו ${completed}/${totalCount} • ${skippedCount} דולגו • ניתן לבצע UNDO`
+                );
+            } else {
+                updateStatusScanProgress(totalCount, totalCount);
+                setStatusScanFooter(
+                    `✅ הסריקה הושלמה • ${linksToScan.length} קישורים נבדקו מחדש • ${skippedCount} דולגו • ניתן לבצע UNDO`
+                );
+            }
+
             setStatusScanButtons({ running: false, undoAvailable: true });
         }
 
