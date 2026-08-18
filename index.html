@@ -415,7 +415,9 @@
         }
         .status-scan-control-btn:hover { background:rgba(127,127,127,0.18); }
         .status-scan-control-btn.stop { color:var(--accent-red); border-color:rgba(217,48,37,0.35); background:rgba(217,48,37,0.08); }
+        .status-scan-control-btn.pause { color:var(--primary-color); border-color:rgba(96,165,250,0.35); background:rgba(96,165,250,0.08); }
         .status-scan-control-btn.undo { color:var(--accent-gold); border-color:rgba(245,158,11,0.35); background:rgba(245,158,11,0.08); }
+        .status-scan-control-btn.cancel { color:var(--text-secondary); border-color:rgba(127,127,127,0.28); background:rgba(127,127,127,0.07); }
         .status-scan-control-btn:disabled { opacity:.45; cursor:not-allowed; }
         .status-scan-title {
             font-weight: 800;
@@ -608,8 +610,10 @@
             <div class="status-scan-title">🤖 בדיקת סטטוס אתרים</div>
             <div class="status-scan-actions">
                 <div class="status-scan-counter" id="statusScanCounter">מכין סריקה...</div>
-                <button type="button" id="statusScanStopBtn" class="status-scan-control-btn stop" title="עצור את הבדיקה">עצור</button>
-                <button type="button" id="statusScanUndoBtn" class="status-scan-control-btn undo" title="בטל את כל שינויי הסטטוס שבוצעו בסריקה זו" disabled>UNDO</button>
+                <button type="button" id="statusScanPauseBtn" class="status-scan-control-btn pause" title="השהה את הסריקה">⏸ השהה</button>
+                <button type="button" id="statusScanStopBtn" class="status-scan-control-btn stop" title="עצור את הסריקה והשאר את השינויים שבוצעו עד עכשיו">⏹ עצור</button>
+                <button type="button" id="statusScanUndoBtn" class="status-scan-control-btn undo" title="בטל את כל שינויי הסטטוס שבוצעו בסריקה זו" disabled>↩ UNDO</button>
+                <button type="button" id="statusScanCancelBtn" class="status-scan-control-btn cancel" title="בטל לחלוטין את הסריקה, החזר את השינויים וסגור את החלון">✕ ביטול</button>
             </div>
         </div>
         <div class="status-scan-progress-wrap">
@@ -617,7 +621,7 @@
         </div>
         <div class="status-scan-body" id="statusScanBody"></div>
         <div class="status-scan-footer">
-            <span id="statusScanFooterLeft">נבדק רק הסטטוס</span>
+            <span id="statusScanFooterLeft">נבדק רק הסטטוס • AI מאמת, הראיות קובעות</span>
             <span id="statusScanFooterRight">0%</span>
         </div>
     </div>
@@ -924,6 +928,7 @@
         window.__statusScanRunStarted = false;
         window.__statusScanAbortController = null;
         window.__statusScanStopRequested = false;
+        window.__statusScanPaused = false;
         window.__statusScanUndoSnapshot = null;
         window.__statusScanRunActive = false;
         // אתר שנבדק בהצלחה במהלך 14 הימים האחרונים לא ייסרק שוב.
@@ -1918,18 +1923,48 @@
               let contentToAnalyze = cleanContent;
 
 if (isWebsite && statusOnly) {
+    // ================================================================
+    // STATUS-ONLY EVIDENCE COLLECTION
+    // The AI is a validator only. It must NEVER override strong HTTP/content evidence.
+    // Unknown/inconclusive evidence never changes an existing status.
+    // ================================================================
     const statusProxies = [
-        u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-        u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`
+        { name: 'corsproxy', build: u => `https://corsproxy.io/?${encodeURIComponent(u)}` },
+        { name: 'allorigins', build: u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}` },
+        { name: 'codetabs', build: u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}` }
     ];
 
-    let statusEvidence = [];
+    const DEAD_MARKERS = [
+        '404 not found', '404 error', '410 gone', 'page not found',
+        'this page is not available', 'this site can’t be reached',
+        'this site can\\'t be reached', 'site cannot be reached',
+        'server not found', 'domain not found', 'dns_probe_finished_nxdomain',
+        'err_name_not_resolved', 'no such host', 'no such domain',
+        'domain has expired', 'domain is expired', 'account suspended',
+        'this link is no longer valid', 'this link has expired'
+    ];
+    const PARKED_MARKERS = [
+        'domain for sale', 'this domain is for sale', 'buy this domain',
+        'domain parking', 'parked domain', 'parked free', 'domain parked',
+        'this domain has been parked', 'coming soon', 'under construction',
+        'website coming soon', 'future home of something quite cool',
+        'hugedomains', 'sedo.com', 'afternic', 'parkingcrew', 'dan.com'
+    ];
+    const BLOCK_MARKERS = [
+        'just a moment', 'enable javascript and cookies', 'checking your browser',
+        'verify you are human', 'access denied', 'security check', 'cloudflare'
+    ];
 
-    const statusProbe = async (proxyFn) => {
-        const proxyUrl = proxyFn(cleanContent);
+    const normalizeEvidenceText = (value) =>
+        String(value || '').replace(/\\s+/g, ' ').trim().toLowerCase();
 
+    const countMarkers = (text, markers) =>
+        markers.filter(marker => text.includes(marker)).length;
+
+    const statusProbe = async ({ name, build }) => {
+        const proxyUrl = build(cleanContent);
         const ctrl = new AbortController();
-        const timeoutId = setTimeout(() => ctrl.abort(), 7000);
+        const timeoutId = setTimeout(() => ctrl.abort(), 8000);
         const sharedSignal = window.__statusScanAbortController?.signal || null;
         let signal = ctrl.signal;
 
@@ -1944,48 +1979,113 @@ if (isWebsite && statusOnly) {
         }
 
         try {
-            const res = await fetch(proxyUrl, { signal });
+            const res = await fetch(proxyUrl, {
+                signal,
+                cache: 'no-store'
+            });
+
+            let targetStatus = res.status;
+            let body = '';
+            let targetUrl = cleanContent;
+
+            if (name === 'allorigins') {
+                const data = await res.json().catch(() => null);
+                body = data?.contents || '';
+                if (Number.isFinite(data?.status?.http_code)) targetStatus = Number(data.status.http_code);
+                if (data?.status?.url) targetUrl = data.status.url;
+            } else {
+                body = await res.text().catch(() => '');
+            }
+
+            const lowerBody = normalizeEvidenceText(body);
+            const bodySample = lowerBody.slice(0, 12000);
+            const deadHits = countMarkers(bodySample, DEAD_MARKERS);
+            const parkedHits = countMarkers(bodySample, PARKED_MARKERS);
+            const blockHits = countMarkers(bodySample, BLOCK_MARKERS);
+            const hasUsableBody = bodySample.length >= 80;
+            const httpDefinitiveDead = targetStatus === 404 || targetStatus === 410;
+            const httpSuccess = targetStatus >= 200 && targetStatus < 400;
+            const proxyError = targetStatus >= 500 && targetStatus <= 599;
+            const activeEvidence = httpSuccess && hasUsableBody && deadHits === 0 && parkedHits === 0 && blockHits === 0;
 
             return {
-                proxy: proxyUrl.split('?')[0],
+                proxy: name,
                 ok: res.ok,
-                httpStatus: res.status
+                targetStatus,
+                targetUrl,
+                bodyLength: bodySample.length,
+                deadHits,
+                parkedHits,
+                blockHits,
+                hasUsableBody,
+                httpDefinitiveDead,
+                httpSuccess,
+                proxyError,
+                activeEvidence,
+                sample: bodySample.slice(0, 2500)
             };
         } finally {
             clearTimeout(timeoutId);
         }
     };
 
-    const probeResults = await Promise.allSettled(
-        statusProxies.map(proxyFn => statusProbe(proxyFn))
-    );
+    const probeResults = await Promise.allSettled(statusProxies.map(statusProbe));
+    const evidence = probeResults
+        .filter(result => result.status === 'fulfilled')
+        .map(result => result.value);
 
-    probeResults.forEach(result => {
-        if (result.status === 'fulfilled') {
-            statusEvidence.push(result.value);
-        }
-    });
+    if (window.__statusScanStopRequested) throw new DOMException('Status scan stopped', 'AbortError');
 
-    const evidenceText = statusEvidence.length
-        ? statusEvidence
-            .map(e =>
-                `Proxy=${e.proxy}; reachable=${e.ok}; HTTP=${e.httpStatus}`
-            )
-            .join('\n')
-        : 'No successful proxy response was obtained.';
+    const successfulEvidence = evidence.filter(e => !e.proxyError);
+    const activeSources = successfulEvidence.filter(e => e.activeEvidence);
+    const explicitDeadSources = successfulEvidence.filter(e => e.httpDefinitiveDead || e.deadHits >= 2);
+    const parkedSources = successfulEvidence.filter(e => e.parkedHits >= 2);
 
-    contentToAnalyze = `[STATUS ONLY EVIDENCE]
+    // Conservative deterministic classification.
+    // ACTIVE wins over weak failure signals. DEAD/PARKED require strong evidence.
+    let deterministicStatus = 'uncertain';
+
+    if (activeSources.length >= 1) {
+        deterministicStatus = 'active';
+    } else if (explicitDeadSources.length >= 2 || explicitDeadSources.some(e => e.httpDefinitiveDead)) {
+        deterministicStatus = 'dead';
+    } else if (parkedSources.length >= 2) {
+        deterministicStatus = 'parked';
+    }
+
+    const evidenceText = successfulEvidence.length
+        ? successfulEvidence.map(e =>
+            `SOURCE=${e.proxy}; HTTP=${e.targetStatus}; activeEvidence=${e.activeEvidence}; deadHits=${e.deadHits}; parkedHits=${e.parkedHits}; blockHits=${e.blockHits}; bodyLength=${e.bodyLength}; URL=${e.targetUrl}`
+        ).join('\n')
+        : 'No trustworthy target response was obtained from the status proxies.';
+
+    contentToAnalyze = `[STATUS-ONLY EVIDENCE]
 Target URL: ${cleanContent}
 
 ${evidenceText}
 
-Determine ONLY the current operational status.
-Do not summarize the site.
-Do not describe the site.
-Do not use the user description.
-Return ONLY active, parked, or dead.`;
+DETERMINISTIC PRE-CHECK: ${deterministicStatus}
+
+Rules:
+- Never invent a failure.
+- A proxy failure (5xx/timeout) is NOT proof that the target site is dead.
+- A single weak/ambiguous signal is NOT enough to mark a reachable site dead.
+- Strong 2xx/3xx evidence with real page content and no failure markers is strong ACTIVE evidence.
+- HTTP 404/410 from the actual target response is strong DEAD evidence.
+- Parking/placeholder signals require corroboration before PARKED is used.
+- When evidence is insufficient, return UNCERTAIN. Do not guess.`;
+
+    // Save the deterministic result for the final safety gate after AI validation.
+    window.__lastStatusEvidenceResult = {
+        deterministicStatus,
+        activeSources: activeSources.length,
+        explicitDeadSources: explicitDeadSources.length,
+        parkedSources: parkedSources.length,
+        evidence: successfulEvidence
+    };
 
 } else if (isWebsite && forceUrlOnly) {
+
                     const domainMatch = cleanContent.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?]+)/im);
                     const domain = domainMatch ? domainMatch[1] : cleanContent;
                     
@@ -2106,7 +2206,7 @@ CRITICAL RULES:
 4. Do NOT use or modify the user's description.
 5. Do NOT generate hashtags.
 6. Do NOT infer or invent information not supported by the supplied status evidence.
-7. Return ONLY one status value.
+7. Return ONLY one status value: active, parked, dead, or uncertain.
 8. If the evidence clearly shows the website is reachable and operational, return "active".
 9. If the evidence clearly shows a parked or placeholder domain, return "parked".
 10. If the evidence clearly shows the site is unavailable or nonexistent, return "dead".
@@ -2125,7 +2225,7 @@ Your ONLY job is to classify the CURRENT operational status of the target websit
 
 Return ONLY valid JSON.
 Required format:
-{"status":"active|parked|dead"}
+{"status":"active|parked|dead|uncertain"}
 
 Do not return "summary".
 Do not return "tags".
@@ -2319,204 +2419,61 @@ ${contentToAnalyze}`;
                 if (!jm2) throw new Error('לא נמצא JSON תקין');
                 const parsed = JSON.parse(jm2[0]);
 
-                if (isWebsite && /(?:t\.me|telegram\.me)\//i.test(cleanContent) && parsed.status === 'dead') {
-                    if (/\d[\d\s,.]+\s*(?:member|subscriber|participant|חברים|מנויים)/i.test(contentToAnalyze))
-                        parsed.status = 'active';
+                const evidenceResult = statusOnly ? (window.__lastStatusEvidenceResult || { deterministicStatus: 'uncertain' }) : null;
+                let finalStatus = parsed.status;
+
+                if (statusOnly && isWebsite) {
+                    const deterministic = evidenceResult.deterministicStatus || 'uncertain';
+                    const aiStatus = ['active', 'parked', 'dead', 'uncertain'].includes(parsed.status)
+                        ? parsed.status
+                        : 'uncertain';
+
+                    // Final safety gate: AI can refine an inconclusive result, but it can NEVER
+                    // downgrade strong ACTIVE evidence to DEAD. Likewise, AI cannot create DEAD
+                    // or PARKED without deterministic evidence supporting it.
+                    if (deterministic === 'active') {
+                        finalStatus = 'active';
+                    } else if (deterministic === 'dead') {
+                        finalStatus = 'dead';
+                    } else if (deterministic === 'parked') {
+                        finalStatus = 'parked';
+                    } else {
+                        finalStatus = 'uncertain';
+                    }
+
+                    // AI disagreement is recorded only in the scan UI/log. It never changes data.
+                    if (aiStatus !== finalStatus) {
+                        console.info('[AI Status Scan] AI/evidence disagreement; deterministic evidence wins.', {
+                            url: cleanContent,
+                            aiStatus,
+                            deterministic,
+                            finalStatus
+                        });
+                    }
                 }
 
-               const ci = state.items.find(i => i.id === id);
-
-if (ci) {
-    const validStatus =
-        ['active', 'parked', 'dead'].includes(parsed.status)
-            ? parsed.status
-            : null;
-
-    if (statusOnly && isWebsite) {
-        if (validStatus) {
-            const statusStamp = nowIso();
-            ci.siteStatus = validStatus;
-            ci.statusCheckedAt = statusStamp;
-            ci.updatedAt = statusStamp;
-        }
-
-        // במצב Status Only:
-        // לא משנים aiSummary
-        // לא משנים aiTags
-        // לא משנים aiModel
-        // לא משנים description
-        // לא משנים content
-        // לא משנים category
-        // לא משנים note
-
-    } else {
-        ci.aiSummary  = parsed.summary || 'לא התקבל סיכום.';
-        ci.siteStatus = isWebsite ? (parsed.status || 'active') : 'text';
-        ci.aiTags     = Array.isArray(parsed.tags) ? parsed.tags : [];
-        ci.aiModel    = usedModelName;
-        ci.updatedAt  = nowIso();
-    }
-}
-
-           } catch (e) {
-    console.error('[AI] Error:', e);
-
-    const ci = state.items.find(i => i.id === id);
-
-    if (ci) {
-        if (!statusOnly) {
-            ci.siteStatus = ci.type === 'link' ? 'active' : 'text';
-            ci.aiSummary  = (e.name === 'AbortError' || (e.message || '').includes('abort'))
-                ? 'הסריקה בוטלה.'
-                : 'שגיאה: ' + e.message;
-            ci.aiTags = [];
-            ci.updatedAt = nowIso();
-        } else {
-            // Status Only:
-            // במקרה של שגיאת AI לא משנים שום נתון קיים.
-            console.warn(
-                `[AI Status Scan] לא ניתן לקבוע סטטוס עבור ${ci.content}.`
-            );
-        }
-    }
-} finally {
                 const ci = state.items.find(i => i.id === id);
+
                 if (ci) {
-                    ci.isScanning = false;
-                    await saveItemToCloud(ci);
+                    if (statusOnly && isWebsite) {
+                        if (['active', 'parked', 'dead'].includes(finalStatus)) {
+                            const statusStamp = nowIso();
+                            ci.siteStatus = finalStatus;
+                            ci.statusCheckedAt = statusStamp;
+                            ci.updatedAt = statusStamp;
+                        } else {
+                            // Inconclusive: DO NOT change status and DO NOT refresh the 14-day timer.
+                            console.warn(`[AI Status Scan] Inconclusive status for ${ci.content}; keeping previous status.`);
+                        }
+                    } else {
+                        ci.aiSummary  = parsed.summary || 'לא התקבל סיכום.';
+                        ci.siteStatus = isWebsite ? (parsed.status || 'active') : 'text';
+                        ci.aiTags     = Array.isArray(parsed.tags) ? parsed.tags : [];
+                        ci.aiModel    = usedModelName;
+                        ci.updatedAt  = nowIso();
+                    }
                 }
-            }
-        };
 
-        document.getElementById('bulkAiScanBtn')?.addEventListener('click', async () => {
-            if (!navigator.onLine) return showToast('❌ לא ניתן לבצע סריקת AI מרובה ללא רשת.', null, 4000, null, true);
-            const settings = getAiSettings();
-            if (!settings.keys.gemini.length && !settings.keys.groq.length && !settings.keys.openrouter.length)
-                return alert('אנא הזן לפחות מפתח API אחד בהגדרות ה-AI.');
-            const itemsToScan = state.items.filter(i => !i.aiSummary || i.aiSummary.includes('שגיאה') || i.aiSummary.includes('Error') || i.aiSummary.includes('Timeout') || i.aiSummary.includes('לא התקבל'));
-            if (itemsToScan.length === 0) return alert('כל הפריטים כבר מנותחים!');
-            if (!confirm(`נמצאו ${itemsToScan.length} פריטים לסריקה. האם להתחיל?`)) return;
-
-            closeAllMenus();
-            abortAiScan = false;
-            document.getElementById('cancelBulkAiBtn').style.display = 'block';
-            const bulkToastId = 'ai-bulk-scan-toast';
-
-            for (let i = 0; i < itemsToScan.length; i++) {
-                if (abortAiScan) break;
-                const pct = Math.round((i / itemsToScan.length) * 100);
-                showToast(`<div style="width:100%;">
-                    <div>🤖 <b>סורק...</b> [${i + 1}/${itemsToScan.length}]</div>
-                    <div style="font-size:11px;opacity:0.75;margin-top:3px;direction:ltr;">${(itemsToScan[i].content||'').substring(0, 35)}...</div>
-                    <div style="width:100%;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin-top:8px;overflow:hidden;">
-                        <div style="width:${pct}%;height:100%;background:var(--accent-green);transition:width 0.3s;"></div>
-                    </div></div>`, null, 0, bulkToastId, false);
-
-                await scanSingleItem(itemsToScan[i].id);
-                if (abortAiScan) break;
-
-                if (i < itemsToScan.length - 1) {
-                    const result = state.items.find(it => it.id === itemsToScan[i].id);
-                    let delay = 300;
-                   if (result?.aiSummary && isRecoverableError(result.aiSummary)) {
-                        delay = 20000;
-                        window.lastWorkingAiProvider = null;
-                        showToast(`<div style="width:100%;"><div>⚠️ <b>מכסות מלאות — ממתין 20 שניות...</b></div>
-                            <div style="width:100%;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin-top:8px;overflow:hidden;">
-                                <div style="width:${pct}%;height:100%;background:var(--accent-gold);"></div>
-                            </div></div>`, null, 0, bulkToastId, true);
-                    }
-                    let waited = 0;
-                    while (waited < delay && !abortAiScan) { await new Promise(r => setTimeout(r, 100)); waited += 100; }
-                }
-            }
-
-            document.getElementById('cancelBulkAiBtn').style.display = 'none';
-            const finalMsg = abortAiScan ? '🛑 <b>הסריקה הופסקה.</b>' : '✅ <b>סריקת ה-AI הסתיימה בהצלחה!</b>';
-            showToast(finalMsg, null, 4000, bulkToastId, false);
-            setTimeout(() => removeToast(bulkToastId), 4000);
-        });
-
-        document.getElementById('cancelBulkAiBtn')?.addEventListener('click', () => {
-            abortAiScan = true;
-            document.getElementById('cancelBulkAiBtn').style.display = 'none';
-            if (window.activeAiRequestController) window.activeAiRequestController.abort();
-        });
-
-        document.getElementById('bulkClearAiBtn')?.addEventListener('click', async () => {
-            if (state.selectedIds.size === 0) return;
-            if (!confirm(`🧹 האם למחוק את נתוני ה-AI עבור ${state.selectedIds.size} הפריטים הנבחרים?`)) return;
-
-            const stamp = nowIso();
-            let updated = 0;
-            const selectedArr = Array.from(state.selectedIds);
-            
-            showToast('מנקה נתוני AI...', null, 0, 'clear-toast', false);
-            
-            const CHUNK_SIZE = 450;
-            for (let i = 0; i < selectedArr.length; i += CHUNK_SIZE) {
-                const chunk = selectedArr.slice(i, i + CHUNK_SIZE);
-                const batch = writeBatch(db);
-                chunk.forEach(id => {
-                    const item = state.items.find(it => it.id === id);
-                    if (item) {
-                        delete item.aiSummary; delete item.siteStatus; delete item.aiTags; delete item.isScanning; delete item.aiModel;
-                        item.updatedAt = stamp;
-                        const ref = doc(db, 'users', state.user.uid, 'items', item.id.toString());
-                        batch.set(ref, item, { merge: true });
-                        updated++;
-                    }
-                });
-                await batch.commit();
-            }
-            
-            removeToast('clear-toast');
-            if (updated > 0) {
-                exitSelectionMode();
-                showToast(`✅ נתוני AI נוקו עבור ${updated} פריטים`);
-            }
-        });
-
-      async function moveToTrash(id) {
-            const item = state.items.find(i => i.id === id);
-            if (!item) return;
-
-            item.deletedAt = nowIso();
-            item.updatedAt = nowIso();
-            
-            updateSyncStatus('syncing', 'מוחק...');
-            try {
-                const batch = writeBatch(db);
-                const itemRef = doc(db, 'users', state.user.uid, 'items', id.toString());
-                const trashRef = doc(db, 'users', state.user.uid, 'trash', id.toString());
-                
-                batch.delete(itemRef);
-                batch.set(trashRef, item);
-                await batch.commit();
-                
-                updateSyncStatus('online', 'מחובר ✓');
-                
-                const toastId = 'trash-undo-' + id;
-                showToast('🗑️ הועבר לסל המחזור', async () => {
-                    removeToast(toastId);
-                    updateSyncStatus('syncing', 'משחזר...');
-                    try {
-                        const undoBatch = writeBatch(db);
-                        const cleanItem = { ...item };
-                        delete cleanItem.deletedAt;
-                        cleanItem.updatedAt = nowIso();
-                        
-                        undoBatch.set(itemRef, cleanItem);
-                        undoBatch.delete(trashRef);
-                        await undoBatch.commit();
-                        
-                        updateSyncStatus('online', 'מחובר ✓');
-                        showToast('↩️ המחיקה בוטלה, הפריט חזר לרשימה!');
-                    } catch (undoErr) {
-                        console.error('Undo Trash error:', undoErr);
-                        showToast('⚠️ שגיאה בביטול המחיקה', null, 3000, null, true);
-                    }
-                }, 8000, toastId); 
             } catch (e) { 
                 console.error('Trash error:', e); 
                 updateSyncStatus('error', 'שגיאת רשת');
@@ -3412,17 +3369,42 @@ if (ci) {
             if (status === 'active') return ['active', '🟢 פעיל'];
             if (status === 'parked') return ['parked', '🟠 חניה/בעיה'];
             if (status === 'dead') return ['dead', '🔴 לא פעיל'];
-            if (status === 'error') return ['error', '⚠️ שגיאה'];
+            if (status === 'error') return ['error', '⚠️ לא ודאי'];
             if (status === 'checking') return ['checking', '🔎 בודק...'];
             if (status === 'stopped') return ['waiting', '⏹ נעצר'];
+            if (status === 'uncertain') return ['error', '⚠️ לא ודאי'];
             return ['waiting', 'ממתין'];
         }
 
-        function setStatusScanButtons({ running = false, undoAvailable = false } = {}) {
+        function setStatusScanButtons({ running = false, paused = false, undoAvailable = false } = {}) {
+            const pauseBtn = document.getElementById('statusScanPauseBtn');
             const stopBtn = document.getElementById('statusScanStopBtn');
             const undoBtn = document.getElementById('statusScanUndoBtn');
+            const cancelBtn = document.getElementById('statusScanCancelBtn');
+            if (pauseBtn) {
+                pauseBtn.disabled = !running;
+                pauseBtn.textContent = paused ? '▶ המשך' : '⏸ השהה';
+                pauseBtn.title = paused ? 'המשך את הסריקה' : 'השהה את הסריקה';
+            }
             if (stopBtn) stopBtn.disabled = !running;
             if (undoBtn) undoBtn.disabled = !undoAvailable;
+            if (cancelBtn) cancelBtn.disabled = !(running || undoAvailable);
+        }
+
+        function setStatusScanPause(paused) {
+            window.__statusScanPaused = paused;
+            setStatusScanButtons({
+                running: !!window.__statusScanRunActive,
+                paused,
+                undoAvailable: Array.isArray(window.__statusScanUndoSnapshot)
+            });
+            setStatusScanFooter(paused ? '⏸ הסריקה מושהית • הבדיקה הנוכחית תסתיים ולאחר מכן המערכת תמתין' : '▶ הסריקה ממשיכה');
+        }
+
+        async function waitWhileStatusScanPaused() {
+            while (window.__statusScanPaused && !window.__statusScanStopRequested) {
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
         }
 
         function openStatusScanPanel(items) {
@@ -3520,11 +3502,11 @@ if (ci) {
             return `נבדק לפני ${ageDays} ${ageDays === 1 ? 'יום' : 'ימים'}`;
         }
 
-        async function undoStatusScanChanges() {
+        async function undoStatusScanChanges(silent = false) {
             const snapshot = window.__statusScanUndoSnapshot;
             if (!Array.isArray(snapshot) || snapshot.length === 0) return;
             if (!state.user || !db) {
-                showToast('❌ לא ניתן לבצע UNDO ללא התחברות.', null, 4000, null, true);
+                if (!silent) showToast('❌ לא ניתן לבצע UNDO ללא התחברות.', null, 4000, null, true);
                 return;
             }
 
@@ -3540,11 +3522,11 @@ if (ci) {
             });
 
             if (changed.length === 0) {
-                showToast('ℹ️ אין שינויי סטטוס לביטול.', null, 3000);
+                if (!silent) showToast('ℹ️ אין שינויי סטטוס לביטול.', null, 3000);
                 return;
             }
 
-            showToast(`↩️ מחזיר ${changed.length} שינויי סטטוס...`, null, 0, 'status-undo-toast', false);
+            if (!silent) showToast(`↩️ מחזיר ${changed.length} שינויי סטטוס...`, null, 0, 'status-undo-toast', false);
             try {
                 const CHUNK_SIZE = 400;
                 for (let i = 0; i < changed.length; i += CHUNK_SIZE) {
@@ -3587,11 +3569,11 @@ if (ci) {
                     if (item?.siteStatus) updateStatusScanRow(saved.id, item.siteStatus);
                     else updateStatusScanRow(saved.id, 'waiting', 'הוחזר');
                 });
-                setStatusScanFooter(`↩️ UNDO הושלם • בוטלו ${changed.length} שינויי סטטוס`);
-                showToast(`✅ UNDO הושלם — ${changed.length} שינויי סטטוס בוטלו`, null, 5000);
+                if (!silent) setStatusScanFooter(`↩️ UNDO הושלם • בוטלו ${changed.length} שינויי סטטוס`);
+                if (!silent) showToast(`✅ UNDO הושלם — ${changed.length} שינויי סטטוס בוטלו`, null, 5000);
             } catch (error) {
                 console.error('[AI Status Scan] Undo failed:', error);
-                showToast('❌ ה-UNDO נכשל: ' + (error?.message || 'שגיאה לא ידועה'), null, 5000, null, true);
+                if (!silent) showToast('❌ ה-UNDO נכשל: ' + (error?.message || 'שגיאה לא ידועה'), null, 5000, null, true);
             } finally {
                 removeToast('status-undo-toast');
             }
@@ -3599,6 +3581,7 @@ if (ci) {
 
         function stopBackgroundStatusScan() {
             if (!window.__statusScanRunActive) return;
+            window.__statusScanPaused = false;
             window.__statusScanStopRequested = true;
             if (window.__statusScanAbortController) {
                 try { window.__statusScanAbortController.abort(); } catch (_) {}
@@ -3610,10 +3593,40 @@ if (ci) {
             setStatusScanButtons({ running: false, undoAvailable: Array.isArray(window.__statusScanUndoSnapshot) });
         }
 
+        async function cancelBackgroundStatusScan() {
+            const hasUndo = Array.isArray(window.__statusScanUndoSnapshot);
+            if (window.__statusScanRunActive) {
+                window.__statusScanPaused = false;
+                window.__statusScanStopRequested = true;
+                if (window.__statusScanAbortController) {
+                    try { window.__statusScanAbortController.abort(); } catch (_) {}
+                }
+                if (window.activeAiRequestController) {
+                    try { window.activeAiRequestController.abort(); } catch (_) {}
+                }
+                setStatusScanFooter('✕ מבטל ומחזיר את כל שינויי הסריקה...');
+            }
+
+            if (hasUndo) {
+                await undoStatusScanChanges(true);
+            }
+
+            window.__statusScanPaused = false;
+            window.__statusScanStopRequested = true;
+            window.__statusScanRunActive = false;
+            const panel = document.getElementById('statusScanPanel');
+            if (panel) panel.classList.remove('open');
+            const body = document.getElementById('statusScanBody');
+            if (body) body.innerHTML = '';
+            setStatusScanButtons({ running: false, undoAvailable: false });
+            setStatusScanFooter('נבדק רק הסטטוס');
+        }
+
         async function runBackgroundStatusScan() {
             const panel = document.getElementById('statusScanPanel');
             window.__statusScanRunActive = true;
             window.__statusScanStopRequested = false;
+            window.__statusScanPaused = false;
             window.__statusScanAbortController = new AbortController();
             setStatusScanButtons({ running: true, undoAvailable: false });
 
@@ -3716,6 +3729,8 @@ if (ci) {
             const worker = async () => {
                 while (true) {
                     if (window.__statusScanStopRequested) return;
+                    await waitWhileStatusScanPaused();
+                    if (window.__statusScanStopRequested) return;
 
                     const index = nextIndex++;
                     if (index >= linksToScan.length) return;
@@ -3725,6 +3740,11 @@ if (ci) {
                     setStatusScanFooter(`🔎 בודק: ${item.content}`);
 
                     try {
+                        await waitWhileStatusScanPaused();
+                        if (window.__statusScanStopRequested) {
+                            updateStatusScanRow(item.id, 'stopped');
+                            return;
+                        }
                         // null מאפשר ל-scanSingleItem לבחור את הספק המועדף ולהמשיך אוטומטית
                         // לכל המפתחות והספקים הזמינים במקרה של כשל.
                         await scanSingleItem(item.id, null, false, true);
@@ -3738,7 +3758,7 @@ if (ci) {
                             if (status === 'active') updateStatusScanRow(item.id, 'active');
                             else if (status === 'parked') updateStatusScanRow(item.id, 'parked');
                             else if (status === 'dead') updateStatusScanRow(item.id, 'dead');
-                            else updateStatusScanRow(item.id, 'error', '⚠️ לא נקבע');
+                            else updateStatusScanRow(item.id, 'uncertain', '⚠️ לא ודאי');
                         }
                     } catch (error) {
                         if (window.__statusScanStopRequested || error?.name === 'AbortError') {
@@ -3802,12 +3822,17 @@ if (ci) {
                 if (panel) panel.classList.add('open');
                 setStatusScanFooter('❌ הסריקה נכשלה — ניתן לבצע UNDO עבור שינויים שבוצעו');
                 setStatusScanButtons({ running: false, undoAvailable: Array.isArray(window.__statusScanUndoSnapshot) });
-                showToast('❌ סריקת הסטטוס נכשלה: ' + (error?.message || 'שגיאה לא ידועה'), null, 5000, null, true);
+
             });
         }
 
+        document.getElementById('statusScanPauseBtn')?.addEventListener('click', () => {
+            if (!window.__statusScanRunActive) return;
+            setStatusScanPause(!window.__statusScanPaused);
+        });
         document.getElementById('statusScanStopBtn')?.addEventListener('click', stopBackgroundStatusScan);
-        document.getElementById('statusScanUndoBtn')?.addEventListener('click', undoStatusScanChanges);
+        document.getElementById('statusScanUndoBtn')?.addEventListener('click', () => undoStatusScanChanges(false));
+        document.getElementById('statusScanCancelBtn')?.addEventListener('click', cancelBackgroundStatusScan);
 
     </script>
 </body>
