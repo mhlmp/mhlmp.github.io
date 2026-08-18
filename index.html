@@ -2370,7 +2370,7 @@ ${promptType}
 Data to Analyze:
 ${contentToAnalyze}`;
                 
-               let jsonString   = '';
+             let jsonString   = '';
                 let success      = false;
                 let lastError    = 'לא ניתן להגיע לספק ה-AI הנבחר';
                 let usedModelName = '';
@@ -2381,8 +2381,8 @@ ${contentToAnalyze}`;
                     const activeKey = rawKey.trim(); 
                     let shouldTryNextKey = false;
 
-                    if (statusOnly) setStatusScanFooter(`🔑 מנסה Gemini — מפתח ${keyIndex}`);
                     if (currentProvider === 'gemini') {
+                        if (statusOnly) setStatusScanFooter(`🔑 מנסה Gemini — מפתח ${keyIndex}`);
                         let models = window.dynamicGeminiModels;
                         if (!models) {
                             try {
@@ -2394,7 +2394,10 @@ ${contentToAnalyze}`;
                                     models.sort((a, b) => (a.includes('flash') ? -1 : 1));
                                     window.dynamicGeminiModels = models;
                                 }
-                            } catch { models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b']; }
+                            } catch (err) { 
+                                if (err.name === 'AbortError' || err.message.includes('aborted') || err.message.includes('The operation was aborted')) throw err;
+                                models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b']; 
+                            }
                         }
                         if (!models?.length) models = ['gemini-1.5-flash'];
 
@@ -2420,6 +2423,7 @@ ${contentToAnalyze}`;
                                 window.dynamicGeminiModels   = [model];
                                 break;
                             } catch (err) {
+                                if (err.name === 'AbortError' || err.message.includes('aborted') || err.message.includes('The operation was aborted')) throw err;
                                 lastError = err.message;
                                 if (statusOnly || isRecoverableError(err.message)) { shouldTryNextKey = true; window.dynamicGeminiModels = null; }
                                 console.warn(`Gemini [${model}]:`, err.message);
@@ -2428,7 +2432,7 @@ ${contentToAnalyze}`;
                         if (!success && shouldTryNextKey) {
                             window.dynamicGeminiModels = null;
                             const next = fallbackChain[i+1] ? `מנסה מפתח גיבוי...` : 'לא נותרו מפתחות פעילים.';
-                            showToast(`⚠️ תקלה ב-Gemini (מפתח ${keyIndex}): ${lastError}. ${next}`, null, 5000, null, true);
+                            if (!statusOnly) showToast(`⚠️ תקלה ב-Gemini (מפתח ${keyIndex}): ${lastError}. ${next}`, null, 4000, null, true);
                             continue;
                         }
                     }
@@ -2446,7 +2450,10 @@ ${contentToAnalyze}`;
                                     models = data.data.map(m => m.id).filter(id => id.includes('llama-3') || id.includes('mixtral')).sort((a, b) => (a.includes('70b') ? -1 : 1)); 
                                     window.dynamicGroqModels = models; 
                                 }
-                            } catch { models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']; }
+                            } catch (err) { 
+                                if (err.name === 'AbortError' || err.message.includes('aborted') || err.message.includes('The operation was aborted')) throw err;
+                                models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']; 
+                            }
                         }
                         if (!models?.length) models = ['llama-3.3-70b-versatile'];
 
@@ -2471,6 +2478,7 @@ ${contentToAnalyze}`;
                                 window.dynamicGroqModels     = [model];
                                 break;
                             } catch (err) {
+                                if (err.name === 'AbortError' || err.message.includes('aborted') || err.message.includes('The operation was aborted')) throw err;
                                 lastError = err.message;
                                 if (statusOnly || isRecoverableError(err.message)) { shouldTryNextKey = true; window.dynamicGroqModels = null; }
                                 console.warn(`Groq [${model}]:`, err.message);
@@ -2479,7 +2487,7 @@ ${contentToAnalyze}`;
                         if (!success && shouldTryNextKey) {
                             window.dynamicGroqModels = null;
                             const next = fallbackChain[i+1] ? `מנסה מפתח גיבוי...` : 'לא נותרו מפתחות פעילים.';
-                            showToast(`⚠️ תקלה ב-Groq (מפתח ${keyIndex}): ${lastError}. ${next}`, null, 5000, null, true);
+                            if (!statusOnly) showToast(`⚠️ תקלה ב-Groq (מפתח ${keyIndex}): ${lastError}. ${next}`, null, 4000, null, true);
                             continue;
                         }
                     }
@@ -2498,7 +2506,10 @@ ${contentToAnalyze}`;
                                         .slice(0, 5);
                                     window.dynamicOpenRouterModels = models;
                                 }
-                            } catch { models = ['google/gemini-2.0-flash-lite-preview-02-05:free', 'meta-llama/llama-3.3-70b-instruct:free']; }
+                            } catch (err) { 
+                                if (err.name === 'AbortError' || err.message.includes('aborted') || err.message.includes('The operation was aborted')) throw err;
+                                models = ['google/gemini-2.0-flash-lite-preview-02-05:free', 'meta-llama/llama-3.3-70b-instruct:free']; 
+                            }
                         }
                         if (!models?.length) models = ['meta-llama/llama-3.3-70b-instruct:free'];
 
@@ -2523,6 +2534,7 @@ ${contentToAnalyze}`;
                                 window.dynamicOpenRouterModels = [model];
                                 break;
                             } catch (err) {
+                                if (err.name === 'AbortError' || err.message.includes('aborted') || err.message.includes('The operation was aborted')) throw err;
                                 lastError = err.message;
                                 if (statusOnly || isRecoverableError(err.message)) shouldTryNextKey = true;
                                 console.warn(`OpenRouter [${model}]:`, err.message);
@@ -2531,7 +2543,7 @@ ${contentToAnalyze}`;
                         if (!success && shouldTryNextKey) {
                             window.dynamicOpenRouterModels = null;
                             const next = fallbackChain[i+1] ? `מנסה מפתח גיבוי...` : 'לא נותרו מפתחות פעילים.';
-                            showToast(`⚠️ תקלה ב-OpenRouter (מפתח ${keyIndex}): ${lastError}. ${next}`, null, 5000, null, true);
+                            if (!statusOnly) showToast(`⚠️ תקלה ב-OpenRouter (מפתח ${keyIndex}): ${lastError}. ${next}`, null, 4000, null, true);
                             continue;
                         }
                     }
@@ -2553,9 +2565,6 @@ ${contentToAnalyze}`;
                         ? parsed.status
                         : 'uncertain';
 
-                    // Final safety gate: the AI is an auditor only. It can NEVER create
-                    // DEAD/PARKED, and it can NEVER downgrade strong ACTIVE evidence.
-                    // Only the corroborated deterministic evidence engine is authoritative.
                     if (deterministic === 'active') {
                         finalStatus = 'active';
                     } else if (deterministic === 'dead') {
@@ -2566,14 +2575,8 @@ ${contentToAnalyze}`;
                         finalStatus = 'uncertain';
                     }
 
-                    // AI disagreement is recorded only in the scan UI/log. It never changes data.
                     if (aiStatus !== finalStatus) {
-                        console.info('[AI Status Scan] AI/evidence disagreement; deterministic evidence wins.', {
-                            url: cleanContent,
-                            aiStatus,
-                            deterministic,
-                            finalStatus
-                        });
+                        console.info('[AI Status Scan] AI/evidence disagreement; deterministic evidence wins.', { url: cleanContent, aiStatus, deterministic, finalStatus });
                     }
                 }
 
@@ -2587,7 +2590,6 @@ ${contentToAnalyze}`;
                             ci.statusCheckedAt = statusStamp;
                             ci.updatedAt = statusStamp;
                         } else {
-                            // Inconclusive: DO NOT change status and DO NOT refresh the 14-day timer.
                             console.warn(`[AI Status Scan] Inconclusive status for ${ci.content}; keeping previous status.`);
                         }
                     } else {
@@ -2597,12 +2599,29 @@ ${contentToAnalyze}`;
                         ci.aiModel    = usedModelName;
                         ci.updatedAt  = nowIso();
                     }
+                    ci.isScanning = false;
+                    await saveItemToCloud(ci);
+                    renderList();
                 }
 
             } catch (e) { 
-                console.error('Trash error:', e); 
-                updateSyncStatus('error', 'שגיאת רשת');
-                showToast('⚠️ שגיאה בהעברה לסל המחזור', null, 3000, null, true);
+                const isAbort = e.name === 'AbortError' || e.message.includes('aborted') || e.message.includes('The operation was aborted');
+                
+                const ci = state.items.find(i => i.id === id);
+                if (ci) { 
+                    ci.isScanning = false; 
+                    renderList(); 
+                }
+
+                if (isAbort) {
+                    console.log(`[AI Scan] הסריקה בוטלה/הופסקה מיוזמת המשתמש.`);
+                    return; // עצירה שקטה לחלוטין ללא הודעות קופצות
+                }
+
+                console.error('AI Scan Error:', e); 
+                if (!statusOnly) {
+                    showToast(`⚠️ שגיאה בסריקת הקישור: ${e.message}`, null, 4000, null, true);
+                }
             }
         }
         
