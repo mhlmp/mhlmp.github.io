@@ -373,7 +373,41 @@
         .edit-modal-btns { display: flex; gap: 10px; margin-top: 8px; }
         .edit-modal-btns button { flex: 1; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; }
         .btn-save { background: var(--accent-green); color: white; border: none; }
-        .btn-cancel { background: rgba(127,127,127,0.2); color: var(--text-primary); border: 1px solid var(--glass-border); }
+       .btn-cancel { background: rgba(127,127,127,0.2); color: var(--text-primary); border: 1px solid var(--glass-border); }
+
+        /* AI Task Widget */
+        #aiTaskWidget {
+            position: fixed; bottom: 20px; left: 20px; z-index: 9700;
+            background: rgba(20, 30, 50, 0.95); color: white;
+            border-radius: var(--radius); border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: none; flex-direction: column; overflow: hidden;
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #aiTaskWidget.minimized {
+            width: 50px; height: 50px; border-radius: 25px; cursor: pointer;
+            justify-content: center; align-items: center; padding: 0;
+        }
+        #aiTaskWidget.minimized .widget-expanded-content { display: none; }
+        #aiTaskWidget.minimized::before { content: '🤖'; font-size: 24px; display: block; }
+        .widget-badge {
+            position: absolute; top: -4px; right: -4px; background: var(--accent-red);
+            color: white; font-size: 11px; font-weight: bold; padding: 2px 6px;
+            border-radius: 10px; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        #aiTaskWidget.minimized .widget-badge { display: block; }
+        .widget-expanded-content { width: 290px; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .widget-header { display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 14px; }
+        .widget-text { font-size: 12px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: ltr; text-align: right; margin-bottom: 2px; }
+        .widget-progress-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.15); border-radius: 3px; overflow: hidden; margin-bottom: 5px; }
+        .widget-progress-fill { height: 100%; background: var(--accent-green); width: 0%; transition: width 0.3s; }
+        .widget-controls { display: flex; gap: 6px; }
+        .widget-btn { flex: 1; padding: 7px 0; border: none; border-radius: 6px; cursor: pointer; font-size: 11.5px; font-weight: bold; color: white; background: rgba(255,255,255,0.1); transition: background 0.2s; }
+        .widget-btn:hover:not(:disabled) { background: rgba(255,255,255,0.2); }
+        .widget-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .widget-btn.cancel { color: #fca5a5; background: rgba(239, 68, 68, 0.2); }
+        .widget-btn.cancel:hover { background: rgba(239, 68, 68, 0.4); }
     </style>
 </head>
 <body class="dark-mode">
@@ -633,6 +667,25 @@
         </div>
     </div>
 
+   <div id="aiTaskWidget">
+        <div class="widget-badge" id="aiTaskBadge">0/0</div>
+        <div class="widget-expanded-content">
+            <div class="widget-header">
+                <span id="aiTaskTitle">🤖 סורק... [0/0]</span>
+                <button id="aiTaskMinimizeBtn" style="background:none;border:none;color:white;cursor:pointer;font-size:16px;padding:0;">➖</button>
+            </div>
+            <div class="widget-text" id="aiTaskCurrentItem">ממתין לסריקה...</div>
+            <div class="widget-progress-bg">
+                <div class="widget-progress-fill" id="aiTaskProgress"></div>
+            </div>
+            <div class="widget-controls">
+                <button class="widget-btn" id="aiTaskPauseBtn">השהייה</button>
+                <button class="widget-btn" id="aiTaskUndoBtn" disabled>UNDO</button>
+                <button class="widget-btn cancel" id="aiTaskCancelBtn">ביטול</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toast-container"></div>
     <button id="scrollTopBtn" title="גלול למעלה">☝️</button>
 
@@ -828,7 +881,15 @@
                     }
                 });
             });
-            window.addEventListener('click', () => closeAllMenus());
+           window.addEventListener('click', (e) => {
+                closeAllMenus();
+                if (e.target.classList.contains('edit-modal-wrap')) {
+                    e.target.style.display = 'none';
+                }
+                if (e.target.id === 'trashModal') {
+                    closeTrashModal();
+                }
+            });
             window.addEventListener('resize', closeAllMenus);
 
           let searchTimeout;
@@ -1931,53 +1992,179 @@ ${contentToAnalyze}`;
             }
         };
 
+       let aiQueueState = {
+            isPaused: false,
+            abort: false,
+            snapshot: null,
+            items: []
+        };
+
+        function getItemsForSmartScan(items) {
+            const now = Date.now();
+            const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+            return items.filter(i => {
+                const isError = i.aiSummary && (i.aiSummary.includes('שגיאה') || i.aiSummary.includes('Error') || i.aiSummary.includes('Timeout') || i.aiSummary.includes('לא התקבל'));
+                if (isError) return true;
+                if (!i.aiSummary) return true;
+                if (i.updatedAt) {
+                    const updatedTime = new Date(i.updatedAt).getTime();
+                    if (now - updatedTime > THIRTY_DAYS_MS) return true;
+                }
+                return false;
+            });
+        }
+
+        async function startAiQueueProcess(itemsToScan, qsOptions = null) {
+            aiQueueState.items = itemsToScan;
+            aiQueueState.isPaused = false;
+            aiQueueState.abort = false;
+            aiQueueState.snapshot = null;
+
+            const widget = document.getElementById('aiTaskWidget');
+            const badge = document.getElementById('aiTaskBadge');
+            const title = document.getElementById('aiTaskTitle');
+            const currentItemEl = document.getElementById('aiTaskCurrentItem');
+            const progress = document.getElementById('aiTaskProgress');
+            const pauseBtn = document.getElementById('aiTaskPauseBtn');
+            const undoBtn = document.getElementById('aiTaskUndoBtn');
+
+            widget.style.display = 'flex';
+            widget.classList.remove('minimized');
+            pauseBtn.textContent = 'השהייה';
+            pauseBtn.disabled = false;
+            undoBtn.disabled = true;
+            document.getElementById('cancelBulkAiBtn').style.display = 'block';
+
+            for (let i = 0; i < aiQueueState.items.length; i++) {
+                if (aiQueueState.abort) break;
+
+                while (aiQueueState.isPaused && !aiQueueState.abort) {
+                    await new Promise(r => setTimeout(r, 500));
+                }
+                if (aiQueueState.abort) break;
+
+                const itemToScan = aiQueueState.items[i];
+                const actualItem = state.items.find(it => it.id === (itemToScan.id || itemToScan));
+                if (!actualItem) continue;
+
+                const currentCount = i + 1;
+                const totalCount = aiQueueState.items.length;
+                const pct = Math.round((currentCount / totalCount) * 100);
+
+                title.textContent = `🤖 סורק... [${currentCount}/${totalCount}]`;
+                badge.textContent = `${currentCount}/${totalCount}`;
+                progress.style.width = `${pct}%`;
+                currentItemEl.textContent = (actualItem.content || '').substring(0, 45) + '...';
+                progress.style.background = 'var(--accent-green)';
+
+                aiQueueState.snapshot = JSON.parse(JSON.stringify(actualItem));
+                undoBtn.disabled = false;
+
+                const provider = qsOptions ? qsOptions.provider : null;
+                const urlOnly = qsOptions ? qsOptions.urlOnly : false;
+                await scanSingleItem(actualItem.id, provider, urlOnly);
+
+                if (aiQueueState.abort) break;
+
+                if (i < aiQueueState.items.length - 1) {
+                    const result = state.items.find(it => it.id === actualItem.id);
+                    let delay = 300;
+                    if (result?.aiSummary && isRecoverableError(result.aiSummary)) {
+                        delay = 20000;
+                        window.lastWorkingAiProvider = null;
+                        currentItemEl.textContent = '⚠️ מכסות מלאות — ממתין 20 שניות...';
+                        progress.style.background = 'var(--accent-gold)';
+                    }
+                    
+                    let waited = 0;
+                    while (waited < delay && !aiQueueState.abort) {
+                        if (!aiQueueState.isPaused) {
+                            waited += 100;
+                        }
+                        await new Promise(r => setTimeout(r, 100));
+                    }
+                }
+            }
+
+            document.getElementById('cancelBulkAiBtn').style.display = 'none';
+            if (!aiQueueState.abort) {
+                title.textContent = '✅ סריקה הושלמה';
+                currentItemEl.textContent = 'כל הפריטים נסרקו בהצלחה.';
+                pauseBtn.disabled = true;
+                progress.style.width = '100%';
+                showToast('✅ סריקת ה-AI הסתיימה בהצלחה!', null, 4000);
+                setTimeout(() => {
+                    if (!aiQueueState.abort) document.getElementById('aiTaskWidget').style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        document.getElementById('aiTaskWidget')?.addEventListener('click', (e) => {
+            if (e.target.closest('.widget-controls') || e.target.id === 'aiTaskMinimizeBtn') return;
+            const widget = document.getElementById('aiTaskWidget');
+            if (widget.classList.contains('minimized')) {
+                widget.classList.remove('minimized');
+            }
+        });
+
+        document.getElementById('aiTaskMinimizeBtn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById('aiTaskWidget').classList.add('minimized');
+        });
+
+        document.getElementById('aiTaskPauseBtn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            aiQueueState.isPaused = !aiQueueState.isPaused;
+            e.target.textContent = aiQueueState.isPaused ? 'המשך סריקה' : 'השהייה';
+            if (aiQueueState.isPaused) {
+                document.getElementById('aiTaskCurrentItem').textContent = '⏸️ מושהה...';
+            }
+        });
+
+        document.getElementById('aiTaskUndoBtn')?.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (aiQueueState.snapshot) {
+                const currentItem = state.items.find(i => i.id === aiQueueState.snapshot.id);
+                if (currentItem) {
+                    Object.assign(currentItem, aiQueueState.snapshot);
+                    currentItem.updatedAt = nowIso();
+                    renderList();
+                    await saveItemToCloud(currentItem);
+                    showToast('↩️ הניתוח האחרון בוטל והוחזר למצבו הקודם.');
+                    e.target.disabled = true;
+                    aiQueueState.snapshot = null;
+                }
+            }
+        });
+
+        const cancelWidgetAndQueue = () => {
+            aiQueueState.abort = true;
+            document.getElementById('aiTaskWidget').style.display = 'none';
+            document.getElementById('cancelBulkAiBtn').style.display = 'none';
+            if (window.activeAiRequestController) window.activeAiRequestController.abort();
+            showToast('🛑 <b>הסריקה הופסקה.</b>', null, 4000);
+        };
+
+        document.getElementById('aiTaskCancelBtn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            cancelWidgetAndQueue();
+        });
+        
+        document.getElementById('cancelBulkAiBtn')?.addEventListener('click', cancelWidgetAndQueue);
+
         document.getElementById('bulkAiScanBtn')?.addEventListener('click', async () => {
             if (!navigator.onLine) return showToast('❌ לא ניתן לבצע סריקת AI מרובה ללא רשת.', null, 4000, null, true);
             const settings = getAiSettings();
             if (!settings.keys.gemini.length && !settings.keys.groq.length && !settings.keys.openrouter.length)
                 return alert('אנא הזן לפחות מפתח API אחד בהגדרות ה-AI.');
-            const itemsToScan = state.items.filter(i => !i.aiSummary || i.aiSummary.includes('שגיאה') || i.aiSummary.includes('Error') || i.aiSummary.includes('Timeout') || i.aiSummary.includes('לא התקבל'));
-            if (itemsToScan.length === 0) return alert('כל הפריטים כבר מנותחים!');
-            if (!confirm(`נמצאו ${itemsToScan.length} פריטים לסריקה. האם להתחיל?`)) return;
+            
+            const itemsToScan = getItemsForSmartScan(state.items);
+            if (itemsToScan.length === 0) return alert('הכל מעודכן! אין פריטים שדורשים סריקה חוזרת ב-30 הימים האחרונים.');
+            
+            if (!confirm('האלגוריתם החכם בחר ' + itemsToScan.length + ' פריטים לסריקה (מסנן פריטים תקינים שנסרקו ב-30 הימים האחרונים). האם להתחיל?')) return;
 
             closeAllMenus();
-            abortAiScan = false;
-            document.getElementById('cancelBulkAiBtn').style.display = 'block';
-            const bulkToastId = 'ai-bulk-scan-toast';
-
-            for (let i = 0; i < itemsToScan.length; i++) {
-                if (abortAiScan) break;
-                const pct = Math.round((i / itemsToScan.length) * 100);
-                showToast(`<div style="width:100%;">
-                    <div>🤖 <b>סורק...</b> [${i + 1}/${itemsToScan.length}]</div>
-                    <div style="font-size:11px;opacity:0.75;margin-top:3px;direction:ltr;">${(itemsToScan[i].content||'').substring(0, 35)}...</div>
-                    <div style="width:100%;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin-top:8px;overflow:hidden;">
-                        <div style="width:${pct}%;height:100%;background:var(--accent-green);transition:width 0.3s;"></div>
-                    </div></div>`, null, 0, bulkToastId, false);
-
-                await scanSingleItem(itemsToScan[i].id);
-                if (abortAiScan) break;
-
-                if (i < itemsToScan.length - 1) {
-                    const result = state.items.find(it => it.id === itemsToScan[i].id);
-                    let delay = 300;
-                   if (result?.aiSummary && isRecoverableError(result.aiSummary)) {
-                        delay = 20000;
-                        window.lastWorkingAiProvider = null;
-                        showToast(`<div style="width:100%;"><div>⚠️ <b>מכסות מלאות — ממתין 20 שניות...</b></div>
-                            <div style="width:100%;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin-top:8px;overflow:hidden;">
-                                <div style="width:${pct}%;height:100%;background:var(--accent-gold);"></div>
-                            </div></div>`, null, 0, bulkToastId, true);
-                    }
-                    let waited = 0;
-                    while (waited < delay && !abortAiScan) { await new Promise(r => setTimeout(r, 100)); waited += 100; }
-                }
-            }
-
-            document.getElementById('cancelBulkAiBtn').style.display = 'none';
-            const finalMsg = abortAiScan ? '🛑 <b>הסריקה הופסקה.</b>' : '✅ <b>סריקת ה-AI הסתיימה בהצלחה!</b>';
-            showToast(finalMsg, null, 4000, bulkToastId, false);
-            setTimeout(() => removeToast(bulkToastId), 4000);
+            startAiQueueProcess(itemsToScan);
         });
 
         document.getElementById('cancelBulkAiBtn')?.addEventListener('click', () => {
@@ -2775,56 +2962,20 @@ ${contentToAnalyze}`;
             else { updateBulkActionBar(); renderList(); }
         });
 
-        document.getElementById('bulkAiBtn')?.addEventListener('click', async () => {
+      document.getElementById('bulkAiBtn')?.addEventListener('click', async () => {
             if (!navigator.onLine) return showToast('❌ לא ניתן לבצע סריקת AI מרובה ללא רשת.', null, 4000, null, true);
             const settings = getAiSettings();
             if (!settings.keys.gemini.length && !settings.keys.groq.length && !settings.keys.openrouter.length)
                 return alert('אנא הזן לפחות מפתח API אחד בהגדרות ה-AI.');
-            if (!confirm(`האם לסרוק ב-AI את ${state.selectedIds.size} הפריטים שבחרת?`)) return;
+            
+            if (!confirm('האם לסרוק ב-AI את ' + state.selectedIds.size + ' הפריטים שבחרת (הפעולה תסרוק הכל ותתעלם מסינון 30 הימים)?')) return;
 
-            const selectedArr = Array.from(state.selectedIds);
+            const selectedArr = Array.from(state.selectedIds).map(id => state.items.find(i => i.id === id)).filter(Boolean);
             exitSelectionMode();
             closeAllMenus();
-            abortAiScan = false;
-            document.getElementById('cancelBulkAiBtn').style.display = 'block';
-            const bulkToastId = 'ai-bulk-scan-toast';
-
-            for (let i = 0; i < selectedArr.length; i++) {
-                if (abortAiScan) break;
-                const itemId  = selectedArr[i];
-                const itemObj = state.items.find(it => it.id === itemId);
-                if (!itemObj) continue;
-                const pct = Math.round((i / selectedArr.length) * 100);
-                showToast(`<div style="width:100%;">
-                    <div>🤖 <b>סורק נבחרים...</b> [${i + 1}/${selectedArr.length}]</div>
-                    <div style="font-size:11px;opacity:0.75;margin-top:3px;direction:ltr;">${escapeHtml(itemObj.content).substring(0, 35)}...</div>
-                    <div style="width:100%;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin-top:8px;overflow:hidden;">
-                        <div style="width:${pct}%;height:100%;background:var(--accent-green);transition:width 0.3s;"></div>
-                    </div></div>`, null, 0, bulkToastId, false);
-
-                const qs = JSON.parse(localStorage.getItem('aiQuickSettings') || '{}');
-                await scanSingleItem(itemId, qs.provider || null, qs.urlOnly || false);
-                if (abortAiScan) break;
-
-                if (i < selectedArr.length - 1) {
-                    const result = state.items.find(it => it.id === itemId);
-                    let delay = 300;
-                    if (result?.aiSummary && isRecoverableError(result.aiSummary)) {
-                        delay = 20000; window.lastWorkingAiProvider = null;
-                        showToast(`<div style="width:100%;"><div>⚠️ <b>מכסות מלאות — ממתין 20 שניות...</b></div>
-                            <div style="width:100%;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin-top:8px;overflow:hidden;">
-                                <div style="width:${pct}%;height:100%;background:var(--accent-gold);"></div>
-                            </div></div>`, null, 0, bulkToastId, true);
-                    }
-                    let waited = 0;
-                    while (waited < delay && !abortAiScan) { await new Promise(r => setTimeout(r, 100)); waited += 100; }
-                }
-            }
-
-            document.getElementById('cancelBulkAiBtn').style.display = 'none';
-            const finalMsg = abortAiScan ? '🛑 <b>הסריקה הופסקה.</b>' : '✅ <b>סריקת ה-AI הסתיימה בהצלחה!</b>';
-            showToast(finalMsg, null, 4000, bulkToastId, false);
-            setTimeout(() => removeToast(bulkToastId), 4000);
+            
+            const qs = JSON.parse(localStorage.getItem('aiQuickSettings') || '{}');
+            startAiQueueProcess(selectedArr, qs);
         });
 
         document.getElementById('bulkDeleteBtn')?.addEventListener('click', async () => {
