@@ -375,13 +375,13 @@
         .btn-save { background: var(--accent-green); color: white; border: none; }
        .btn-cancel { background: rgba(127,127,127,0.2); color: var(--text-primary); border: 1px solid var(--glass-border); }
 
-      /* AI Task Widget */
+    /* AI Task Widget */
         #aiTaskWidget {
             position: fixed; bottom: 20px; left: 20px; z-index: 9700;
             background: rgba(20, 30, 50, 0.95); color: white;
             border-radius: var(--radius); border: 1px solid rgba(255,255,255,0.1);
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            display: flex; flex-direction: column; overflow: hidden;
+            display: flex; flex-direction: column; overflow: visible;
             backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
@@ -390,22 +390,30 @@
             justify-content: center; align-items: center; padding: 0;
             background: linear-gradient(135deg, var(--primary-color), #8b5cf6);
             box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+            overflow: visible;
         }
         #aiTaskWidget.minimized:hover { transform: scale(1.05); }
         #aiTaskWidget.minimized .widget-expanded-content { display: none; }
         #aiTaskWidget.minimized::before { content: '🤖'; font-size: 24px; display: block; }
         .widget-badge {
-            position: absolute; top: -4px; right: -4px; background: var(--accent-red);
-            color: white; font-size: 11px; font-weight: bold; padding: 2px 6px;
-            border-radius: 10px; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            position: absolute; top: -6px; left: -6px; 
+            background: var(--accent-red); color: white; 
+            font-size: 11px; font-weight: bold; 
+            min-width: 22px; height: 22px; padding: 0 6px;
+            border-radius: 11px; display: none; 
+            align-items: center; justify-content: center;
+            border: 2px solid #0f172a;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+            z-index: 10;
         }
-        #aiTaskWidget.minimized .widget-badge { display: block; }
-        .widget-expanded-content { width: 290px; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        #aiTaskWidget.minimized .widget-badge { display: flex; }
+        .widget-expanded-content { width: 310px; padding: 15px; display: flex; flex-direction: column; gap: 8px; }
         .widget-header { display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 14px; }
-        .widget-text { font-size: 12px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: ltr; text-align: right; margin-bottom: 2px; }
-        .widget-progress-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.15); border-radius: 3px; overflow: hidden; margin-bottom: 5px; }
+        .widget-text { font-size: 12px; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: ltr; text-align: right; background: rgba(0,0,0,0.2); padding: 6px 8px; border-radius: 6px; }
+        .widget-details-box { font-size: 11px; color: var(--text-secondary); background: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px; display: flex; flex-direction: column; gap: 3px; border: 1px solid rgba(255,255,255,0.05); }
+        .widget-progress-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.15); border-radius: 3px; overflow: hidden; margin-top: 2px; }
         .widget-progress-fill { height: 100%; background: var(--accent-green); width: 0%; transition: width 0.3s; }
-        .widget-controls { display: flex; gap: 6px; }
+        .widget-controls { display: flex; gap: 6px; margin-top: 4px; }
         .widget-btn { flex: 1; padding: 7px 0; border: none; border-radius: 6px; cursor: pointer; font-size: 11.5px; font-weight: bold; color: white; background: rgba(255,255,255,0.1); transition: background 0.2s; }
         .widget-btn:hover:not(:disabled) { background: rgba(255,255,255,0.2); }
         .widget-btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -670,14 +678,18 @@
         </div>
     </div>
 
-  <div id="aiTaskWidget" class="minimized">
-        <div class="widget-badge" id="aiTaskBadge">0/0</div>
+ <div id="aiTaskWidget" class="minimized">
+        <div class="widget-badge" id="aiTaskBadge">0</div>
         <div class="widget-expanded-content">
             <div class="widget-header">
                 <span id="aiTaskTitle">🤖 סורק... [0/0]</span>
                 <button id="aiTaskMinimizeBtn" style="background:none;border:none;color:white;cursor:pointer;font-size:16px;padding:0;">➖</button>
             </div>
             <div class="widget-text" id="aiTaskCurrentItem">ממתין לסריקה...</div>
+            <div class="widget-details-box">
+                <div><b>ספק פעיל:</b> <span id="widgetProviderInfo">לא מוגדר</span></div>
+                <div><b>מצב קישור:</b> <span id="widgetLinkTypeInfo">-</span></div>
+            </div>
             <div class="widget-progress-bg">
                 <div class="widget-progress-fill" id="aiTaskProgress"></div>
             </div>
@@ -1995,7 +2007,7 @@ ${contentToAnalyze}`;
             }
         };
 
-       let aiQueueState = {
+      let aiQueueState = {
             isPaused: false,
             abort: false,
             snapshot: null,
@@ -2018,7 +2030,16 @@ ${contentToAnalyze}`;
         }
 
         async function startAiQueueProcess(itemsToScan, qsOptions = null) {
-            aiQueueState.items = itemsToScan;
+            if (!itemsToScan || itemsToScan.length === 0) return;
+
+            // המרה לווידוא שמועברים אובייקטים מלאים ולא רק מזהים
+            aiQueueState.items = itemsToScan.map(itemOrId => {
+                if (typeof itemOrId === 'object' && itemOrId !== null) return itemOrId;
+                return state.items.find(i => i.id === itemOrId);
+            }).filter(Boolean);
+
+            if (aiQueueState.items.length === 0) return;
+
             aiQueueState.isPaused = false;
             aiQueueState.abort = false;
             aiQueueState.snapshot = null;
@@ -2027,6 +2048,8 @@ ${contentToAnalyze}`;
             const badge = document.getElementById('aiTaskBadge');
             const title = document.getElementById('aiTaskTitle');
             const currentItemEl = document.getElementById('aiTaskCurrentItem');
+            const providerInfoEl = document.getElementById('widgetProviderInfo');
+            const linkTypeInfoEl = document.getElementById('widgetLinkTypeInfo');
             const progress = document.getElementById('aiTaskProgress');
             const pauseBtn = document.getElementById('aiTaskPauseBtn');
             const undoBtn = document.getElementById('aiTaskUndoBtn');
@@ -2038,16 +2061,21 @@ ${contentToAnalyze}`;
             undoBtn.disabled = true;
             document.getElementById('cancelBulkAiBtn').style.display = 'block';
 
+            const settings = getAiSettings();
+            const activeProvider = qsOptions?.provider || settings.provider || 'gemini';
+            providerInfoEl.textContent = activeProvider.toUpperCase();
+
             for (let i = 0; i < aiQueueState.items.length; i++) {
                 if (aiQueueState.abort) break;
 
                 while (aiQueueState.isPaused && !aiQueueState.abort) {
-                    await new Promise(r => setTimeout(r, 500));
+                    currentItemEl.textContent = '⏸️ מושהה ע"י המשתמש...';
+                    await new Promise(r => setTimeout(r, 400));
                 }
                 if (aiQueueState.abort) break;
 
-                const itemToScan = aiQueueState.items[i];
-                const actualItem = state.items.find(it => it.id === (itemToScan.id || itemToScan));
+                const targetItem = aiQueueState.items[i];
+                const actualItem = state.items.find(it => it.id === targetItem.id);
                 if (!actualItem) continue;
 
                 const currentCount = i + 1;
@@ -2055,16 +2083,18 @@ ${contentToAnalyze}`;
                 const pct = Math.round((currentCount / totalCount) * 100);
 
                 title.textContent = `🤖 סורק... [${currentCount}/${totalCount}]`;
-                badge.textContent = `${currentCount}/${totalCount}`;
+                badge.textContent = currentCount;
                 progress.style.width = `${pct}%`;
-                currentItemEl.textContent = (actualItem.content || '').substring(0, 45) + '...';
+                currentItemEl.textContent = actualItem.content || '';
+                linkTypeInfoEl.textContent = actualItem.type === 'link' ? '🌐 אתר/קישור' : '📄 טקסט/פקודה';
                 progress.style.background = 'var(--accent-green)';
 
                 aiQueueState.snapshot = JSON.parse(JSON.stringify(actualItem));
                 undoBtn.disabled = false;
 
-                const provider = qsOptions ? qsOptions.provider : null;
-                const urlOnly = qsOptions ? qsOptions.urlOnly : false;
+                const provider = qsOptions?.provider || null;
+                const urlOnly = qsOptions?.urlOnly || false;
+                
                 await scanSingleItem(actualItem.id, provider, urlOnly);
 
                 if (aiQueueState.abort) break;
@@ -2075,7 +2105,7 @@ ${contentToAnalyze}`;
                     if (result?.aiSummary && isRecoverableError(result.aiSummary)) {
                         delay = 20000;
                         window.lastWorkingAiProvider = null;
-                        currentItemEl.textContent = '⚠️ מכסות מלאות — ממתין 20 שניות...';
+                        currentItemEl.textContent = '⚠️ מכסות מלאות — ממתין 20 שניות לפריט הבא...';
                         progress.style.background = 'var(--accent-gold)';
                     }
                     
@@ -2099,7 +2129,7 @@ ${contentToAnalyze}`;
                 setTimeout(() => {
                     if (!aiQueueState.abort) {
                         document.getElementById('aiTaskWidget').classList.add('minimized');
-                        document.getElementById('aiTaskBadge').textContent = '0/0';
+                        badge.textContent = '0';
                     }
                 }, 3000);
             }
@@ -2123,9 +2153,6 @@ ${contentToAnalyze}`;
             e.stopPropagation();
             aiQueueState.isPaused = !aiQueueState.isPaused;
             e.target.textContent = aiQueueState.isPaused ? 'המשך סריקה' : 'השהייה';
-            if (aiQueueState.isPaused) {
-                document.getElementById('aiTaskCurrentItem').textContent = '⏸️ מושהה...';
-            }
         });
 
         document.getElementById('aiTaskUndoBtn')?.addEventListener('click', async (e) => {
@@ -2144,14 +2171,15 @@ ${contentToAnalyze}`;
             }
         });
 
-       const cancelWidgetAndQueue = () => {
+        const cancelWidgetAndQueue = () => {
             aiQueueState.abort = true;
             document.getElementById('aiTaskWidget').classList.add('minimized');
-            document.getElementById('aiTaskBadge').textContent = '0/0';
+            document.getElementById('aiTaskBadge').textContent = '0';
             document.getElementById('cancelBulkAiBtn').style.display = 'none';
             if (window.activeAiRequestController) window.activeAiRequestController.abort();
             showToast('🛑 <b>הסריקה הופסקה.</b>', null, 4000);
         };
+
         document.getElementById('aiTaskCancelBtn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             cancelWidgetAndQueue();
@@ -2172,6 +2200,22 @@ ${contentToAnalyze}`;
 
             closeAllMenus();
             startAiQueueProcess(itemsToScan);
+        });
+
+        document.getElementById('bulkAiBtn')?.addEventListener('click', async () => {
+            if (!navigator.onLine) return showToast('❌ לא ניתן לבצע סריקת AI מרובה ללא רשת.', null, 4000, null, true);
+            const settings = getAiSettings();
+            if (!settings.keys.gemini.length && !settings.keys.groq.length && !settings.keys.openrouter.length)
+                return alert('אנא הזן לפחות מפתח API אחד בהגדרות ה-AI.');
+            
+            if (!confirm('האם לסרוק ב-AI את ' + state.selectedIds.size + ' הפריטים שבחרת (הפעולה תסרוק הכל ותתעלם מסינון 30 הימים)?')) return;
+
+            const selectedArr = Array.from(state.selectedIds).map(id => state.items.find(i => i.id === id)).filter(Boolean);
+            exitSelectionMode();
+            closeAllMenus();
+            
+            const qs = JSON.parse(localStorage.getItem('aiQuickSettings') || '{}');
+            startAiQueueProcess(selectedArr, qs);
         });
 
         document.getElementById('cancelBulkAiBtn')?.addEventListener('click', () => {
