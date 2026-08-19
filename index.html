@@ -2130,20 +2130,18 @@ ${contentToAnalyze}`;
             if (!settings.keys.gemini.length && !settings.keys.groq.length && !settings.keys.openrouter.length)
                 return alert('אנא הזן לפחות מפתח API אחד בהגדרות ה-AI.');
                 
-            const selectedArr = Array.from(state.selectedIds).map(id => state.items.find(it => it.id === id)).filter(Boolean);
-            const itemsToScan = getItemsForSmartScan(selectedArr);
+            // כאן ביטלנו את הפילטר החכם - הלוגיקה סורקת בכוח בדיוק את מה שסימנת
+            const itemsToScan = Array.from(state.selectedIds).map(id => state.items.find(it => it.id === id)).filter(Boolean);
             
-            if (itemsToScan.length === 0) {
-                exitSelectionMode();
-                return alert('הפריטים שבחרת כבר נסרקו בהצלחה ב-30 הימים האחרונים ואין צורך בסריקה חוזרת.');
-            }
+            if (itemsToScan.length === 0) return;
             
-            if (!confirm(`מתוך הבחירה שלך, ${itemsToScan.length} פריטים דורשים סריקה. האם להתחיל?`)) return;
+            if (!confirm(`בחרת ${itemsToScan.length} פריטים לסריקה מאולצת. האם להתחיל?`)) return;
 
             exitSelectionMode();
             closeAllMenus();
             startAiQueueProcess(itemsToScan);
         });
+        
         document.getElementById('bulkClearAiBtn')?.addEventListener('click', async () => {
             if (state.selectedIds.size === 0) return;
             if (!confirm(`🧹 האם למחוק את נתוני ה-AI עבור ${state.selectedIds.size} הפריטים הנבחרים?`)) return;
