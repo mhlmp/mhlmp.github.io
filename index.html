@@ -375,20 +375,23 @@
         .btn-save { background: var(--accent-green); color: white; border: none; }
        .btn-cancel { background: rgba(127,127,127,0.2); color: var(--text-primary); border: 1px solid var(--glass-border); }
 
-        /* AI Task Widget */
+      /* AI Task Widget */
         #aiTaskWidget {
             position: fixed; bottom: 20px; left: 20px; z-index: 9700;
             background: rgba(20, 30, 50, 0.95); color: white;
             border-radius: var(--radius); border: 1px solid rgba(255,255,255,0.1);
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            display: none; flex-direction: column; overflow: hidden;
+            display: flex; flex-direction: column; overflow: hidden;
             backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         #aiTaskWidget.minimized {
-            width: 50px; height: 50px; border-radius: 25px; cursor: pointer;
+            width: 56px; height: 56px; border-radius: 28px; cursor: pointer;
             justify-content: center; align-items: center; padding: 0;
+            background: linear-gradient(135deg, var(--primary-color), #8b5cf6);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
         }
+        #aiTaskWidget.minimized:hover { transform: scale(1.05); }
         #aiTaskWidget.minimized .widget-expanded-content { display: none; }
         #aiTaskWidget.minimized::before { content: '🤖'; font-size: 24px; display: block; }
         .widget-badge {
@@ -667,7 +670,7 @@
         </div>
     </div>
 
-   <div id="aiTaskWidget">
+  <div id="aiTaskWidget" class="minimized">
         <div class="widget-badge" id="aiTaskBadge">0/0</div>
         <div class="widget-expanded-content">
             <div class="widget-header">
@@ -2094,7 +2097,10 @@ ${contentToAnalyze}`;
                 progress.style.width = '100%';
                 showToast('✅ סריקת ה-AI הסתיימה בהצלחה!', null, 4000);
                 setTimeout(() => {
-                    if (!aiQueueState.abort) document.getElementById('aiTaskWidget').style.display = 'none';
+                    if (!aiQueueState.abort) {
+                        document.getElementById('aiTaskWidget').classList.add('minimized');
+                        document.getElementById('aiTaskBadge').textContent = '0/0';
+                    }
                 }, 3000);
             }
         }
@@ -2104,6 +2110,7 @@ ${contentToAnalyze}`;
             const widget = document.getElementById('aiTaskWidget');
             if (widget.classList.contains('minimized')) {
                 widget.classList.remove('minimized');
+                e.stopPropagation();
             }
         });
 
@@ -2137,14 +2144,14 @@ ${contentToAnalyze}`;
             }
         });
 
-        const cancelWidgetAndQueue = () => {
+       const cancelWidgetAndQueue = () => {
             aiQueueState.abort = true;
-            document.getElementById('aiTaskWidget').style.display = 'none';
+            document.getElementById('aiTaskWidget').classList.add('minimized');
+            document.getElementById('aiTaskBadge').textContent = '0/0';
             document.getElementById('cancelBulkAiBtn').style.display = 'none';
             if (window.activeAiRequestController) window.activeAiRequestController.abort();
             showToast('🛑 <b>הסריקה הופסקה.</b>', null, 4000);
         };
-
         document.getElementById('aiTaskCancelBtn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             cancelWidgetAndQueue();
