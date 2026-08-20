@@ -2,7 +2,7 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover, interactive-widget=resizes-content">
     <meta name="theme-color" content="#0f172a">
     <title>MH Link Manager Pro</title>
     
@@ -589,6 +589,752 @@
         .edit-modal-btns button { flex: 1; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; }
         .btn-save { background: var(--accent-green); color: white; border: none; }
         .btn-cancel { background: rgba(127,127,127,0.2); color: var(--text-primary); border: 1px solid var(--glass-border); }
+
+
+/* ================================================================
+   MOBILE PRO LAYER — optimized for phones / PWA / touch
+   Keeps desktop behavior intact and overrides only small screens.
+   ================================================================ */
+@media (max-width: 768px) {
+    :root {
+        --mobile-gap: 8px;
+        --mobile-radius: 14px;
+        --mobile-safe-bottom: env(safe-area-inset-bottom, 0px);
+        --mobile-safe-top: env(safe-area-inset-top, 0px);
+    }
+
+    html {
+        width: 100%;
+        min-height: 100%;
+        overflow-x: hidden;
+        overscroll-behavior-x: none;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+        scroll-padding-top: 12px;
+        scroll-padding-bottom: 140px;
+    }
+
+    body {
+        width: 100%;
+        min-width: 0;
+        min-height: 100svh;
+        padding: 8px 8px calc(126px + var(--mobile-safe-bottom));
+        margin: 0;
+        overflow-x: hidden;
+        overscroll-behavior-x: none;
+        background-attachment: scroll;
+    }
+
+    body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: -1;
+    }
+
+    header {
+        margin-bottom: 8px;
+        padding-top: max(0px, var(--mobile-safe-top));
+    }
+
+    h1 {
+        font-size: clamp(1.12rem, 4.9vw, 1.45rem);
+        line-height: 1.15;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .header-logo {
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
+    }
+
+    #itemCount {
+        font-size: 0.78rem;
+        padding: 5px 12px;
+        line-height: 1.2;
+    }
+
+    #userSection {
+        padding: 9px 10px;
+        margin-bottom: 8px;
+        gap: 7px;
+        border-radius: var(--mobile-radius);
+    }
+
+    .user-top-row {
+        gap: 8px;
+        align-items: center;
+    }
+
+    .user-info {
+        min-width: 0;
+        gap: 8px;
+    }
+
+    .user-avatar {
+        width: 36px;
+        height: 36px;
+    }
+
+    .user-name,
+    .user-email {
+        max-width: 55vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .btn-action-sm,
+    .btn-login,
+    .action-btn,
+    .bulk-btn,
+    .status-scan-control-btn,
+    .icon-btn,
+    .ctrl-btn,
+    #addItemForm button,
+    .btn-save,
+    .btn-cancel,
+    .toast-undo-btn {
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+    }
+
+    #controlsArea {
+        padding: 9px;
+        margin-bottom: 8px;
+        gap: 8px;
+        border-radius: var(--mobile-radius);
+    }
+
+    .search-container input {
+        min-width: 0;
+        width: 100%;
+        min-height: 48px;
+        height: 48px;
+        padding: 0 14px;
+        border-radius: 13px;
+        font-size: 16px;
+        line-height: 48px;
+        -webkit-appearance: none;
+        appearance: none;
+    }
+
+    .search-container input::-webkit-search-cancel-button {
+        width: 18px;
+        height: 18px;
+    }
+
+    .filters-container {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 8px;
+    }
+
+    .filters-container select {
+        min-width: 0;
+        width: 100%;
+        min-height: 48px;
+        height: 48px;
+        padding: 0 10px;
+        border-radius: 13px;
+        font-size: 15px;
+        -webkit-appearance: auto;
+        appearance: auto;
+    }
+
+    .actions-container {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 7px;
+        justify-content: stretch;
+        align-items: stretch;
+    }
+
+    .actions-container .dropdown {
+        grid-column: span 2;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .actions-container > .action-btn {
+        width: 100% !important;
+        min-width: 0;
+        min-height: 48px;
+        height: 48px;
+        padding: 0 6px;
+        border-radius: 13px;
+        font-size: 0.82rem;
+    }
+
+    .actions-container .dropdown .action-btn {
+        min-height: 48px;
+        height: 48px;
+        padding-inline: 7px;
+        font-size: 0.82rem;
+    }
+
+    .actions-container #trashBtn,
+    .actions-container #toggleDeadBtn,
+    .actions-container #toggleDuplicatesBtn,
+    .actions-container #toggleDarkModeBtn {
+        width: 100% !important;
+        flex-grow: 1 !important;
+        font-size: 1.1rem;
+        padding: 0;
+    }
+
+    .dropdown-content {
+        position: fixed;
+        top: auto;
+        right: 8px;
+        left: 8px;
+        bottom: calc(8px + var(--mobile-safe-bottom));
+        width: auto;
+        min-width: 0;
+        max-width: none;
+        max-height: min(62svh, 500px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        border-radius: 16px;
+        padding: 7px 0;
+        box-shadow: 0 18px 50px rgba(0,0,0,.48);
+        z-index: 12000;
+    }
+
+    .dropdown-content button,
+    .dropdown-content label {
+        min-height: 46px;
+        padding: 12px 16px;
+        font-size: 15px;
+        line-height: 1.25;
+    }
+
+    details {
+        margin-bottom: 8px;
+        border-radius: var(--mobile-radius);
+    }
+
+    summary {
+        min-height: 48px;
+        padding: 12px 10px;
+        font-size: 14px;
+        border-radius: 13px;
+    }
+
+    #addItemForm {
+        padding: 12px;
+        gap: 9px;
+    }
+
+    #addItemForm input,
+    #addItemForm textarea {
+        min-height: 48px;
+        font-size: 16px;
+        padding: 11px;
+    }
+
+    #addItemForm textarea {
+        min-height: 88px;
+        line-height: 1.45;
+        resize: vertical;
+    }
+
+    #addItemForm button {
+        min-height: 50px;
+        font-size: 15px;
+    }
+
+    .category-block {
+        margin-bottom: 22px;
+    }
+
+    .category-header {
+        padding: 8px 3px;
+        margin-bottom: 9px;
+        gap: 8px;
+    }
+
+    .category-header h2 {
+        min-width: 0;
+        font-size: 1.05rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .category-badge {
+        flex-shrink: 0;
+        padding: 4px 9px;
+        font-size: 0.76rem;
+    }
+
+    .items-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 9px;
+    }
+
+    .card {
+        min-width: 0;
+        width: 100%;
+        border-radius: 14px;
+        overflow: clip;
+    }
+
+    .card:hover {
+        transform: none;
+        box-shadow: none;
+    }
+
+    .card-header-bar {
+        padding: 12px;
+        gap: 9px;
+    }
+
+    .card-header-content {
+        gap: 6px;
+        min-width: 0;
+    }
+
+    .card-meta-row {
+        gap: 5px;
+        margin-bottom: 0;
+    }
+
+    .card-index-badge,
+    .tag-category,
+    .duplicate-badge {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .card-link {
+        max-width: 100%;
+        font-size: 14px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .card-text-content {
+        font-size: 12.5px;
+        line-height: 1.45;
+        padding: 10px;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .card-header-controls {
+        gap: 4px;
+    }
+
+    .ctrl-btn {
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+        min-height: 40px;
+        border-radius: 11px;
+        font-size: 16px;
+    }
+
+    .card-details-content {
+        padding: 0 12px 12px;
+    }
+
+    .card-desc {
+        font-size: 13.5px;
+    }
+
+    .card-note {
+        font-size: 12.5px;
+        line-height: 1.45;
+        padding: 9px;
+    }
+
+    .card-actions-content {
+        padding: 8px 10px 10px;
+        justify-content: stretch;
+    }
+
+    .card-actions-content .icon-btn,
+    .card-actions-content button {
+        min-height: 42px;
+    }
+
+    #trashModal {
+        align-items: stretch;
+        padding: 0;
+    }
+
+    .modal-content {
+        width: 100%;
+        height: 100svh;
+        max-width: none;
+        max-height: none;
+        border-radius: 0;
+        border-left: 0;
+        border-right: 0;
+        padding-bottom: var(--mobile-safe-bottom);
+    }
+
+    .modal-header {
+        padding: 12px 14px;
+        min-height: 58px;
+    }
+
+    .modal-body {
+        padding: 10px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .trash-item {
+        gap: 10px;
+        align-items: flex-start;
+        padding: 11px;
+        min-height: 50px;
+    }
+
+    #bulkActionBar {
+        top: 0;
+        padding: calc(8px + var(--mobile-safe-top)) 9px 9px;
+        gap: 8px;
+        align-items: center;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-x: contain;
+    }
+
+    #bulkActionBar > * {
+        flex-shrink: 0;
+    }
+
+    .bulk-actions {
+        gap: 6px;
+        flex-wrap: nowrap;
+    }
+
+    .bulk-btn {
+        min-height: 42px;
+        padding: 8px 11px;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+
+    #loading-screen {
+        min-height: 100svh;
+        height: var(--mobile-vh, 100svh);
+        padding: 20px;
+        padding-top: calc(20px + var(--mobile-safe-top));
+        padding-bottom: calc(20px + var(--mobile-safe-bottom));
+    }
+
+    #statusScanPanel {
+        left: 8px;
+        right: 8px;
+        bottom: calc(8px + var(--mobile-safe-bottom));
+        width: auto;
+        height: min(34svh, 270px);
+        max-height: min(34svh, 270px);
+        min-height: 132px;
+        border-radius: 16px;
+        padding-bottom: 0;
+        box-shadow: 0 16px 45px rgba(0,0,0,.38);
+        isolation: isolate;
+    }
+
+    #statusScanPanel.open {
+        animation-duration: .16s;
+    }
+
+    .status-scan-header {
+        min-height: 46px;
+        height: 46px;
+        padding: 5px 8px;
+        gap: 6px;
+    }
+
+    .status-scan-title {
+        min-width: 0;
+        max-width: 45vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 11px;
+    }
+
+    .status-scan-counter {
+        font-size: 10px;
+    }
+
+    .status-scan-actions {
+        gap: 4px;
+    }
+
+    .status-scan-control-btn {
+        min-width: 42px;
+        min-height: 36px;
+        padding: 7px 8px;
+        font-size: 10px;
+        border-radius: 9px;
+    }
+
+    .status-scan-body {
+        padding: 5px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+
+    .status-scan-row {
+        grid-template-columns: 28px minmax(0, 1fr) auto;
+        min-height: 32px;
+        padding: 4px 5px;
+        margin-bottom: 3px;
+        border-radius: 9px;
+        gap: 6px;
+    }
+
+    .status-scan-index {
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        font-size: 9px;
+    }
+
+    .status-scan-url {
+        font-size: 9.5px;
+        line-height: 1.25;
+    }
+
+    .status-scan-state {
+        min-width: 58px;
+        font-size: 9px;
+        padding: 5px 6px;
+    }
+
+    .status-scan-footer {
+        min-height: 34px;
+        padding: 5px 8px;
+        font-size: 9px;
+    }
+
+    #statusScanPanel.minimized {
+        left: 50%;
+        right: auto;
+        bottom: calc(12px + var(--mobile-safe-bottom));
+        width: max-content;
+        max-width: calc(100vw - 16px);
+        height: 44px !important;
+        max-height: 44px !important;
+        border-radius: 22px;
+        transform: translateX(-50%);
+    }
+
+    #statusScanPanel.minimized .status-scan-header {
+        height: 44px;
+        min-height: 44px;
+    }
+
+    #toast-container {
+        left: 8px;
+        right: 8px;
+        bottom: calc(8px + var(--mobile-safe-bottom));
+        width: auto;
+        max-width: none;
+        transform: none;
+        align-items: stretch;
+        gap: 7px;
+        z-index: 12500;
+    }
+
+    .toast-item {
+        width: 100%;
+        border-radius: 14px;
+    }
+
+    .toast-content {
+        min-height: 52px;
+        padding: 10px 12px;
+        gap: 8px;
+        font-size: 13px;
+    }
+
+    .toast-undo-btn {
+        min-height: 40px;
+        padding: 7px 10px;
+        font-size: 12px;
+    }
+
+    #scrollTopBtn {
+        right: 10px;
+        bottom: calc(10px + var(--mobile-safe-bottom));
+        width: 46px;
+        height: 46px;
+        z-index: 12400;
+    }
+
+    body.selection-mode-active .card {
+        -webkit-tap-highlight-color: rgba(96,165,250,.18);
+    }
+
+    /* Prevent browser text-selection / zoom surprises on controls while preserving text selection elsewhere. */
+    button,
+    select,
+    input[type="button"],
+    input[type="submit"] {
+        touch-action: manipulation;
+    }
+
+    /* Avoid accidental horizontal overflow caused by long URLs / code / notes. */
+    #listContainer,
+    .category-block,
+    .items-grid,
+    .card,
+    .card-header-bar,
+    .card-header-content,
+    .card-details-content,
+    .card-actions-content {
+        min-width: 0;
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        padding-left: 6px;
+        padding-right: 6px;
+    }
+
+    h1 {
+        font-size: 1.05rem;
+    }
+
+    #userSection {
+        padding: 8px;
+    }
+
+    .user-top-row {
+        flex-wrap: wrap;
+    }
+
+    .user-info {
+        flex: 1 1 auto;
+    }
+
+    .actions-container {
+        gap: 6px;
+    }
+
+    .actions-container > .action-btn,
+    .actions-container .dropdown .action-btn {
+        min-height: 46px;
+        height: 46px;
+        font-size: 0.78rem;
+    }
+
+    .status-scan-title {
+        max-width: 36vw;
+    }
+
+    .status-scan-counter {
+        display: none;
+    }
+
+    .status-scan-control-btn {
+        min-width: 39px;
+        padding-inline: 7px;
+    }
+
+    .status-scan-state {
+        min-width: 54px;
+        font-size: 8px;
+    }
+}
+
+@media (max-width: 360px) {
+    body {
+        padding-left: 4px;
+        padding-right: 4px;
+    }
+
+    #controlsArea {
+        padding: 7px;
+    }
+
+    .actions-container {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 5px;
+    }
+
+    .actions-container .dropdown {
+        grid-column: span 2;
+    }
+
+    .actions-container > .action-btn,
+    .actions-container .dropdown .action-btn {
+        min-height: 44px;
+        height: 44px;
+        font-size: 0.72rem;
+    }
+
+    .status-scan-control-btn {
+        min-width: 35px;
+        min-height: 34px;
+        padding: 6px;
+        font-size: 9px;
+    }
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .card:hover,
+    .ctrl-btn:hover,
+    .icon-btn:hover,
+    .btn-login:hover,
+    .btn-reload:hover,
+    .bulk-btn:hover,
+    .status-scan-control-btn:hover {
+        transform: none;
+        box-shadow: inherit;
+    }
+
+    .action-btn:active,
+    .ctrl-btn:active,
+    .icon-btn:active,
+    .bulk-btn:active,
+    .status-scan-control-btn:active,
+    #addItemForm button:active {
+        transform: scale(.97);
+    }
+}
+
+
+@media (max-width: 768px) {
+    body.keyboard-open #statusScanPanel.open {
+        bottom: calc(8px + var(--keyboard-offset, 0px) + var(--mobile-safe-bottom));
+    }
+    body.keyboard-open #statusScanPanel.minimized {
+        bottom: calc(12px + var(--keyboard-offset, 0px) + var(--mobile-safe-bottom));
+    }
+    body.keyboard-open #scrollTopBtn {
+        bottom: calc(10px + var(--keyboard-offset, 0px) + var(--mobile-safe-bottom));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #statusScanPanel.open,
+    .toast-item,
+    #scrollTopBtn,
+    .dropdown-content,
+    .card,
+    .action-btn {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
     </style>
 </head>
 <body class="dark-mode">
@@ -962,6 +1708,53 @@
             }
         } catch (e) { console.error('[Firebase] Init Error:', e); }
 
+
+        // ==================== MOBILE / PWA VIEWPORT SUPPORT ====================
+        function setupMobileViewportSupport() {
+            const root = document.documentElement;
+            const updateViewportVars = () => {
+                const vv = window.visualViewport;
+                const viewportHeight = vv ? vv.height : window.innerHeight;
+                const keyboardOffset = vv
+                    ? Math.max(0, window.innerHeight - vv.height - (vv.offsetTop || 0))
+                    : 0;
+                root.style.setProperty('--mobile-vh', `${Math.round(viewportHeight)}px`);
+                root.style.setProperty('--keyboard-offset', `${Math.round(keyboardOffset)}px`);
+                document.body.classList.toggle('keyboard-open', keyboardOffset > 120);
+            };
+
+            updateViewportVars();
+            window.addEventListener('resize', updateViewportVars, { passive: true });
+            window.addEventListener('orientationchange', () => setTimeout(updateViewportVars, 80), { passive: true });
+
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', updateViewportVars, { passive: true });
+                window.visualViewport.addEventListener('scroll', updateViewportVars, { passive: true });
+            }
+
+            // Mobile keyboards can hide the focused field; bring it above the keyboard after the keyboard settles.
+            document.addEventListener('focusin', (event) => {
+                const el = event.target;
+                if (!(el instanceof HTMLElement)) return;
+                if (!el.matches('input, textarea, select')) return;
+                setTimeout(() => {
+                    try { el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' }); }
+                    catch (_) { try { el.scrollIntoView(); } catch (_) {} }
+                    updateViewportVars();
+                }, 180);
+            }, { passive: true });
+
+            // On touch devices, close an open dropdown when the user taps outside it.
+            document.addEventListener('touchstart', (event) => {
+                const target = event.target;
+                if (!(target instanceof Node)) return;
+                document.querySelectorAll('.dropdown-content.show').forEach(menu => {
+                    const wrapper = menu.closest('.dropdown');
+                    if (wrapper && !wrapper.contains(target)) menu.classList.remove('show');
+                });
+            }, { passive: true });
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             try {
                 const savedUi = JSON.parse(localStorage.getItem('mh_ui_settings') || '{}');
@@ -985,6 +1778,7 @@
             } catch(e) {}
 
             updateDeadCountBadge();
+            setupMobileViewportSupport();
             initServiceWorker();
             initTheme();
             setupEventListeners();
@@ -1472,7 +2266,7 @@
             } catch (err) {
                 console.error(err);
                 if (btn) btn.classList.remove('spinning');
-                updateSyncStatus('error', 'שגיאת רשת');
+                updateSyncStatus('error', 'שגיאה ברענון הענן');
                 if (!silent) showToast("⚠️ שגיאה ברענון הנתונים: " + err.message, null, 3000, null, true);
             }
         }
@@ -3334,12 +4128,37 @@ ${contentToAnalyze}`;
             const toastContainer = document.getElementById('toast-container');
             if (toastContainer) {
                 const updatePosition = () => {
-                    btn.style.bottom = toastContainer.children.length > 0
-                        ? `${toastContainer.offsetHeight + 45}px`
-                        : '28px';
+                    const isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+                    let bottom = isMobile ? 10 : 28;
+
+                    if (toastContainer.children.length > 0) {
+                        bottom = Math.max(bottom, toastContainer.offsetHeight + (isMobile ? 18 : 45));
+                    }
+
+                    const scanPanel = document.getElementById('statusScanPanel');
+                    if (isMobile && scanPanel && scanPanel.classList.contains('open')) {
+                        const panelBottom = scanPanel.classList.contains('minimized')
+                            ? 58
+                            : scanPanel.offsetHeight + 18;
+                        bottom = Math.max(bottom, panelBottom);
+                    }
+
+                    const keyboardOffset = isMobile
+                        ? (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--keyboard-offset')) || 0)
+                        : 0;
+                    btn.style.bottom = `${Math.round(bottom + keyboardOffset)}px`;
                 };
-                if (window.ResizeObserver) new ResizeObserver(updatePosition).observe(toastContainer);
+                if (window.ResizeObserver) {
+                    new ResizeObserver(updatePosition).observe(toastContainer);
+                    const scanPanel = document.getElementById('statusScanPanel');
+                    if (scanPanel) new ResizeObserver(updatePosition).observe(scanPanel);
+                }
                 new MutationObserver(updatePosition).observe(toastContainer, { childList: true });
+                const scanPanelForMutations = document.getElementById('statusScanPanel');
+                if (scanPanelForMutations) {
+                    new MutationObserver(updatePosition).observe(scanPanelForMutations, { attributes: true, attributeFilter: ['class', 'style'] });
+                }
+                window.addEventListener('resize', updatePosition, { passive: true });
             }
         }
 
