@@ -939,6 +939,9 @@
         window.__statusScanPaused = false;
         window.__statusScanUndoSnapshot = null;
         window.__statusScanRunActive = false;
+        // Per-run API-key health. Failed/exhausted keys are skipped for the
+        // rest of the current status scan; a new scan resets this map.
+        window.__statusScanKeyHealth = new Map();
         // אתר שנבדק בהצלחה במהלך 14 הימים האחרונים לא ייסרק שוב.
         // הערך נשמר בכל פריט בשדה statusCheckedAt.
         const STATUS_RECHECK_DAYS = 14;
@@ -1193,6 +1196,33 @@
         function setupFirebaseListeners() {
             if (!auth || !db) return;
             onAuthStateChanged(auth, async (user) => {
+                const previousUid = state.user?.uid || null;
+                if (previousUid !== (user?.uid || null)) {
+                    if (window.__statusScanRunActive || window.__statusScanRunStarted) {
+                        window.__statusScanPaused = false;
+                        window.__statusScanStopRequested = true;
+                        try { window.__statusScanAbortController?.abort(); } catch (_) {}
+                        try { window.activeAiRequestController?.abort(); } catch (_) {}
+                    }
+                    window.__statusScanRunActive = false;
+                    window.__statusScanRunStarted = false;
+                    window.__statusScanPaused = false;
+                    window.__statusScanStopRequested = true;
+                    window.__statusScanAbortController = null;
+                    window.__statusScanUndoSnapshot = null;
+                    const scanPanel = document.getElementById('statusScanPanel');
+                    if (scanPanel) scanPanel.classList.remove('open', 'minimized');
+                    const scanBody = document.getElementById('statusScanBody');
+                    if (scanBody) scanBody.innerHTML = '';
+                    if (state.unsubItems) { state.unsubItems(); state.unsubItems = null; }
+                    if (state.unsubTrash) { state.unsubTrash(); state.unsubTrash = null; }
+                    state.items = [];
+                    state.trash = [];
+                    state.filteredItems = [];
+                    state.selectedIds.clear();
+                    state.isSelectionMode = false;
+                }
+
                 if (user) {
                     state.isOffline = !navigator.onLine;
                     state.user = user;
@@ -1292,14 +1322,26 @@
             });
         }
 
-        async function saveItemToCloud(item) {
-            if (!state.user || state.isOffline) return;
+        async function saveItemToCloud(item, expectedUid = null, silent = false) {
+            const currentUid = state.user?.uid || null;
+            if (!currentUid || state.isOffline) return false;
+            // Never let an async operation started under one account write into another
+            // account after a fast logout/login or account switch.
+            if (expectedUid && currentUid !== expectedUid) {
+                console.warn('[Cloud] Ignoring stale save after account change.');
+                return false;
+            }
             try {
-                const itemRef = doc(db, 'users', state.user.uid, 'items', item.id.toString());
+                const itemRef = doc(db, 'users', currentUid, 'items', item.id.toString());
                 const cleanItem = { ...item };
                 delete cleanItem.isScanning; 
                 await setDoc(itemRef, cleanItem, {merge: true});
-            } catch (e) { console.error('Error saving item:', e); showToast('⚠️ שגיאה בשמירת פריט בענן', null, 3000, null, true); }
+                return true;
+            } catch (e) {
+                console.error('Error saving item:', e);
+                if (!silent) showToast('⚠️ שגיאה בשמירת פריט בענן', null, 3000, null, true);
+                return false;
+            }
         }
 
         function saveUiSettings() {
@@ -1817,6 +1859,35 @@
                 l.includes('no endpoints');
         }
 
+        function isQuotaOrAuthFailure(msg) {
+            const l = String(msg || '').toLowerCase();
+            return l.includes('quota') || l.includes('resource_exhausted') ||
+                l.includes('rate_limit') || l.includes('rate limit') ||
+                l.includes('too many requests') || l.includes('429') ||
+                l.includes('401') || l.includes('403') ||
+                l.includes('invalid api key') || l.includes('invalid key') ||
+                l.includes('unauthorized') || l.includes('permission denied') ||
+                l.includes('exceeded');
+        }
+
+        function statusScanKeyId(provider, key) {
+            return `${provider}::${String(key || '').trim()}`;
+        }
+
+        function markStatusScanKeyFailed(provider, key, error) {
+            if (!window.__statusScanRunActive) return;
+            window.__statusScanKeyHealth.set(statusScanKeyId(provider, key), {
+                failed: true,
+                kind: isQuotaOrAuthFailure(error) ? 'quota/auth' : 'error',
+                at: Date.now(),
+                message: String(error || '')
+            });
+        }
+
+        function isStatusScanKeyUsable(provider, key) {
+            return !window.__statusScanKeyHealth.get(statusScanKeyId(provider, key))?.failed;
+        }
+
         window.activeAiRequestController = null;
 
         window.scanSingleItem = async function (id, overrideProvider = null, forceUrlOnly = false, statusOnly = false) {
@@ -1829,6 +1900,7 @@
 
             const item = state.items.find(i => i.id === id);
             if (!item) return;
+            const scanOwnerUid = state.user?.uid || null;
 
             const settings = getAiSettings();
 
@@ -1864,13 +1936,11 @@
                         : (settings.keys?.[provider] ? [settings.keys[provider]] : []);
 
                     keys
-                        .filter(k => k && String(k).trim())
-                        .forEach((key, idx) => {
-                            fallbackChain.push({
-                                provider,
-                                key,
-                                keyIndex: idx + 1
-                            });
+                        .map((key, idx) => ({ key, keyIndex: idx + 1 }))
+                        .filter(entry => entry.key && String(entry.key).trim())
+                        .filter(entry => !statusOnly || isStatusScanKeyUsable(provider, entry.key))
+                        .forEach(({ key, keyIndex }) => {
+                            fallbackChain.push({ provider, key, keyIndex });
                         });
                 });
             } else {
@@ -1886,6 +1956,13 @@
 
             if (fallbackChain.length === 0) {
                 const providerNames = { 'gemini': 'Google Gemini', 'groq': 'Groq', 'openrouter': 'OpenRouter' };
+                if (statusOnly) {
+                    // No popup during the background status scan. If every key
+                    // is exhausted/invalid, report the condition in the scan
+                    // panel and let the worker continue to the next link.
+                    setStatusScanFooter(`⚠️ אין כרגע מפתח זמין ל-${providerNames[currentProvider] || currentProvider} • ממשיך לקישור הבא`);
+                    throw new Error('NO_STATUS_API_KEYS_AVAILABLE');
+                }
                 return alert(`לא נמצא מפתח תקין עבור ${providerNames[currentProvider]}. אנא עדכן מפתח בהגדרות.`);
             }
 
@@ -2207,8 +2284,10 @@ Rules:
 - When evidence is insufficient or contradictory, return UNCERTAIN.
 - Do not guess.`;
 
-    // Save the deterministic result for the final safety gate after AI validation.
-    window.__lastStatusEvidenceResult = {
+    // Keep evidence local to THIS scan request. Do not store it on window: the
+    // background status scanner runs multiple scanSingleItem() calls in parallel,
+    // and a shared global would let one item's evidence overwrite another item's result.
+    const deterministicEvidenceResult = {
         deterministicStatus,
         verificationLevel,
         activeSources: evidence1.activeSources.length + evidence2.activeSources.length,
@@ -2386,7 +2465,7 @@ ${contentToAnalyze}`;
 
                 // Deterministic web evidence is the source of truth for current-status scans.
                 const deterministicEvidenceStatus = statusOnly && isWebsite
-                    ? (window.__lastStatusEvidenceResult?.deterministicStatus || 'uncertain')
+                    ? (deterministicEvidenceResult?.deterministicStatus || 'uncertain')
                     : null;
 
                 if (statusOnly && isWebsite && ['active', 'parked', 'dead'].includes(deterministicEvidenceStatus)) {
@@ -2398,10 +2477,14 @@ ${contentToAnalyze}`;
                 for (let i = 0; i < fallbackChain.length && !success; i++) {
                     if (success) break;
                     const { provider: currentProvider, key: rawKey, keyIndex } = fallbackChain[i];
-                    const activeKey = rawKey.trim(); 
+                    const activeKey = rawKey.trim();
+                    if (statusOnly && !isStatusScanKeyUsable(currentProvider, activeKey)) continue;
                     let shouldTryNextKey = false;
 
-                    if (statusOnly) setStatusScanFooter(`🔑 מנסה Gemini — מפתח ${keyIndex}`);
+                    if (statusOnly) {
+                        const providerLabel = ({ gemini: 'Gemini', groq: 'Groq', openrouter: 'OpenRouter' })[currentProvider] || currentProvider;
+                        setStatusScanFooter(`🔑 מנסה ${providerLabel} — מפתח ${keyIndex}`);
+                    }
                     if (currentProvider === 'gemini') {
                         let models = window.dynamicGeminiModels;
                         if (!models) {
@@ -2447,8 +2530,18 @@ ${contentToAnalyze}`;
                         }
                         if (!success && shouldTryNextKey) {
                             window.dynamicGeminiModels = null;
-                            const next = fallbackChain[i+1] ? `מנסה מפתח גיבוי...` : 'לא נותרו מפתחות פעילים.';
-                            showToast(`⚠️ תקלה ב-Gemini (מפתח ${keyIndex}): ${lastError}. ${next}`, null, 5000, null, true);
+                            if (statusOnly) {
+                                markStatusScanKeyFailed(currentProvider, activeKey, lastError);
+                                const remaining = fallbackChain.slice(i + 1).filter(entry =>
+                                    isStatusScanKeyUsable(entry.provider, entry.key)
+                                ).length;
+                                setStatusScanFooter(
+                                    `⚠️ Gemini מפתח ${keyIndex} לא זמין — עובר אוטומטית למפתח הבא${remaining ? ` • נותרו ${remaining}` : ' • אין מפתחות זמינים נוספים'}`
+                                );
+                            } else {
+                                const next = fallbackChain[i+1] ? `מנסה מפתח גיבוי...` : 'לא נותרו מפתחות פעילים.';
+                                showToast(`⚠️ תקלה ב-Gemini (מפתח ${keyIndex}): ${lastError}. ${next}`, null, 5000, null, true);
+                            }
                             continue;
                         }
                     }
@@ -2498,8 +2591,16 @@ ${contentToAnalyze}`;
                         }
                         if (!success && shouldTryNextKey) {
                             window.dynamicGroqModels = null;
-                            const next = fallbackChain[i+1] ? `מנסה מפתח גיבוי...` : 'לא נותרו מפתחות פעילים.';
-                            showToast(`⚠️ תקלה ב-Groq (מפתח ${keyIndex}): ${lastError}. ${next}`, null, 5000, null, true);
+                            if (statusOnly) {
+                                markStatusScanKeyFailed(currentProvider, activeKey, lastError);
+                                const remaining = fallbackChain.slice(i + 1).filter(entry =>
+                                    isStatusScanKeyUsable(entry.provider, entry.key)
+                                ).length;
+                                setStatusScanFooter(`⚠️ Groq מפתח ${keyIndex} לא זמין — עובר אוטומטית למפתח הבא${remaining ? ` • נותרו ${remaining}` : ' • אין מפתחות זמינים נוספים'}`);
+                            } else {
+                                const next = fallbackChain[i+1] ? `מנסה מפתח גיבוי...` : 'לא נותרו מפתחות פעילים.';
+                                showToast(`⚠️ תקלה ב-Groq (מפתח ${keyIndex}): ${lastError}. ${next}`, null, 5000, null, true);
+                            }
                             continue;
                         }
                     }
@@ -2550,8 +2651,16 @@ ${contentToAnalyze}`;
                         }
                         if (!success && shouldTryNextKey) {
                             window.dynamicOpenRouterModels = null;
-                            const next = fallbackChain[i+1] ? `מנסה מפתח גיבוי...` : 'לא נותרו מפתחות פעילים.';
-                            showToast(`⚠️ תקלה ב-OpenRouter (מפתח ${keyIndex}): ${lastError}. ${next}`, null, 5000, null, true);
+                            if (statusOnly) {
+                                markStatusScanKeyFailed(currentProvider, activeKey, lastError);
+                                const remaining = fallbackChain.slice(i + 1).filter(entry =>
+                                    isStatusScanKeyUsable(entry.provider, entry.key)
+                                ).length;
+                                setStatusScanFooter(`⚠️ OpenRouter מפתח ${keyIndex} לא זמין — עובר אוטומטית למפתח הבא${remaining ? ` • נותרו ${remaining}` : ' • אין מפתחות זמינים נוספים'}`);
+                            } else {
+                                const next = fallbackChain[i+1] ? `מנסה מפתח גיבוי...` : 'לא נותרו מפתחות פעילים.';
+                                showToast(`⚠️ תקלה ב-OpenRouter (מפתח ${keyIndex}): ${lastError}. ${next}`, null, 5000, null, true);
+                            }
                             continue;
                         }
                     }
@@ -2564,7 +2673,7 @@ ${contentToAnalyze}`;
                 if (!jm2) throw new Error('לא נמצא JSON תקין');
                 const parsed = JSON.parse(jm2[0]);
 
-                const evidenceResult = statusOnly ? (window.__lastStatusEvidenceResult || { deterministicStatus: 'uncertain' }) : null;
+                const evidenceResult = statusOnly ? (deterministicEvidenceResult || { deterministicStatus: 'uncertain' }) : null;
                 let finalStatus = parsed.status;
 
                 if (statusOnly && isWebsite) {
@@ -2603,10 +2712,15 @@ ${contentToAnalyze}`;
                     if (statusOnly && isWebsite) {
                         if (['active', 'parked', 'dead'].includes(finalStatus)) {
                             const statusStamp = nowIso();
+                            const previousInactiveCount = getInactiveStatusCount();
                             ci.siteStatus = finalStatus;
                             ci.statusCheckedAt = statusStamp;
                             ci.updatedAt = statusStamp;
-                            await saveItemToCloud(ci);
+                            // Update the red badge immediately, before cloud I/O.
+                            updateDeadCountBadge(previousInactiveCount);
+                            renderList();
+                            await saveItemToCloud(ci, scanOwnerUid, statusOnly);
+                            updateDeadCountBadge(previousInactiveCount);
                         } else {
                             // Inconclusive: DO NOT change status and DO NOT refresh the 14-day timer.
                             console.warn(`[AI Status Scan] Inconclusive status for ${ci.content}; keeping previous status.`);
@@ -2624,7 +2738,11 @@ ${contentToAnalyze}`;
                 console.error('[AI Status Scan] Item scan error:', e);
                 if (e?.name !== 'AbortError') {
                     updateSyncStatus('error', 'שגיאת רשת');
-                    if (!statusOnly) showToast('⚠️ שגיאה בניתוח הפריט: ' + (e?.message || 'שגיאה לא ידועה'), null, 3500, null, true);
+                    if (statusOnly) {
+                        setStatusScanFooter('⚠️ הקישור לא הוכרע — ממשיך אוטומטית לקישור הבא');
+                    } else {
+                        showToast('⚠️ שגיאה בניתוח הפריט: ' + (e?.message || 'שגיאה לא ידועה'), null, 3500, null, true);
+                    }
                 }
                 throw e;
             } finally {
@@ -3781,6 +3899,7 @@ ${contentToAnalyze}`;
             window.__statusScanStopRequested = true;
             window.__statusScanRunActive = false;
             window.__statusScanRunStarted = false;
+            window.__statusScanKeyHealth = new Map();
             const panel = document.getElementById('statusScanPanel');
             if (panel) panel.classList.remove('open');
             const body = document.getElementById('statusScanBody');
@@ -3792,6 +3911,7 @@ ${contentToAnalyze}`;
         async function runBackgroundStatusScan() {
             const panel = document.getElementById('statusScanPanel');
             window.__statusScanRunActive = true;
+            window.__statusScanKeyHealth = new Map();
             window.__statusScanStopRequested = false;
             window.__statusScanPaused = false;
             window.__statusScanAbortController = new AbortController();
@@ -3828,38 +3948,27 @@ ${contentToAnalyze}`;
                 return;
             }
 
-            const recentLinks = [];
-            const linksToScan = [];
+            // A user-triggered/background full status pass must actually walk
+            // every link. Recent timestamps are still displayed in the UI, but
+            // they never prevent this run from finishing the entire list.
+            const recentLinks = allLinks.filter(item => getRecentStatusCheckInfo(item));
+            const linksToScan = [...allLinks];
+            const totalCount = allLinks.length;
+            let completed = 0;
 
             allLinks.forEach(item => {
                 const recentLabel = getRecentStatusCheckInfo(item);
-                if (recentLabel) {
-                    recentLinks.push(item);
-                    updateStatusScanRow(item.id, 'fresh', `✓ ${recentLabel}`);
-                } else {
-                    linksToScan.push(item);
-                }
+                updateStatusScanRow(
+                    item.id,
+                    recentLabel ? 'waiting' : 'waiting',
+                    recentLabel ? `מחדש • ${recentLabel}` : 'ממתין'
+                );
             });
-
-            const skippedCount = recentLinks.length;
-            const totalCount = allLinks.length;
-            let completed = skippedCount;
 
             updateStatusScanProgress(completed, totalCount);
             setStatusScanFooter(
-                skippedCount > 0
-                    ? `⏭️ דולגו ${skippedCount} קישורים — נבדקו בהצלחה במהלך ${STATUS_RECHECK_DAYS} הימים האחרונים`
-                    : `נבדק רק הסטטוס • ${totalCount} קישורים`
+                `בודק את כל ${totalCount} הקישורים • ${recentLinks.length} מהם נבדקו לאחרונה אך נבדקים שוב עכשיו`
             );
-
-            if (linksToScan.length === 0) {
-                window.__statusScanRunActive = false;
-                checkDeadLinksAlert();
-                renderList();
-                setStatusScanFooter(`✅ אין צורך בסריקה נוספת • כל ${totalCount} הקישורים נבדקו במהלך ${STATUS_RECHECK_DAYS} הימים האחרונים`);
-                setStatusScanButtons({ running: false, undoAvailable: true });
-                return;
-            }
 
             const settings = getAiSettings();
             const configuredProviders = ['gemini', 'groq', 'openrouter'];
@@ -3872,10 +3981,7 @@ ${contentToAnalyze}`;
                 setStatusScanFooter('לא נמצא מפתח API פעיל ל-AI');
                 const body = document.getElementById('statusScanBody');
                 if (body) {
-                    const skippedText = skippedCount > 0
-                        ? `<div style="padding:12px 18px;text-align:center;color:var(--text-secondary);">⏭️ ${skippedCount} קישורים דולגו כי נבדקו לאחרונה.</div>`
-                        : '';
-                    body.insertAdjacentHTML('afterbegin', skippedText + '<div style="padding:12px 18px;text-align:center;color:var(--accent-red);line-height:1.6;">❌ לא נמצא מפתח API פעיל.<br>הסריקה דורשת מפתח AI אחד לפחות.</div>');
+                    body.insertAdjacentHTML('afterbegin', '<div style="padding:12px 18px;text-align:center;color:var(--accent-red);line-height:1.6;">❌ לא נמצא מפתח API פעיל.<br>הסריקה דורשת מפתח AI אחד לפחות.</div>');
                 }
                 updateStatusScanProgress(completed, totalCount);
                 window.__statusScanRunActive = false;
@@ -3885,7 +3991,7 @@ ${contentToAnalyze}`;
             }
 
             setStatusScanFooter(
-                `בודק ${linksToScan.length} קישורים • מדלג על בדיקות בנות פחות מ-${STATUS_RECHECK_DAYS} ימים`
+                `בודק ${linksToScan.length} קישורים • ללא חלונות קופצים • עובר אוטומטית בין כל המפתחות הזמינים`
             );
 
             let nextIndex = 0;
@@ -3948,8 +4054,8 @@ ${contentToAnalyze}`;
 
                         setStatusScanFooter(
                             window.__statusScanStopRequested
-                                ? `⏹ נעצר • הושלמו ${completed}/${totalCount} • ${inactiveCount} לא פעילים/בבעיה • ${skippedCount} דולגו`
-                                : `הושלמו ${completed}/${totalCount} • ${inactiveCount} לא פעילים/בבעיה • ${skippedCount} דולגו`
+                                ? `⏹ נעצר • הושלמו ${completed}/${totalCount} • ${inactiveCount} לא פעילים/בבעיה`
+                                : `הושלמו ${completed}/${totalCount} • ${inactiveCount} לא פעילים/בבעיה`
                         );
 
                         renderList();
@@ -3965,17 +4071,18 @@ ${contentToAnalyze}`;
             window.__statusScanRunActive = false;
             window.__statusScanRunStarted = false;
             window.__statusScanAbortController = null;
+            window.__statusScanKeyHealth = new Map();
             checkDeadLinksAlert();
             renderList();
 
             if (wasStopped) {
                 setStatusScanFooter(
-                    `⏹ הסריקה נעצרה • הושלמו ${completed}/${totalCount} • ${skippedCount} דולגו • ניתן לבצע UNDO`
+                    `⏹ הסריקה נעצרה • הושלמו ${completed}/${totalCount} • ניתן לבצע UNDO`
                 );
             } else {
                 updateStatusScanProgress(totalCount, totalCount);
                 setStatusScanFooter(
-                    `✅ הסריקה הושלמה • ${linksToScan.length} קישורים נבדקו מחדש • ${skippedCount} דולגו • ניתן לבצע UNDO`
+                    `✅ הסריקה הושלמה • כל ${linksToScan.length} הקישורים נבדקו • ניתן לבצע UNDO`
                 );
             }
 
