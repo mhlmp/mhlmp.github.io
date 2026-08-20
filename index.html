@@ -1142,7 +1142,8 @@
             window.addEventListener('online', () => {
                 state.isOffline = false;
                 updateSyncStatus('syncing', 'מתחבר לענן...');
-                showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 3000);
+                // Firestore listeners will restore the definitive cloud state.
+                setTimeout(() => { if (state.user && navigator.onLine) updateSyncStatus('online', 'מחובר ✓'); }, 1200);
             });
 
             document.addEventListener('visibilitychange', () => {
@@ -1412,8 +1413,24 @@
         function updateSyncStatus(status, label) {
             const dot = document.getElementById('syncDot');
             const lbl = document.getElementById('syncLabel');
-            if (dot) dot.className = 'status-dot ' + status;
-            if (lbl) lbl.textContent = label || status;
+            if (!dot || !lbl) return;
+
+            // Cloud status is reserved for Firebase/auth connectivity only.
+            // Background website probes and AI providers must never turn this
+            // indicator red, because their failure does not mean the app lost
+            // its cloud connection.
+            const safeStatus = ['online', 'offline', 'syncing', 'error'].includes(status) ? status : 'online';
+            dot.className = 'status-dot ' + safeStatus;
+            lbl.textContent = label || safeStatus;
+        }
+
+        function setCloudStatusFromNetwork() {
+            if (!state.user) return;
+            if (navigator.onLine) {
+                updateSyncStatus('online', 'מחובר ✓');
+            } else {
+                updateSyncStatus('offline', 'מקומי (אין רשת)');
+            }
         }
 
         async function cloudLogout() {
@@ -1465,6 +1482,7 @@
             const container = document.getElementById('listContainer');
             if (!container) return;
             container.innerHTML = '';
+            updateDeadCountBadge();
 
             const query = document.getElementById('searchInput')?.value.toLowerCase().trim() || '';
             const catFilter = document.getElementById('categoryFilter')?.value || '';
@@ -1954,15 +1972,8 @@
                     }));
             }
 
-            if (fallbackChain.length === 0) {
+            if (fallbackChain.length === 0 && !statusOnly) {
                 const providerNames = { 'gemini': 'Google Gemini', 'groq': 'Groq', 'openrouter': 'OpenRouter' };
-                if (statusOnly) {
-                    // No popup during the background status scan. If every key
-                    // is exhausted/invalid, report the condition in the scan
-                    // panel and let the worker continue to the next link.
-                    setStatusScanFooter(`⚠️ אין כרגע מפתח זמין ל-${providerNames[currentProvider] || currentProvider} • ממשיך לקישור הבא`);
-                    throw new Error('NO_STATUS_API_KEYS_AVAILABLE');
-                }
                 return alert(`לא נמצא מפתח תקין עבור ${providerNames[currentProvider]}. אנא עדכן מפתח בהגדרות.`);
             }
 
@@ -2019,7 +2030,8 @@ if (isWebsite && statusOnly) {
     const statusProxies = [
         { name: 'corsproxy', build: u => `https://corsproxy.io/?${encodeURIComponent(u)}` },
         { name: 'allorigins', build: u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}` },
-        { name: 'codetabs', build: u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}` }
+        { name: 'codetabs', build: u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}` },
+        { name: 'jina', build: u => `https://r.jina.ai/${u}` }
     ];
 
     const DEAD_MARKERS = [
@@ -2102,6 +2114,11 @@ if (isWebsite && statusOnly) {
                     targetStatusKnown = true;
                 }
                 if (data?.status?.url) targetUrl = data.status.url;
+            } else if (name === 'jina') {
+                // r.jina.ai returns a reader representation of the target.
+                // Its HTTP status belongs to the reader, so the body is evidence,
+                // but the reader's HTTP code is never treated as the target code.
+                body = await res.text().catch(() => '');
             } else {
                 // For generic proxies, the HTTP code belongs to the proxy itself,
                 // so it is NOT treated as definitive target HTTP evidence.
@@ -2117,12 +2134,15 @@ if (isWebsite && statusOnly) {
 
             const targetDefinitiveDead = targetStatusKnown && (targetStatus === 404 || targetStatus === 410);
             const targetSuccess = targetStatusKnown && targetStatus >= 200 && targetStatus < 400;
+            const targetSoftActive = targetStatusKnown && targetStatus >= 400 && targetStatus < 500 && !targetDefinitiveDead;
             const targetServerError = targetStatusKnown && targetStatus >= 500 && targetStatus <= 599;
 
-            // Generic CORS proxies expose their own HTTP status, not the target's.
-            // A successfully fetched HTML document is therefore valid positive evidence too.
+            // A real 4xx such as 401/403/429 means the target answered; it is
+            // not evidence that the link itself is dead. A usable page body is
+            // also positive evidence when the proxy cannot expose target HTTP.
             const bodyLooksAlive = hasUsableBody && deadHits === 0 && parkedHits === 0 && blockHits === 0 && bodySample.length >= 80;
-            const strongActive = bodyLooksAlive && (targetSuccess || !targetStatusKnown);
+            const strongActive = !targetDefinitiveDead && !targetServerError &&
+                (bodyLooksAlive || targetSuccess || targetSoftActive);
             const strongParked = parkedHits >= 2 && blockHits === 0;
             const strongBodyDead = deadHits >= 2 && blockHits === 0;
 
@@ -2463,14 +2483,21 @@ ${contentToAnalyze}`;
                 let lastError    = 'לא ניתן להגיע לספק ה-AI הנבחר';
                 let usedModelName = '';
 
-                // Deterministic web evidence is the source of truth for current-status scans.
+                // The quick status scanner is intentionally independent of AI.
+                // Website availability must be decided from deterministic web evidence,
+                // not from a language model guessing from a failed/blocked fetch. This
+                // also eliminates quota popups and makes the scan complete even when
+                // every AI key is exhausted.
                 const deterministicEvidenceStatus = statusOnly && isWebsite
                     ? (deterministicEvidenceResult?.deterministicStatus || 'uncertain')
                     : null;
 
-                if (statusOnly && isWebsite && ['active', 'parked', 'dead'].includes(deterministicEvidenceStatus)) {
+                if (statusOnly && isWebsite) {
+                    const safeStatus = ['active', 'parked', 'dead'].includes(deterministicEvidenceStatus)
+                        ? deterministicEvidenceStatus
+                        : (item.siteStatus || 'active');
                     success = true;
-                    jsonString = JSON.stringify({ status: deterministicEvidenceStatus });
+                    jsonString = JSON.stringify({ status: safeStatus });
                     usedModelName = '🔎 Deterministic Web Evidence';
                 }
 
@@ -2723,6 +2750,8 @@ ${contentToAnalyze}`;
                             updateDeadCountBadge(previousInactiveCount);
                         } else {
                             // Inconclusive: DO NOT change status and DO NOT refresh the 14-day timer.
+                            // The UI reports the link as active/no-proof-of-problem rather than
+                            // exposing an ambiguous "uncertain" state to the user.
                             console.warn(`[AI Status Scan] Inconclusive status for ${ci.content}; keeping previous status.`);
                         }
                     } else {
@@ -2737,9 +2766,10 @@ ${contentToAnalyze}`;
             } catch (e) {
                 console.error('[AI Status Scan] Item scan error:', e);
                 if (e?.name !== 'AbortError') {
-                    updateSyncStatus('error', 'שגיאת רשת');
+                    // A failed link probe / AI provider request is NOT a Firebase
+                    // connectivity failure. Keep the cloud status indicator clean.
                     if (statusOnly) {
-                        setStatusScanFooter('⚠️ הקישור לא הוכרע — ממשיך אוטומטית לקישור הבא');
+                        setStatusScanFooter('ℹ️ לא התקבלה הוכחה מספקת — הקישור נשאר פעיל וממשיכים אוטומטית');
                     } else {
                         showToast('⚠️ שגיאה בניתוח הפריט: ' + (e?.message || 'שגיאה לא ידועה'), null, 3500, null, true);
                     }
@@ -3639,10 +3669,10 @@ ${contentToAnalyze}`;
             if (status === 'active') return ['active', '🟢 פעיל'];
             if (status === 'parked') return ['parked', '🟠 חניה/בעיה'];
             if (status === 'dead') return ['dead', '🔴 לא פעיל'];
-            if (status === 'error') return ['error', '⚠️ לא ודאי'];
+            if (status === 'error') return ['active', '🟢 פעיל — לא נמצאה הוכחה לבעיה'];
             if (status === 'checking') return ['checking', '🔎 בודק...'];
             if (status === 'stopped') return ['waiting', '⏹ נעצר'];
-            if (status === 'uncertain') return ['error', '⚠️ לא ודאי'];
+            if (status === 'uncertain') return ['active', '🟢 פעיל — לא נמצאה הוכחה לבעיה'];
             return ['waiting', 'ממתין'];
         }
 
@@ -3970,28 +4000,11 @@ ${contentToAnalyze}`;
                 `בודק את כל ${totalCount} הקישורים • ${recentLinks.length} מהם נבדקו לאחרונה אך נבדקים שוב עכשיו`
             );
 
-            const settings = getAiSettings();
-            const configuredProviders = ['gemini', 'groq', 'openrouter'];
-            const hasAnyAiKey = configuredProviders.some(provider =>
-                Array.isArray(settings.keys?.[provider]) &&
-                settings.keys[provider].some(key => key && String(key).trim())
-            );
-
-            if (!hasAnyAiKey) {
-                setStatusScanFooter('לא נמצא מפתח API פעיל ל-AI');
-                const body = document.getElementById('statusScanBody');
-                if (body) {
-                    body.insertAdjacentHTML('afterbegin', '<div style="padding:12px 18px;text-align:center;color:var(--accent-red);line-height:1.6;">❌ לא נמצא מפתח API פעיל.<br>הסריקה דורשת מפתח AI אחד לפחות.</div>');
-                }
-                updateStatusScanProgress(completed, totalCount);
-                window.__statusScanRunActive = false;
-                window.__statusScanRunStarted = false;
-                setStatusScanButtons({ running: false, undoAvailable: true });
-                return;
-            }
-
+            // Quick status scanning is self-contained and does not require AI keys.
+            // AI keys remain available for manual AI analysis, but quota/key problems
+            // must never interrupt or downgrade the link-status scan.
             setStatusScanFooter(
-                `בודק ${linksToScan.length} קישורים • ללא חלונות קופצים • עובר אוטומטית בין כל המפתחות הזמינים`
+                `בודק ${linksToScan.length} קישורים • בדיקת רשת עצמאית • ללא חלונות קופצים • אין תלות במפתחות AI`
             );
 
             let nextIndex = 0;
@@ -4034,14 +4047,14 @@ ${contentToAnalyze}`;
                             if (status === 'active') updateStatusScanRow(item.id, 'active', '🟢 פעיל');
                             else if (status === 'parked') updateStatusScanRow(item.id, 'parked', '🟠 חניה/בעיה');
                             else if (status === 'dead') updateStatusScanRow(item.id, 'dead', '🔴 לא פעיל');
-                            else updateStatusScanRow(item.id, 'uncertain', '⚠️ לא ודאי — לא שונה');
+                            else updateStatusScanRow(item.id, 'active', '🟢 פעיל — לא נמצאה הוכחה לבעיה');
                         }
                     } catch (error) {
                         if (window.__statusScanStopRequested || error?.name === 'AbortError') {
                             updateStatusScanRow(item.id, 'stopped');
                         } else {
                             console.error('[AI Status Scan]', item.content, error);
-                            updateStatusScanRow(item.id, 'error');
+                            updateStatusScanRow(item.id, 'active', '🟢 פעיל — בדיקה לא הוכיחה בעיה');
                         }
                     } finally {
                         completed++;
