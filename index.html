@@ -392,12 +392,53 @@
             overflow: hidden;
         }
         #statusScanPanel.open { display: flex; animation: statusScanDockIn 0.18s ease; }
-        #statusScanPanel.minimized { width: max-content; max-width: calc(100vw - 20px); height: 42px !important; max-height: 42px !important; border-radius: 22px; bottom: 18px; cursor: pointer; overflow: hidden; }
+        /* Minimized scan = true floating action circle. Keep it visually identical
+           to the scroll-to-top affordance, but place it on the LEFT. */
+        #statusScanPanel.minimized {
+            left: 14px; right: auto; bottom: 28px; transform: none;
+            width: 46px !important; max-width: 46px !important;
+            height: 46px !important; max-height: 46px !important;
+            border-radius: 50%; cursor: pointer; overflow: visible;
+            padding: 0;
+            display: flex;
+            align-items: center; justify-content: center;
+            background: color-mix(in srgb, var(--glass-bg) 96%, transparent);
+            box-shadow: 0 4px 15px rgba(0,0,0,.35);
+            isolation: isolate;
+        }
         #statusScanPanel.minimized .status-scan-body,
         #statusScanPanel.minimized .status-scan-footer,
         #statusScanPanel.minimized .status-scan-progress-wrap { display: none !important; }
-        #statusScanPanel.minimized .status-scan-header { border-bottom: none; min-height: 42px; height: 42px; padding: 0 10px; background: transparent; }
-        #statusScanPanel.minimized .status-scan-actions .status-scan-control-btn:not(#statusScanMinMaxBtn):not(#statusScanCancelBtn) { display: none; }
+        #statusScanPanel.minimized .status-scan-header {
+            width: 100%; height: 46px; min-height: 46px;
+            padding: 0; border: 0; background: transparent;
+            justify-content: center;
+        }
+        #statusScanPanel.minimized .status-scan-title {
+            width: 100%; height: 46px; padding: 0; margin: 0;
+            justify-content: center; gap: 0;
+        }
+        #statusScanPanel.minimized .status-scan-title-text,
+        #statusScanPanel.minimized .status-scan-counter,
+        #statusScanPanel.minimized .status-scan-actions .status-scan-control-btn:not(#statusScanMinMaxBtn) {
+            display: none !important;
+        }
+        #statusScanPanel.minimized .status-scan-title-icon {
+            display: flex; align-items: center; justify-content: center;
+            width: 46px; height: 46px; font-size: 20px; line-height: 1;
+        }
+        #statusScanPanel.minimized #statusScanMinMaxBtn {
+            position: absolute; inset: 0; width: 46px !important; height: 46px !important;
+            min-width: 46px; min-height: 46px; padding: 0; margin: 0;
+            border: 0; background: transparent; border-radius: 50%;
+            font-size: 0; z-index: 2;
+        }
+        #statusScanPanel.minimized #statusScanMinMaxBtn::before {
+            content: '🔎'; font-size: 20px;
+        }
+        #statusScanPanel.minimized .status-scan-actions {
+            position: static; width: 0; height: 0; gap: 0;
+        }
         @keyframes statusScanDockIn {
             from { opacity: 0; transform: translateX(-50%) translateY(8px); }
             to { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -432,6 +473,21 @@
             align-items: center;
             gap: 5px;
             white-space: nowrap;
+        }
+        .status-scan-title-icon { display: inline-flex; align-items:center; justify-content:center; line-height:1; }
+        .status-scan-mini-badge {
+            display: none; align-items: center; justify-content: center;
+            min-width: 18px; height: 18px; padding: 0 5px;
+            border-radius: 999px; background: var(--accent-red); color: #fff;
+            border: 2px solid var(--glass-bg); box-shadow: 0 2px 8px rgba(217,48,37,.45);
+            font: 900 9px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+            z-index: 5;
+        }
+        .status-scan-mini-badge.visible { display: inline-flex; }
+        #statusScanPanel.minimized .status-scan-mini-badge {
+            position: absolute; top: -3px; right: -3px;
+            min-width: 18px; height: 18px; padding: 0 4px; font-size: 8px;
+            border-width: 2px;
         }
         .status-scan-counter { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
         .status-scan-progress-wrap {
@@ -534,7 +590,12 @@
             }
             .status-scan-url { font-size: 9px; }
             .status-scan-state { min-width: 56px; font-size: 8px; }
-            #statusScanPanel.minimized { left: 50%; right: auto; width: max-content; max-width: calc(100vw - 16px); bottom: 14px; transform: translateX(-50%); }
+            #statusScanPanel.minimized {
+                left: 10px; right: auto; bottom: calc(10px + var(--mobile-safe-bottom));
+                width: 46px !important; max-width: 46px !important;
+                height: 46px !important; max-height: 46px !important;
+                transform: none;
+            }
             .dead-count-badge {
                 top: -4px;
                 right: -4px;
@@ -1122,20 +1183,15 @@
     }
 
     #statusScanPanel.minimized {
-        left: 50%;
-        right: auto;
-        bottom: calc(12px + var(--mobile-safe-bottom));
-        width: max-content;
-        max-width: calc(100vw - 16px);
-        height: 44px !important;
-        max-height: 44px !important;
-        border-radius: 22px;
-        transform: translateX(-50%);
+        left: 10px; right: auto;
+        bottom: calc(10px + var(--mobile-safe-bottom));
+        width: 46px !important; max-width: 46px !important;
+        height: 46px !important; max-height: 46px !important;
+        border-radius: 50%; transform: none;
     }
 
     #statusScanPanel.minimized .status-scan-header {
-        height: 44px;
-        min-height: 44px;
+        width: 46px; height: 46px; min-height: 46px;
     }
 
     #toast-container {
@@ -1316,7 +1372,7 @@
         bottom: calc(8px + var(--keyboard-offset, 0px) + var(--mobile-safe-bottom));
     }
     body.keyboard-open #statusScanPanel.minimized {
-        bottom: calc(12px + var(--keyboard-offset, 0px) + var(--mobile-safe-bottom));
+        bottom: calc(10px + var(--keyboard-offset, 0px) + var(--mobile-safe-bottom));
     }
     body.keyboard-open #scrollTopBtn {
         bottom: calc(10px + var(--keyboard-offset, 0px) + var(--mobile-safe-bottom));
@@ -1335,7 +1391,200 @@
     }
 }
 
-    </style>
+    
+/* ================================================================
+   STATUS SCAN DISPLAY ENHANCEMENT ONLY
+   Keeps the scan engine and performance logic unchanged.
+   Makes the expanded scanner larger, clearer and easier to use.
+   ================================================================ */
+
+#statusScanPanel:not(.minimized) {
+    width: min(820px, calc(100vw - 24px));
+    height: 150px;
+    max-height: 150px;
+    border-radius: 16px;
+    box-shadow: 0 14px 38px rgba(0,0,0,.28);
+}
+
+#statusScanPanel:not(.minimized) .status-scan-header {
+    min-height: 46px;
+    height: 46px;
+    padding: 7px 12px;
+    gap: 10px;
+}
+
+#statusScanPanel:not(.minimized) .status-scan-title {
+    font-size: 14px;
+    gap: 7px;
+    letter-spacing: .1px;
+}
+
+#statusScanPanel:not(.minimized) .status-scan-counter {
+    font-size: 12px;
+    font-weight: 700;
+}
+
+#statusScanPanel:not(.minimized) .status-scan-actions {
+    gap: 6px;
+}
+
+#statusScanPanel:not(.minimized) .status-scan-control-btn {
+    min-height: 38px;
+    min-width: 46px;
+    padding: 7px 10px;
+    border-radius: 9px;
+    font-size: 10.5px;
+}
+
+#statusScanPanel:not(.minimized) .status-scan-body {
+    padding: 7px 8px;
+}
+
+#statusScanPanel:not(.minimized) .status-scan-row {
+    grid-template-columns: 30px minmax(0,1fr) auto;
+    min-height: 34px;
+    padding: 4px 7px;
+    margin-bottom: 4px;
+    gap: 8px;
+    border-radius: 9px;
+}
+
+#statusScanPanel:not(.minimized) .status-scan-index {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    font-size: 10px;
+}
+
+#statusScanPanel:not(.minimized) .status-scan-url {
+    font-size: 11px;
+    line-height: 1.3;
+}
+
+#statusScanPanel:not(.minimized) .status-scan-state {
+    min-width: 68px;
+    font-size: 10px;
+    padding: 5px 7px;
+}
+
+#statusScanPanel:not(.minimized) .status-scan-footer {
+    min-height: 34px;
+    padding: 6px 10px;
+    font-size: 10px;
+}
+
+@media (max-width: 768px) {
+    #statusScanPanel:not(.minimized) {
+        left: 8px;
+        right: 8px;
+        bottom: calc(8px + var(--mobile-safe-bottom, 0px));
+        width: auto;
+        height: min(38svh, 310px);
+        max-height: min(38svh, 310px);
+        min-height: 158px;
+        border-radius: 16px;
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-header {
+        min-height: 50px;
+        height: 50px;
+        padding: 7px 9px;
+        gap: 7px;
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-title {
+        max-width: 38vw;
+        font-size: 13px;
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-counter {
+        font-size: 11px;
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-actions {
+        gap: 5px;
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-control-btn {
+        min-width: 43px;
+        min-height: 40px;
+        padding: 8px 9px;
+        border-radius: 10px;
+        font-size: 10.5px;
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-body {
+        padding: 6px;
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-row {
+        grid-template-columns: 30px minmax(0,1fr) auto;
+        min-height: 36px;
+        padding: 5px 6px;
+        margin-bottom: 4px;
+        gap: 7px;
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-index {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        font-size: 9.5px;
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-url {
+        font-size: 10.5px;
+        line-height: 1.28;
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-state {
+        min-width: 64px;
+        font-size: 9.5px;
+        padding: 6px 7px;
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-footer {
+        min-height: 36px;
+        padding: 6px 8px;
+        font-size: 9.5px;
+    }
+}
+
+@media (max-width: 480px) {
+    #statusScanPanel:not(.minimized) {
+        min-height: 152px;
+        height: min(40svh, 300px);
+        max-height: min(40svh, 300px);
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-title {
+        max-width: 35vw;
+        font-size: 12px;
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-counter {
+        display: block;
+        font-size: 10px;
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-control-btn {
+        min-width: 40px;
+        min-height: 38px;
+        padding-inline: 8px;
+        font-size: 10px;
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-url {
+        font-size: 10px;
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-state {
+        min-width: 60px;
+        font-size: 9px;
+    }
+}
+
+</style>
 </head>
 <body class="dark-mode">
     <div id="bulkActionBar">
@@ -1358,12 +1607,16 @@
         <p class="loading-text">מוודא שהכל מעודכן ומאובטח, זה ייקח רק רגע.</p>
     </div>
 
-    <div id="statusScanPanel" aria-live="polite" aria-label="סריקת סטטוס אתרים">
+    <div id="statusScanPanel" aria-live="polite" aria-label="סריקת סטטוס אתרים" aria-expanded="false" tabindex="-1">
         <div class="status-scan-header">
-            <div class="status-scan-title">🤖 בדיקת סטטוס אתרים</div>
+            <div class="status-scan-title" title="בדיקת סטטוס אתרים">
+                <span class="status-scan-title-icon" aria-hidden="true">🔎</span>
+                <span class="status-scan-title-text">בדיקת סטטוס אתרים</span>
+                <span class="status-scan-mini-badge" id="statusScanDeadBadge" aria-label="קישורים לא פעילים">0</span>
+            </div>
             <div class="status-scan-actions">
                 <div class="status-scan-counter" id="statusScanCounter">מכין סריקה...</div>
-                <button type="button" id="statusScanMinMaxBtn" class="status-scan-control-btn" title="מזער/הרחב">🗕</button>
+                <button type="button" id="statusScanMinMaxBtn" class="status-scan-control-btn" title="מזער חלון סריקה" aria-label="מזער חלון סריקה">🗕</button>
                 <button type="button" id="statusScanPauseBtn" class="status-scan-control-btn pause" title="השהה את הסריקה">⏸ השהה</button>
                 <button type="button" id="statusScanStopBtn" class="status-scan-control-btn stop" title="עצור את הסריקה והשאר את השינויים שבוצעו עד עכשיו">⏹ עצור</button>
                 <button type="button" id="statusScanUndoBtn" class="status-scan-control-btn undo" title="בטל את כל שינויי הסטטוס שבוצעו בסריקה זו" disabled>↩ UNDO</button>
@@ -3539,7 +3792,9 @@ ${contentToAnalyze}`;
                             ci.updatedAt = statusStamp;
                             // Update the red badge immediately, before cloud I/O.
                             updateDeadCountBadge(previousInactiveCount);
-                            renderList();
+                            /* Do not re-render the whole list here. Saving is independent
+                               from painting the UI; the scheduler below coalesces updates. */
+                            queueStatusScanRender();
                             await saveItemToCloud(ci, scanOwnerUid, statusOnly);
                             updateDeadCountBadge(previousInactiveCount);
                         } else {
@@ -4477,6 +4732,7 @@ ${contentToAnalyze}`;
             } else {
                 btn.classList.remove('dead-active');
             }
+            updateStatusScanMiniBadge();
         }
 
         function checkDeadLinksAlert(previousCount = null) {
@@ -4526,15 +4782,73 @@ ${contentToAnalyze}`;
             }
         }
 
-        function toggleStatusScanMinimized() {
+        /*
+         * UI budget guard: network checks can run concurrently, but rendering the
+         * entire link grid after every result is expensive. Coalesce changes into
+         * at most one render per frame and never more often than ~350 ms. This keeps
+         * scrolling, typing and tapping responsive while the scanner is busy.
+         */
+        let statusScanRenderTimer = null;
+        let statusScanRenderPending = false;
+        let statusScanLastRenderAt = 0;
+        function queueStatusScanRender(force = false) {
+            if (statusScanRenderPending && !force) return;
+            const now = performance.now();
+            const delay = force ? 0 : Math.max(0, 350 - (now - statusScanLastRenderAt));
+            statusScanRenderPending = true;
+            clearTimeout(statusScanRenderTimer);
+            statusScanRenderTimer = setTimeout(() => {
+                statusScanRenderTimer = null;
+                requestAnimationFrame(() => {
+                    statusScanRenderPending = false;
+                    statusScanLastRenderAt = performance.now();
+                    renderList();
+                });
+            }, delay);
+        }
+
+        async function yieldToBrowser() {
+            await new Promise(resolve => {
+                if (typeof scheduler !== 'undefined' && scheduler?.postTask) {
+                    scheduler.postTask(resolve, { priority: 'background' });
+                } else {
+                    setTimeout(resolve, 0);
+                }
+            });
+        }
+
+        function updateStatusScanMiniBadge() {
+            const badge = document.getElementById('statusScanDeadBadge');
+            const panel = document.getElementById('statusScanPanel');
+            if (!badge) return;
+            const count = getInactiveStatusCount();
+            badge.textContent = String(count > 99 ? '99+' : count);
+            badge.classList.toggle('visible', count > 0);
+            badge.setAttribute('aria-label', `${count} קישורים לא פעילים או בעייתיים`);
+            if (panel) {
+                panel.setAttribute('data-dead-count', String(count));
+                panel.setAttribute('aria-label', count > 0
+                    ? `סריקת סטטוס אתרים. ${count} קישורים לא פעילים או בעייתיים. לחץ להרחבה.`
+                    : 'סריקת סטטוס אתרים. לחץ להרחבה.');
+            }
+        }
+
+        function toggleStatusScanMinimized(forceMinimized = null) {
             const panel = document.getElementById('statusScanPanel');
             const btn = document.getElementById('statusScanMinMaxBtn');
             if (!panel) return;
-            const minimized = panel.classList.toggle('minimized');
+            const minimized = forceMinimized === null
+                ? !panel.classList.contains('minimized')
+                : !!forceMinimized;
+            panel.classList.toggle('minimized', minimized);
+            panel.setAttribute('aria-expanded', minimized ? 'false' : 'true');
+            panel.setAttribute('tabindex', minimized ? '0' : '-1');
             if (btn) {
                 btn.textContent = minimized ? '🗖' : '🗕';
                 btn.title = minimized ? 'הרחב חלון סריקה' : 'מזער חלון סריקה';
+                btn.setAttribute('aria-label', minimized ? 'הרחב חלון סריקה' : 'מזער חלון סריקה');
             }
+            updateStatusScanMiniBadge();
         }
 
         function openStatusScanPanel(items) {
@@ -4574,9 +4888,18 @@ ${contentToAnalyze}`;
             const footerLeft = document.getElementById('statusScanFooterLeft');
             if (footerRight) footerRight.textContent = '0%';
             if (footerLeft) footerLeft.textContent = `נבדק רק הסטטוס • ${items.length} קישורים`;
-            panel.classList.remove('minimized');
+
+            /* The scanner opens minimized by default so it never steals visual focus. */
+            panel.classList.add('minimized');
             const minMaxBtn = document.getElementById('statusScanMinMaxBtn');
-            if (minMaxBtn) { minMaxBtn.textContent = '🗕'; minMaxBtn.title = 'מזער חלון סריקה'; }
+            if (minMaxBtn) {
+                minMaxBtn.textContent = '🗖';
+                minMaxBtn.title = 'הרחב חלון סריקה';
+                minMaxBtn.setAttribute('aria-label', 'הרחב חלון סריקה');
+            }
+            panel.setAttribute('aria-expanded', 'false');
+            panel.setAttribute('tabindex', '0');
+            updateStatusScanMiniBadge();
             panel.classList.add('open');
         }
 
@@ -4753,6 +5076,8 @@ ${contentToAnalyze}`;
             if (panel) panel.classList.remove('open');
             const body = document.getElementById('statusScanBody');
             if (body) body.innerHTML = '';
+            queueStatusScanRender(true);
+            updateStatusScanMiniBadge();
             setStatusScanButtons({ running: false, undoAvailable: false });
             setStatusScanFooter('נבדק רק הסטטוס');
         }
@@ -4831,8 +5156,11 @@ ${contentToAnalyze}`;
                 it.type === 'link' && ['dead', 'parked'].includes(it.siteStatus)
             ).length;
 
-            // 4 workers במקביל, וכל אחד עובר דרך כל המפתחות והספקים הזמינים עד להצלחה.
-            const WORKER_COUNT = Math.min(4, linksToScan.length);
+            // Keep network concurrency intentionally modest. The scan is background work:
+            // fewer concurrent probes reduce CPU/network contention without making the
+            // scanner feel stalled. Mobile gets 2 workers, desktop 3.
+            const isMobileScan = window.matchMedia?.('(max-width: 768px)')?.matches;
+            const WORKER_COUNT = Math.min(isMobileScan ? 2 : 3, linksToScan.length);
 
             const worker = async () => {
                 while (true) {
@@ -4889,8 +5217,11 @@ ${contentToAnalyze}`;
                                 ? `⏹ נעצר • הושלמו ${completed}/${totalCount} • ${inactiveCount} לא פעילים/בבעיה`
                                 : `הושלמו ${completed}/${totalCount} • ${inactiveCount} לא פעילים/בבעיה`
                         );
-
-                        renderList();
+                        updateStatusScanMiniBadge();
+                        queueStatusScanRender();
+                        /* Explicitly yield after each completed network job so input,
+                           scrolling and painting get a chance before the next request. */
+                        await yieldToBrowser();
                     }
                 }
             };
@@ -4905,7 +5236,10 @@ ${contentToAnalyze}`;
             window.__statusScanAbortController = null;
             window.__statusScanKeyHealth = new Map();
             checkDeadLinksAlert();
-            renderList();
+            clearTimeout(statusScanRenderTimer);
+            statusScanRenderTimer = null;
+            statusScanRenderPending = false;
+            queueStatusScanRender(true);
 
             if (wasStopped) {
                 setStatusScanFooter(
@@ -4940,6 +5274,20 @@ ${contentToAnalyze}`;
         document.getElementById('statusScanMinMaxBtn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             toggleStatusScanMinimized();
+        });
+        document.getElementById('statusScanPanel')?.addEventListener('click', (e) => {
+            const panel = document.getElementById('statusScanPanel');
+            if (!panel?.classList.contains('minimized')) return;
+            if (e.target.closest('button')) return;
+            toggleStatusScanMinimized(false);
+        });
+        document.getElementById('statusScanPanel')?.addEventListener('keydown', (e) => {
+            const panel = document.getElementById('statusScanPanel');
+            if (!panel?.classList.contains('minimized')) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleStatusScanMinimized(false);
+            }
         });
         document.getElementById('statusScanPauseBtn')?.addEventListener('click', () => {
             if (!window.__statusScanRunActive) return;
