@@ -1757,7 +1757,100 @@
     }
 }
 
-</style>
+
+
+/* ================================================================
+   RESTORED TOP HEADER / ACCOUNT PANEL — aligned with index.html
+   Keep the original top-panel proportions on mobile instead of the
+   later compact mobile layer.
+   ================================================================ */
+@media (max-width: 768px) {
+    header {
+        margin-bottom: 10px;
+        padding-top: 0;
+    }
+    header h1 {
+        font-size: 1.4rem;
+        line-height: normal;
+        gap: 8px;
+        flex-wrap: nowrap;
+    }
+    header .header-logo {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+    }
+    #itemCount {
+        font-size: 0.9rem;
+        padding: 4px 15px;
+        line-height: normal;
+    }
+    #userSection {
+        padding: 8px 12px;
+        margin-bottom: 10px;
+        gap: 6px;
+        border-radius: 12px;
+    }
+    #userSection .user-top-row {
+        gap: 0;
+        align-items: center;
+    }
+    #userSection .user-info {
+        min-width: 0;
+        gap: 10px;
+    }
+    #userSection .user-avatar {
+        width: 38px;
+        height: 38px;
+    }
+    #userSection .user-name,
+    #userSection .user-email {
+        max-width: none;
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
+    }
+}
+
+/* A single minimized scan circle: no secondary floating red bubble and
+   no tiny second circular control. The progress text is the circle's
+   only visible content, e.g. 123/628. */
+#statusScanPanel.minimized .status-scan-mini-badge {
+    display: none !important;
+}
+#statusScanPanel.minimized .status-scan-mini-progress {
+    display: flex !important;
+    width: 100%;
+    max-width: 100%;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-primary);
+    font-size: 10px !important;
+    font-weight: 900;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+    direction: ltr;
+    white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0,0,0,.28);
+}
+#statusScanPanel.minimized .status-scan-actions #statusScanMinMaxBtn {
+    inset: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: 0 !important;
+    width: 46px !important;
+    height: 46px !important;
+    min-width: 46px !important;
+    min-height: 46px !important;
+    opacity: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border-radius: 50% !important;
+}
+
+    </style>
 </head>
 <body class="dark-mode">
     <div id="bulkActionBar">
@@ -2115,12 +2208,86 @@
         // Per-run API-key health. Failed/exhausted keys are skipped for the
         // rest of the current status scan; a new scan resets this map.
         window.__statusScanKeyHealth = new Map();
-        // אתר שנבדק בהצלחה במהלך 14 הימים האחרונים לא ייסרק שוב.
+        // אתר שנבדק בהצלחה במהלך 30 הימים האחרונים לא ייסרק שוב.
         // הערך נשמר בכל פריט בשדה statusCheckedAt.
         const STATUS_RECHECK_DAYS = 30;
         const STATUS_RECHECK_MS = STATUS_RECHECK_DAYS * 24 * 60 * 60 * 1000;
+        // Shared in-memory cache rebuilt from cloud-backed item data.
+        // It is keyed by canonical URL so the same link is never re-probed
+        // twice in one device/session merely because it exists in duplicate items.
+        window.__statusScanRecentCache = new Map();
+        window.__statusScanAutoStartedForSession = false;
 
         function nowIso() { return new Date().toISOString(); }
+
+        function normalizeStatusScanKey(value) {
+            const raw = String(value || '').trim();
+            if (!raw) return '';
+            try {
+                let candidate = raw;
+                if (/^t\.me\//i.test(candidate)) candidate = 'https://' + candidate;
+                else if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate) && /^[^\s/]+\.[^\s/]+/i.test(candidate)) {
+                    candidate = 'https://' + candidate;
+                }
+                const url = new URL(candidate);
+                url.hash = '';
+                url.hostname = url.hostname.toLowerCase();
+                if ((url.protocol === 'https:' && url.port === '443') || (url.protocol === 'http:' && url.port === '80')) {
+                    url.port = '';
+                }
+                // Query ordering should not make identical URLs look different.
+                try { url.searchParams.sort(); } catch (_) {}
+                let path = url.pathname || '/';
+                if (path.length > 1) path = path.replace(/\/+$/, '');
+                url.pathname = path;
+                return url.toString();
+            } catch (_) {
+                return raw.replace(/\s+/g, ' ').replace(/#.*$/, '').replace(/\/$/, '').toLowerCase();
+            }
+        }
+
+        function getRecentStatusCheckTimestamp(itemOrStamp) {
+            const stamp = typeof itemOrStamp === 'string' ? itemOrStamp : itemOrStamp?.statusCheckedAt;
+            if (!stamp) return null;
+            const checkedAt = Date.parse(stamp);
+            if (!Number.isFinite(checkedAt)) return null;
+            const ageMs = Date.now() - checkedAt;
+            if (ageMs < 0 || ageMs >= STATUS_RECHECK_MS) return null;
+            return checkedAt;
+        }
+
+        function rebuildRecentStatusScanCache(items = state.items) {
+            const cache = new Map();
+            for (const item of (Array.isArray(items) ? items : [])) {
+                if (item?.type !== 'link') continue;
+                const key = normalizeStatusScanKey(item.content);
+                const checkedAt = getRecentStatusCheckTimestamp(item);
+                if (!key || !checkedAt) continue;
+                const previous = cache.get(key) || 0;
+                if (checkedAt > previous) cache.set(key, checkedAt);
+            }
+            window.__statusScanRecentCache = cache;
+            return cache;
+        }
+
+        function rememberRecentStatusCheck(itemOrUrl, stamp) {
+            const key = typeof itemOrUrl === 'string'
+                ? normalizeStatusScanKey(itemOrUrl)
+                : normalizeStatusScanKey(itemOrUrl?.content);
+            const checkedAt = getRecentStatusCheckTimestamp(stamp);
+            if (!key || !checkedAt) return;
+            if (!(window.__statusScanRecentCache instanceof Map)) window.__statusScanRecentCache = new Map();
+            const previous = window.__statusScanRecentCache.get(key) || 0;
+            if (checkedAt > previous) window.__statusScanRecentCache.set(key, checkedAt);
+        }
+
+        function getRecentStatusCheckFromCache(item, cache = window.__statusScanRecentCache) {
+            if (!item?.content || !(cache instanceof Map)) return null;
+            const checkedAt = cache.get(normalizeStatusScanKey(item.content));
+            if (!checkedAt) return null;
+            const ageMs = Date.now() - checkedAt;
+            return ageMs >= 0 && ageMs < STATUS_RECHECK_MS ? checkedAt : null;
+        }
 
         try {
             app  = initializeApp(firebaseConfig);
@@ -2432,6 +2599,8 @@
                     window.__statusScanStopRequested = true;
                     window.__statusScanAbortController = null;
                     window.__statusScanUndoSnapshot = null;
+                    window.__statusScanAutoStartedForSession = false;
+                    window.__statusScanRecentCache = new Map();
                     const scanPanel = document.getElementById('statusScanPanel');
                     if (scanPanel) scanPanel.classList.remove('open', 'minimized');
                     const scanBody = document.getElementById('statusScanBody');
@@ -2449,6 +2618,8 @@
                     state.isOffline = !navigator.onLine;
                     state.user = user;
                     isServerDataArrived = false;
+                    window.__statusScanAutoStartedForSession = false;
+                    window.__statusScanRecentCache = new Map();
                     
                     try { if (navigator.onLine) await enableNetwork(db); } catch(e) {}
                     
@@ -2498,14 +2669,24 @@
                             isServerDataArrived = true;
                         }
 
-                        if (hasChanges || snapshot.metadata.fromCache) {
+                        // Rebuild the recent-check cache from the complete current state.
+                        // This makes the 30-day rule device-agnostic as long as both devices
+                        // are looking at the same Firestore-backed collection.
+                        rebuildRecentStatusScanCache(state.items);
+
+                        // Do not repaint the full 600+ card grid for every status write
+                        // while the background scanner is running. The scan panel remains
+                        // live; the main grid is repainted once at the end.
+                        if ((hasChanges || snapshot.metadata.fromCache) && !window.__statusScanRunActive) {
                             renderList();
                             updateCategoryDropdowns();
                         }
 
-                        // טריגר בטוח לאחר הגעת נתוני הקישורים בפועל.
-                        // guard בתוך startBackgroundStatusScan מונע הפעלה כפולה.
-                        if (isServerDataArrived && state.user) {
+                        // Start the automatic status scan once per authenticated data session.
+                        // Scanner writes must not recursively start another scan through
+                        // their own Firestore snapshot events.
+                        if (isServerDataArrived && state.user && !window.__statusScanAutoStartedForSession) {
+                            window.__statusScanAutoStartedForSession = true;
                             setTimeout(() => startBackgroundStatusScan(), 0);
                         }
 
@@ -3133,7 +3314,10 @@
             if (!navigator.onLine) {
                 showToast('❌ לא ניתן לבצע סריקת AI ללא אינטרנט.', null, 4000, null, true);
                 const ci = state.items.find(i => i.id === id);
-                if (ci) { ci.isScanning = false; renderList(); }
+                if (ci) {
+                    ci.isScanning = false;
+                    if (!window.__statusScanRunActive) renderList();
+                }
                 return;
             }
 
@@ -3964,6 +4148,7 @@ ${contentToAnalyze}`;
                             ci.siteStatus = finalStatus;
                             ci.statusCheckedAt = statusStamp;
                             ci.updatedAt = statusStamp;
+                            rememberRecentStatusCheck(ci, statusStamp);
                             // Update the red badge immediately, before cloud I/O.
                             updateDeadCountBadge(previousInactiveCount);
                             /* Do not re-render the whole list here. Saving is independent
@@ -4966,6 +5151,11 @@ ${contentToAnalyze}`;
         let statusScanRenderPending = false;
         let statusScanLastRenderAt = 0;
         function queueStatusScanRender(force = false) {
+            // During the background scanner, repainting hundreds of cards after every
+            // network result is the main source of UI hitching. The scan panel already
+            // has its own progress UI, so defer the expensive full-grid repaint until the
+            // scan is finished (or force is explicitly requested).
+            if (window.__statusScanRunActive && !force) return;
             if (statusScanRenderPending && !force) return;
             const now = performance.now();
             const delay = force ? 0 : Math.max(0, 350 - (now - statusScanLastRenderAt));
@@ -5032,7 +5222,7 @@ ${contentToAnalyze}`;
             updateStatusScanMiniBadge();
         }
 
-        function openStatusScanPanel(items, { totalAll = items.length, skippedRecent = 0, initialFound = 0 } = {}) {
+        function openStatusScanPanel(items, { totalAll = items.length, skippedRecent = 0, skippedDuplicate = 0, initialFound = 0, progressInitial = 0 } = {}) {
             const panel = document.getElementById('statusScanPanel');
             const body = document.getElementById('statusScanBody');
             const counter = document.getElementById('statusScanCounter');
@@ -5066,17 +5256,26 @@ ${contentToAnalyze}`;
             });
             body.appendChild(fragment);
 
-            counter.textContent = `0 / ${items.length}`;
-            progress.style.width = '0%';
-            panel.style.setProperty('--scan-progress', '0%');
-            if (miniProgress) miniProgress.textContent = `0/${items.length}`;
+            const safeProgressTotal = Math.max(0, Number(totalAll) || 0);
+            const safeProgressInitial = Math.min(safeProgressTotal, Math.max(0, Number(progressInitial) || 0));
+            const initialPct = safeProgressTotal > 0 ? Math.round((safeProgressInitial / safeProgressTotal) * 100) : 100;
+            counter.textContent = `${safeProgressInitial} / ${safeProgressTotal}`;
+            progress.style.width = `${initialPct}%`;
+            panel.style.setProperty('--scan-progress', `${initialPct}%`);
+            if (miniProgress) {
+                miniProgress.textContent = `${safeProgressInitial}/${safeProgressTotal}`;
+                miniProgress.setAttribute('aria-label', `נבדקו ${safeProgressInitial} מתוך ${safeProgressTotal} קישורים`);
+            }
             const footerRight = document.getElementById('statusScanFooterRight');
             const footerLeft = document.getElementById('statusScanFooterLeft');
-            if (footerRight) footerRight.textContent = items.length ? '0%' : '100%';
+            if (footerRight) footerRight.textContent = `${initialPct}%`;
             if (footerLeft) {
-                footerLeft.textContent = skippedRecent > 0
-                    ? `ממתינים ${items.length} • דולגו ${skippedRecent} שנבדקו ב-30 הימים האחרונים`
-                    : `ממתינים ${items.length} • ${totalAll} קישורים בסריקה`;
+                const skipParts = [];
+                if (skippedRecent > 0) skipParts.push(`דולגו ${skippedRecent} שנבדקו ב-30 הימים האחרונים`);
+                if (skippedDuplicate > 0) skipParts.push(`דולגו ${skippedDuplicate} כפילויות`);
+                footerLeft.textContent = items.length
+                    ? `ממתינים ${items.length} • מתוך ${safeProgressTotal}${skipParts.length ? ` • ${skipParts.join(' • ')}` : ''}`
+                    : (safeProgressTotal ? `כל ${safeProgressTotal} הקישורים כבר נבדקו או דולגו` : 'אין קישורים לבדיקה');
             }
 
             window.__statusScanFoundInactive = Number(initialFound || 0);
@@ -5114,8 +5313,14 @@ ${contentToAnalyze}`;
             counter.textContent = `${safeCompleted} / ${safeTotal}`;
             progress.style.width = `${pct}%`;
             footerRight.textContent = `${pct}%`;
-            if (miniProgress) miniProgress.textContent = `${safeCompleted}/${safeTotal}`;
-            if (panel) panel.style.setProperty('--scan-progress', `${pct}%`);
+            if (miniProgress) {
+                miniProgress.textContent = `${safeCompleted}/${safeTotal}`;
+                miniProgress.setAttribute('aria-label', `נבדקו ${safeCompleted} מתוך ${safeTotal} קישורים`);
+            }
+            if (panel) {
+                panel.style.setProperty('--scan-progress', `${pct}%`);
+                panel.setAttribute('data-scan-progress', `${safeCompleted}/${safeTotal}`);
+            }
         }
 
         function setStatusScanFooter(text) {
@@ -5311,18 +5516,55 @@ ${contentToAnalyze}`;
              * timestamp from the last 30 days is skipped completely. This avoids
              * unnecessary proxy/API traffic, CPU work, database writes and UI churn.
              */
-            const linksToScan = allLinks.filter(item => !getRecentStatusCheckInfo(item));
-            const skippedRecent = allLinks.length - linksToScan.length;
+            const recentCache = rebuildRecentStatusScanCache(allLinks);
+            const linksToScan = [];
+            const scannedKeys = new Set();
+            let skippedRecent = 0;
+            let skippedDuplicate = 0;
+
+            for (const item of allLinks) {
+                const key = normalizeStatusScanKey(item.content);
+                const ownRecent = getRecentStatusCheckTimestamp(item);
+                const sharedRecent = getRecentStatusCheckFromCache(item, recentCache);
+
+                // First and cheapest gate: a valid check from the last 30 days.
+                // No provider selection, proxy request, AI request or UI row is created.
+                if (ownRecent || sharedRecent) {
+                    skippedRecent++;
+                    continue;
+                }
+
+                // Second gate: duplicate URLs in the current corpus. Only one network
+                // probe is allowed per canonical URL during this run.
+                if (key && scannedKeys.has(key)) {
+                    skippedDuplicate++;
+                    continue;
+                }
+                if (key) scannedKeys.add(key);
+                linksToScan.push(item);
+            }
+
             const totalCount = linksToScan.length;
-            let completed = 0;
+            const progressTotal = allLinks.length;
+            // Already-checked links count as completed work for the overall run progress.
+            // This makes the minimized circle truthful, e.g. 400/628 immediately means
+            // 400 links were already checked and 228 still need an actual probe.
+            let completed = skippedRecent + skippedDuplicate;
+            let scannedCompleted = 0;
+            window.__statusScanRecentCache = recentCache;
+            window.__statusScanTotalAll = progressTotal;
+            window.__statusScanSkippedRecent = skippedRecent;
+            window.__statusScanSkippedDuplicate = skippedDuplicate;
 
             window.__statusScanFoundInactive = 0;
             window.__statusScanUndoSnapshot = createStatusScanUndoSnapshot(linksToScan);
             setStatusScanButtons({ running: true, undoAvailable: false });
             openStatusScanPanel(linksToScan, {
-                totalAll: allLinks.length,
+                totalAll: progressTotal,
                 skippedRecent,
-                initialFound: 0
+                skippedDuplicate,
+                initialFound: 0,
+                progressInitial: completed
             });
 
             if (allLinks.length === 0) {
@@ -5336,7 +5578,7 @@ ${contentToAnalyze}`;
             }
 
             if (linksToScan.length === 0) {
-                updateStatusScanProgress(0, 0);
+                updateStatusScanProgress(allLinks.length, allLinks.length);
                 setStatusScanFooter(`✅ אין צורך לסרוק • כל ${allLinks.length} הקישורים נבדקו ב-30 הימים האחרונים • 0 בקשות רשת`);
                 window.__statusScanRunActive = false;
                 window.__statusScanRunStarted = false;
@@ -5347,10 +5589,10 @@ ${contentToAnalyze}`;
 
             linksToScan.forEach(item => updateStatusScanRow(item.id, 'waiting', 'ממתין'));
 
-            updateStatusScanProgress(completed, totalCount);
+            updateStatusScanProgress(completed, progressTotal);
             setStatusScanFooter(
-                skippedRecent > 0
-                    ? `בודק ${totalCount} קישורים • דולגו ${skippedRecent} שנבדקו ב-30 הימים האחרונים`
+                skippedRecent > 0 || skippedDuplicate > 0
+                    ? `בודק ${totalCount} קישורים בפועל • דולגו ${skippedRecent} שנבדקו ב-30 הימים האחרונים${skippedDuplicate ? ` • דולגו ${skippedDuplicate} כפילויות` : ''}`
                     : `בודק ${totalCount} קישורים • בדיקת רשת עצמאית`
             );
 
@@ -5380,6 +5622,23 @@ ${contentToAnalyze}`;
                     if (index >= linksToScan.length) return;
 
                     const item = linksToScan[index];
+
+                    // Final pre-network guard. Another tab/device may have just written a
+                    // fresh statusCheckedAt while this run was waiting in the queue. If the
+                    // local Firestore listener has received it, skip immediately.
+                    const liveItem = state.items.find(it => it.id === item.id) || item;
+                    const liveRecent = getRecentStatusCheckTimestamp(liveItem) ||
+                        getRecentStatusCheckFromCache(liveItem, window.__statusScanRecentCache);
+                    if (liveRecent) {
+                        rememberRecentStatusCheck(liveItem, new Date(liveRecent).toISOString());
+                        completed++;
+                        updateStatusScanProgress(completed, progressTotal);
+                        updateStatusScanRow(item.id, 'fresh', 'נבדק החודש');
+                        setStatusScanFooter(`⏭ דולג מיד: נבדק ב-30 הימים האחרונים • הושלמו ${completed}/${progressTotal}`);
+                        updateStatusScanMiniBadge();
+                        continue;
+                    }
+
                     updateStatusScanRow(item.id, 'checking');
                     setStatusScanFooter(`🔎 בודק: ${item.content}`);
 
@@ -5419,8 +5678,9 @@ ${contentToAnalyze}`;
                             updateStatusScanRow(item.id, 'active', '🟢 פעיל — בדיקה לא הוכיחה בעיה');
                         }
                     } finally {
+                        scannedCompleted++;
                         completed++;
-                        updateStatusScanProgress(completed, totalCount);
+                        updateStatusScanProgress(completed, progressTotal);
 
                         const previousInactiveCount = inactiveCount;
                         inactiveCount = getInactiveStatusCount();
@@ -5429,8 +5689,8 @@ ${contentToAnalyze}`;
 
                         setStatusScanFooter(
                             window.__statusScanStopRequested
-                                ? `⏹ נעצר • הושלמו ${completed}/${totalCount} • ${inactiveCount} לא פעילים/בבעיה`
-                                : `הושלמו ${completed}/${totalCount} • ${inactiveCount} לא פעילים/בבעיה`
+                                ? `⏹ נעצר • הושלמו ${completed}/${progressTotal} • נסרקו בפועל ${scannedCompleted}/${totalCount} • ${inactiveCount} לא פעילים/בבעיה`
+                                : `הושלמו ${completed}/${progressTotal} • נסרקו בפועל ${scannedCompleted}/${totalCount} • ${inactiveCount} לא פעילים/בבעיה`
                         );
                         updateStatusScanMiniBadge();
                         queueStatusScanRender();
@@ -5449,6 +5709,9 @@ ${contentToAnalyze}`;
             window.__statusScanRunActive = false;
             window.__statusScanRunStarted = false;
             window.__statusScanAbortController = null;
+            // The background scan itself must not trigger another automatic scan through
+            // its own Firestore writes. A future explicit session/login will initialize
+            // the auto-start flag again.
             window.__statusScanKeyHealth = new Map();
             checkDeadLinksAlert();
             clearTimeout(statusScanRenderTimer);
@@ -5458,12 +5721,12 @@ ${contentToAnalyze}`;
 
             if (wasStopped) {
                 setStatusScanFooter(
-                    `⏹ הסריקה נעצרה • הושלמו ${completed}/${totalCount} • נמצאו ${window.__statusScanFoundInactive || 0} בעייתיים${skippedRecent ? ` • דולגו ${skippedRecent} שנבדקו החודש` : ''}`
+                    `⏹ הסריקה נעצרה • הושלמו ${completed}/${progressTotal} • נסרקו בפועל ${scannedCompleted}/${totalCount} • נמצאו ${window.__statusScanFoundInactive || 0} בעייתיים${skippedRecent ? ` • דולגו ${skippedRecent} שנבדקו ב-30 הימים האחרונים` : ''}${skippedDuplicate ? ` • דולגו ${skippedDuplicate} כפילויות` : ''}`
                 );
             } else {
-                updateStatusScanProgress(totalCount, totalCount);
+                updateStatusScanProgress(progressTotal, progressTotal);
                 setStatusScanFooter(
-                    `✅ הסריקה הושלמה • נבדקו ${linksToScan.length} • נמצאו ${window.__statusScanFoundInactive || 0} לא פעילים/בעייתיים${skippedRecent ? ` • דולגו ${skippedRecent} שנבדקו ב-30 הימים האחרונים` : ''}`
+                    `✅ הסריקה הושלמה • נבדקו ${progressTotal} מתוך ${progressTotal} • נסרקו בפועל ${linksToScan.length} • נמצאו ${window.__statusScanFoundInactive || 0} לא פעילים/בעייתיים${skippedRecent ? ` • דולגו ${skippedRecent} שנבדקו ב-30 הימים האחרונים` : ''}${skippedDuplicate ? ` • דולגו ${skippedDuplicate} כפילויות` : ''}`
                 );
             }
 
