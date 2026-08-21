@@ -760,13 +760,13 @@
             getAuth, signInWithPopup, GoogleAuthProvider, signOut, signInWithRedirect, getRedirectResult,
             onAuthStateChanged, browserLocalPersistence
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import {
+       import {
             getFirestore, doc, setDoc, getDoc, collection, onSnapshot, getDocs,
             deleteDoc, writeBatch, enableNetwork, disableNetwork,
             initializeFirestore, persistentLocalCache, persistentSingleTabManager,
-            terminate, clearIndexedDbPersistence
+            terminate, clearIndexedDbPersistence, deleteField
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
+        
         const firebaseConfig = {
             apiKey: "AIzaSyDwofGCJUWkdLGWyXK7_UBAbbC39FXnAmI",
             authDomain: "linkmeir-dada4.firebaseapp.com",
@@ -1131,25 +1131,24 @@
             });
         });
 
-       async function cloudLogin() {
+      async function cloudLogin() {
             if (!navigator.onLine) return showToast('❌ לא ניתן להתחבר ללא אינטרנט.', null, 4000, null, true);
             if (!auth) return showToast('❌ שירותי ההתחברות אינם זמינים.', null, 5000, null, true);
 
             const provider = new GoogleAuthProvider();
             provider.setCustomParameters({ prompt: 'select_account' });
-
-            // אנו מתחילים את הפתיחה *מיידית* כדי לשמור על Trust הדפדפן ולמנוע זריקה לכרום החיצוני!
-            const authPromise = signInWithPopup(auth, provider);
-            
-            // רק אחרי שהחלון הפנימי קיבל פקודת פתיחה, מציגים את הטוסט
             showToast('פותח חיבור מאובטח...', null, 0, 'login-toast', false);
 
             try {
-                await authPromise;
+                await signInWithPopup(auth, provider);
                 removeToast('login-toast');
             } catch (err) {
                 removeToast('login-toast');
-                if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
+                // מעבר אוטומטי להתחברות ישירה אם החלון נחסם על ידי הדפדפן/PWA
+                if (err.code === 'auth/popup-blocked') {
+                    showToast('⚠️ החלון נחסם. מעביר אותך להתחברות ישירה...', null, 3000, null, true);
+                    signInWithRedirect(auth, provider);
+                } else if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
                     console.error("Login Error:", err);
                     showToast('❌ שגיאת התחברות: ' + err.message, null, 5000, null, true);
                 }
