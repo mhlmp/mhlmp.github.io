@@ -2773,6 +2773,13 @@
                 return;
             }
 
+            if (state.user && ADMIN_EMAILS.includes(state.user.email)) {
+                welcomeScreen.style.display = 'none';
+                welcomeScreen.classList.remove('visible');
+                protectedContent.classList.remove('locked');
+                return;
+            }
+
             welcomeScreen.style.display = 'flex';
             welcomeScreen.classList.add('visible');
             protectedContent.classList.add('locked');
@@ -4189,6 +4196,54 @@ ${contentToAnalyze}`;
             }
         }
         
+      async function moveToTrash(id) {
+            const item = state.items.find(i => i.id === id);
+            if (!item) return;
+
+            item.deletedAt = nowIso();
+            item.updatedAt = nowIso();
+            
+            updateSyncStatus('syncing', 'מוחק...');
+            try {
+                const batch = writeBatch(db);
+                const itemRef = doc(db, 'users', state.user.uid, 'items', id.toString());
+                const trashRef = doc(db, 'users', state.user.uid, 'trash', id.toString());
+                
+                batch.delete(itemRef);
+                batch.set(trashRef, item);
+                await batch.commit();
+                
+                updateSyncStatus('online', 'מחובר ✓');
+                
+                const toastId = 'trash-undo-' + id;
+                showToast('🗑️ הועבר לסל המחזור', async () => {
+                    removeToast(toastId);
+                    updateSyncStatus('syncing', 'משחזר...');
+                    try {
+                        const undoBatch = writeBatch(db);
+                        const cleanItem = { ...item };
+                        delete cleanItem.deletedAt;
+                        cleanItem.updatedAt = nowIso();
+                        
+                        undoBatch.set(itemRef, cleanItem);
+                        undoBatch.delete(trashRef);
+                        await undoBatch.commit();
+                        
+                        updateSyncStatus('online', 'מחובר ✓');
+                        showToast('↩️ המחיקה בוטלה, הפריט חזר לרשימה!');
+                    } catch (undoErr) {
+                        console.error('Undo Trash error:', undoErr);
+                        showToast('⚠️ שגיאה בביטול המחיקה', null, 3000, null, true);
+                    }
+                }, 8000, toastId); 
+            } catch (e) { 
+                console.error('Trash error:', e); 
+                updateSyncStatus('error', 'שגיאת רשת');
+                showToast('⚠️ שגיאה בהעברה לסל המחזור', null, 3000, null, true);
+            }
+        }
+        
+
         async function togglePin(id) {
             const item = state.items.find(i => i.id === id);
             if (!item) return;
@@ -4826,6 +4881,96 @@ ${contentToAnalyze}`;
             toast.classList.add('leaving');
             setTimeout(() => { if (toast.parentElement) toast.remove(); }, 300);
         }
+
+        document.getElementById('bulkAiScanBtn')?.addEventListener('click', async () => {
+            if (!navigator.onLine) return showToast('❌ לא ניתן לבצע סריקת AI מרובה ללא רשת.', null, 4000, null, true);
+            const settings = getAiSettings();
+            if (!settings.keys.gemini.length && !settings.keys.groq.length && !settings.keys.openrouter.length)
+                return alert('אנא הזן לפחות מפתח API אחד בהגדרות ה-AI.');
+            const itemsToScan = state.items.filter(i => !i.aiSummary || i.aiSummary.includes('שגיאה') || i.aiSummary.includes('Error') || i.aiSummary.includes('Timeout') || i.aiSummary.includes('לא התקבל'));
+            if (itemsToScan.length === 0) return alert('כל הפריטים כבר מנותחים!');
+            if (!confirm(`נמצאו ${itemsToScan.length} פריטים לסריקה. האם להתחיל?`)) return;
+
+            closeAllMenus();
+            abortAiScan = false;
+            document.getElementById('cancelBulkAiBtn').style.display = 'block';
+            const bulkToastId = 'ai-bulk-scan-toast';
+
+            for (let i = 0; i < itemsToScan.length; i++) {
+                if (abortAiScan) break;
+                const pct = Math.round((i / itemsToScan.length) * 100);
+                showToast(`<div style="width:100%;">
+                    <div>🤖 <b>סורק...</b> [${i + 1}/${itemsToScan.length}]</div>
+                    <div style="font-size:11px;opacity:0.75;margin-top:3px;direction:ltr;">${(itemsToScan[i].content||'').substring(0, 35)}...</div>
+                    <div style="width:100%;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin-top:8px;overflow:hidden;">
+                        <div style="width:${pct}%;height:100%;background:var(--accent-green);transition:width 0.3s;"></div>
+                    </div></div>`, null, 0, bulkToastId, false);
+
+                await scanSingleItem(itemsToScan[i].id);
+                if (abortAiScan) break;
+
+                if (i < itemsToScan.length - 1) {
+                    const result = state.items.find(it => it.id === itemsToScan[i].id);
+                    let delay = 300;
+                   if (result?.aiSummary && isRecoverableError(result.aiSummary)) {
+                        delay = 20000;
+                        window.lastWorkingAiProvider = null;
+                        showToast(`<div style="width:100%;"><div>⚠️ <b>מכסות מלאות — ממתין 20 שניות...</b></div>
+                            <div style="width:100%;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin-top:8px;overflow:hidden;">
+                                <div style="width:${pct}%;height:100%;background:var(--accent-gold);"></div>
+                            </div></div>`, null, 0, bulkToastId, true);
+                    }
+                    let waited = 0;
+                    while (waited < delay && !abortAiScan) { await new Promise(r => setTimeout(r, 100)); waited += 100; }
+                }
+            }
+
+            document.getElementById('cancelBulkAiBtn').style.display = 'none';
+            const finalMsg = abortAiScan ? '🛑 <b>הסריקה הופסקה.</b>' : '✅ <b>סריקת ה-AI הסתיימה בהצלחה!</b>';
+            showToast(finalMsg, null, 4000, bulkToastId, false);
+            setTimeout(() => removeToast(bulkToastId), 4000);
+        });
+
+        document.getElementById('cancelBulkAiBtn')?.addEventListener('click', () => {
+            abortAiScan = true;
+            document.getElementById('cancelBulkAiBtn').style.display = 'none';
+            if (window.activeAiRequestController) window.activeAiRequestController.abort();
+        });
+
+        document.getElementById('bulkClearAiBtn')?.addEventListener('click', async () => {
+            if (state.selectedIds.size === 0) return;
+            if (!confirm(`🧹 האם למחוק את נתוני ה-AI עבור ${state.selectedIds.size} הפריטים הנבחרים?`)) return;
+
+            const stamp = nowIso();
+            let updated = 0;
+            const selectedArr = Array.from(state.selectedIds);
+            
+            showToast('מנקה נתוני AI...', null, 0, 'clear-toast', false);
+            
+            const CHUNK_SIZE = 450;
+            for (let i = 0; i < selectedArr.length; i += CHUNK_SIZE) {
+                const chunk = selectedArr.slice(i, i + CHUNK_SIZE);
+                const batch = writeBatch(db);
+                chunk.forEach(id => {
+                    const item = state.items.find(it => it.id === id);
+                    if (item) {
+                        delete item.aiSummary; delete item.siteStatus; delete item.aiTags; delete item.isScanning; delete item.aiModel;
+                        item.updatedAt = stamp;
+                        const ref = doc(db, 'users', state.user.uid, 'items', item.id.toString());
+                        batch.set(ref, item, { merge: true });
+                        updated++;
+                    }
+                });
+                await batch.commit();
+            }
+            
+            removeToast('clear-toast');
+            if (updated > 0) {
+                exitSelectionMode();
+                showToast(`✅ נתוני AI נוקו עבור ${updated} פריטים`);
+            }
+        });
+
 
         window.openAiFloatingMenu = function (id, e) {
             e.preventDefault(); e.stopPropagation();
