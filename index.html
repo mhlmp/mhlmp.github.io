@@ -1393,35 +1393,55 @@
 
     
 /* ================================================================
-   STATUS SCAN DISPLAY ENHANCEMENT ONLY
-   Keeps the scan engine and performance logic unchanged.
-   Makes the expanded scanner larger, clearer and easier to use.
+   QUICK STATUS SCAN — PROFESSIONAL FLOATING UI
+   Expanded panel stays readable; minimized state is a real 46px circle
+   matching the scroll-to-top control and showing live progress.
    ================================================================ */
+
+/* Shared scan progress ring variable: 0%..100%. */
+#statusScanPanel {
+    --scan-progress: 0%;
+    --scan-found: 0;
+}
 
 #statusScanPanel:not(.minimized) {
     width: min(820px, calc(100vw - 24px));
-    height: 150px;
-    max-height: 150px;
+    height: min(42svh, 320px);
+    min-height: 175px;
+    max-height: 320px;
     border-radius: 16px;
     box-shadow: 0 14px 38px rgba(0,0,0,.28);
 }
 
 #statusScanPanel:not(.minimized) .status-scan-header {
-    min-height: 46px;
-    height: 46px;
+    min-height: 48px;
+    height: 48px;
     padding: 7px 12px;
     gap: 10px;
 }
 
 #statusScanPanel:not(.minimized) .status-scan-title {
+    min-width: 0;
     font-size: 14px;
     gap: 7px;
-    letter-spacing: .1px;
+}
+
+#statusScanPanel:not(.minimized) .status-scan-title-icon {
+    font-size: 17px;
+}
+
+#statusScanPanel:not(.minimized) .status-scan-title-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#statusScanPanel:not(.minimized) .status-scan-mini-progress {
+    display: none;
 }
 
 #statusScanPanel:not(.minimized) .status-scan-counter {
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 800;
 }
 
 #statusScanPanel:not(.minimized) .status-scan-actions {
@@ -1442,8 +1462,8 @@
 
 #statusScanPanel:not(.minimized) .status-scan-row {
     grid-template-columns: 30px minmax(0,1fr) auto;
-    min-height: 34px;
-    padding: 4px 7px;
+    min-height: 36px;
+    padding: 5px 7px;
     margin-bottom: 4px;
     gap: 8px;
     border-radius: 9px;
@@ -1457,39 +1477,206 @@
 }
 
 #statusScanPanel:not(.minimized) .status-scan-url {
-    font-size: 11px;
+    font-size: 11.5px;
     line-height: 1.3;
 }
 
 #statusScanPanel:not(.minimized) .status-scan-state {
-    min-width: 68px;
+    min-width: 74px;
     font-size: 10px;
     padding: 5px 7px;
 }
 
 #statusScanPanel:not(.minimized) .status-scan-footer {
-    min-height: 34px;
+    min-height: 38px;
     padding: 6px 10px;
     font-size: 10px;
 }
 
+/* Minimized desktop + mobile: true circle, 46px like the scroll button. */
+#statusScanPanel.minimized {
+    left: 20px !important;
+    right: auto !important;
+    bottom: 28px;
+    width: 46px !important;
+    min-width: 46px !important;
+    max-width: 46px !important;
+    height: 46px !important;
+    min-height: 46px !important;
+    max-height: 46px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    transform: none !important;
+    cursor: pointer;
+    overflow: visible !important;
+    border: 2px solid transparent !important;
+    box-shadow: 0 6px 20px rgba(0,0,0,.42);
+    isolation: isolate;
+    background:
+        linear-gradient(var(--glass-bg), var(--glass-bg)) padding-box,
+        conic-gradient(var(--primary-color) var(--scan-progress), rgba(127,127,127,.18) var(--scan-progress)) border-box;
+}
+
+#statusScanPanel.minimized .status-scan-header {
+    position: relative;
+    width: 100%;
+    height: 100% !important;
+    min-height: 46px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    display: block;
+}
+
+#statusScanPanel.minimized .status-scan-title {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    pointer-events: none;
+}
+
+#statusScanPanel.minimized .status-scan-title-icon,
+#statusScanPanel.minimized .status-scan-title-text {
+    display: none !important;
+}
+
+#statusScanPanel.minimized .status-scan-mini-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    max-width: 38px;
+    color: var(--text-primary);
+    font-size: 8px;
+    line-height: 1;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.15px;
+    text-shadow: 0 1px 2px rgba(0,0,0,.28);
+    direction: ltr;
+    white-space: nowrap;
+}
+
+#statusScanPanel.minimized .status-scan-actions {
+    position: absolute;
+    inset: 0;
+    display: block;
+    pointer-events: none;
+}
+
+#statusScanPanel.minimized .status-scan-actions .status-scan-control-btn {
+    display: none !important;
+}
+
+#statusScanPanel.minimized .status-scan-actions #statusScanMinMaxBtn {
+    display: flex !important;
+    position: absolute;
+    right: 2px;
+    top: 2px;
+    width: 19px;
+    height: 19px;
+    min-width: 19px;
+    min-height: 19px;
+    padding: 0;
+    margin: 0;
+    border-radius: 50%;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    line-height: 1;
+    font-weight: 900;
+    pointer-events: auto;
+    color: var(--text-primary);
+    background: rgba(127,127,127,.24);
+    border-color: rgba(255,255,255,.13);
+    box-shadow: 0 2px 5px rgba(0,0,0,.28);
+}
+
+#statusScanPanel.minimized .status-scan-progress-wrap {
+    display: none !important;
+}
+
+#statusScanPanel.minimized .status-scan-body,
+#statusScanPanel.minimized .status-scan-footer {
+    display: none !important;
+}
+
+#statusScanPanel.minimized .status-scan-mini-badge {
+    position: absolute;
+    left: -6px;
+    top: -6px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border: 2px solid var(--glass-bg);
+    border-radius: 999px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-red);
+    color: #fff;
+    box-shadow: 0 3px 8px rgba(217,48,37,.48);
+    font: 900 9px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    z-index: 30;
+}
+
+#statusScanPanel.minimized .status-scan-mini-badge.visible {
+    display: flex;
+}
+
+#statusScanPanel.minimized #statusScanMinMaxBtn::before {
+    content: none !important;
+}
+
 @media (max-width: 768px) {
+    #statusScanPanel.minimized {
+        left: 10px !important;
+        right: auto !important;
+        bottom: calc(10px + var(--mobile-safe-bottom, 0px));
+        width: 46px !important;
+        height: 46px !important;
+    }
+
     #statusScanPanel:not(.minimized) {
         left: 8px;
         right: 8px;
         bottom: calc(8px + var(--mobile-safe-bottom, 0px));
         width: auto;
-        height: min(38svh, 310px);
-        max-height: min(38svh, 310px);
-        min-height: 158px;
+        height: min(44svh, 340px);
+        max-height: min(44svh, 340px);
+        min-height: 180px;
         border-radius: 16px;
     }
 
     #statusScanPanel:not(.minimized) .status-scan-header {
-        min-height: 50px;
-        height: 50px;
-        padding: 7px 9px;
-        gap: 7px;
+        min-height: 86px;
+        height: 86px;
+        padding: 7px 8px 8px;
+        gap: 5px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: 32px 39px;
+        align-items: center;
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-title {
+        grid-column: 1;
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        min-height: 32px;
+    }
+
+    #statusScanPanel:not(.minimized) .status-scan-actions {
+        grid-column: 1;
+        width: 100%;
+        min-width: 0;
+        justify-content: space-between;
+        align-items: center;
+        gap: 4px;
     }
 
     #statusScanPanel:not(.minimized) .status-scan-title {
@@ -1501,35 +1688,25 @@
         font-size: 11px;
     }
 
-    #statusScanPanel:not(.minimized) .status-scan-actions {
-        gap: 5px;
-    }
-
     #statusScanPanel:not(.minimized) .status-scan-control-btn {
-        min-width: 43px;
-        min-height: 40px;
-        padding: 8px 9px;
+        min-width: 38px;
+        min-height: 38px;
+        padding: 7px 7px;
         border-radius: 10px;
-        font-size: 10.5px;
+        font-size: 9.5px;
     }
 
     #statusScanPanel:not(.minimized) .status-scan-body {
         padding: 6px;
+        -webkit-overflow-scrolling: touch;
     }
 
     #statusScanPanel:not(.minimized) .status-scan-row {
         grid-template-columns: 30px minmax(0,1fr) auto;
-        min-height: 36px;
+        min-height: 38px;
         padding: 5px 6px;
         margin-bottom: 4px;
         gap: 7px;
-    }
-
-    #statusScanPanel:not(.minimized) .status-scan-index {
-        width: 28px;
-        height: 28px;
-        border-radius: 8px;
-        font-size: 9.5px;
     }
 
     #statusScanPanel:not(.minimized) .status-scan-url {
@@ -1538,49 +1715,45 @@
     }
 
     #statusScanPanel:not(.minimized) .status-scan-state {
-        min-width: 64px;
+        min-width: 65px;
         font-size: 9.5px;
         padding: 6px 7px;
     }
 
     #statusScanPanel:not(.minimized) .status-scan-footer {
-        min-height: 36px;
+        min-height: 40px;
         padding: 6px 8px;
         font-size: 9.5px;
     }
 }
 
 @media (max-width: 480px) {
-    #statusScanPanel:not(.minimized) {
-        min-height: 152px;
-        height: min(40svh, 300px);
-        max-height: min(40svh, 300px);
+    #statusScanPanel.minimized .status-scan-mini-progress {
+        font-size: 7.7px;
+        max-width: 36px;
     }
 
     #statusScanPanel:not(.minimized) .status-scan-title {
-        max-width: 35vw;
+        max-width: 33vw;
         font-size: 12px;
     }
 
     #statusScanPanel:not(.minimized) .status-scan-counter {
-        display: block;
-        font-size: 10px;
+        font-size: 9.5px;
+        font-weight: 900;
     }
 
     #statusScanPanel:not(.minimized) .status-scan-control-btn {
-        min-width: 40px;
-        min-height: 38px;
-        padding-inline: 8px;
-        font-size: 10px;
-    }
-
-    #statusScanPanel:not(.minimized) .status-scan-url {
-        font-size: 10px;
-    }
-
-    #statusScanPanel:not(.minimized) .status-scan-state {
-        min-width: 60px;
+        min-width: 35px;
+        min-height: 36px;
+        padding-inline: 6px;
         font-size: 9px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #statusScanPanel {
+        scroll-behavior: auto;
     }
 }
 
@@ -1612,7 +1785,8 @@
             <div class="status-scan-title" title="בדיקת סטטוס אתרים">
                 <span class="status-scan-title-icon" aria-hidden="true">🔎</span>
                 <span class="status-scan-title-text">בדיקת סטטוס אתרים</span>
-                <span class="status-scan-mini-badge" id="statusScanDeadBadge" aria-label="קישורים לא פעילים">0</span>
+                <span class="status-scan-mini-progress" id="statusScanMiniProgress" aria-hidden="true">0/0</span>
+                <span class="status-scan-mini-badge" id="statusScanDeadBadge" aria-label="קישורים לא פעילים שנמצאו">0</span>
             </div>
             <div class="status-scan-actions">
                 <div class="status-scan-counter" id="statusScanCounter">מכין סריקה...</div>
@@ -1943,7 +2117,7 @@
         window.__statusScanKeyHealth = new Map();
         // אתר שנבדק בהצלחה במהלך 14 הימים האחרונים לא ייסרק שוב.
         // הערך נשמר בכל פריט בשדה statusCheckedAt.
-        const STATUS_RECHECK_DAYS = 14;
+        const STATUS_RECHECK_DAYS = 30;
         const STATUS_RECHECK_MS = STATUS_RECHECK_DAYS * 24 * 60 * 60 * 1000;
 
         function nowIso() { return new Date().toISOString(); }
@@ -3798,7 +3972,7 @@ ${contentToAnalyze}`;
                             await saveItemToCloud(ci, scanOwnerUid, statusOnly);
                             updateDeadCountBadge(previousInactiveCount);
                         } else {
-                            // Inconclusive: DO NOT change status and DO NOT refresh the 14-day timer.
+                            // Inconclusive: DO NOT change status and DO NOT refresh the 30-day timer.
                             // The UI reports the link as active/no-proof-of-problem rather than
                             // exposing an ambiguous "uncertain" state to the user.
                             console.warn(`[AI Status Scan] Inconclusive status for ${ci.content}; keeping previous status.`);
@@ -4821,15 +4995,22 @@ ${contentToAnalyze}`;
             const badge = document.getElementById('statusScanDeadBadge');
             const panel = document.getElementById('statusScanPanel');
             if (!badge) return;
-            const count = getInactiveStatusCount();
+            const running = !!window.__statusScanRunActive;
+            const scanFound = Number(window.__statusScanFoundInactive || 0);
+            const totalInactive = getInactiveStatusCount();
+            const count = running ? scanFound : totalInactive;
             badge.textContent = String(count > 99 ? '99+' : count);
             badge.classList.toggle('visible', count > 0);
-            badge.setAttribute('aria-label', `${count} קישורים לא פעילים או בעייתיים`);
+            badge.setAttribute('aria-label', running
+                ? `${count} קישורים לא פעילים או בעייתיים נמצאו בסריקה זו`
+                : `${count} קישורים לא פעילים או בעייתיים`);
             if (panel) {
                 panel.setAttribute('data-dead-count', String(count));
-                panel.setAttribute('aria-label', count > 0
-                    ? `סריקת סטטוס אתרים. ${count} קישורים לא פעילים או בעייתיים. לחץ להרחבה.`
-                    : 'סריקת סטטוס אתרים. לחץ להרחבה.');
+                panel.setAttribute('aria-label', running
+                    ? `סריקת סטטוס אתרים. ${count} קישורים לא פעילים או בעייתיים נמצאו בסריקה זו. לחץ להרחבה.`
+                    : (count > 0
+                        ? `סריקת סטטוס אתרים. ${count} קישורים לא פעילים או בעייתיים.`
+                        : 'סריקת סטטוס אתרים. לחץ להרחבה.'));
             }
         }
 
@@ -4844,21 +5025,23 @@ ${contentToAnalyze}`;
             panel.setAttribute('aria-expanded', minimized ? 'false' : 'true');
             panel.setAttribute('tabindex', minimized ? '0' : '-1');
             if (btn) {
-                btn.textContent = minimized ? '🗖' : '🗕';
+                btn.textContent = minimized ? '↗' : '−';
                 btn.title = minimized ? 'הרחב חלון סריקה' : 'מזער חלון סריקה';
                 btn.setAttribute('aria-label', minimized ? 'הרחב חלון סריקה' : 'מזער חלון סריקה');
             }
             updateStatusScanMiniBadge();
         }
 
-        function openStatusScanPanel(items) {
+        function openStatusScanPanel(items, { totalAll = items.length, skippedRecent = 0, initialFound = 0 } = {}) {
             const panel = document.getElementById('statusScanPanel');
             const body = document.getElementById('statusScanBody');
             const counter = document.getElementById('statusScanCounter');
             const progress = document.getElementById('statusScanProgress');
+            const miniProgress = document.getElementById('statusScanMiniProgress');
             if (!panel || !body || !counter || !progress) return;
 
             body.innerHTML = '';
+            const fragment = document.createDocumentFragment();
             items.forEach((item, index) => {
                 const row = document.createElement('div');
                 row.className = 'status-scan-row';
@@ -4879,24 +5062,31 @@ ${contentToAnalyze}`;
                 stateEl.textContent = 'ממתין';
 
                 row.append(indexEl, urlEl, stateEl);
-                body.appendChild(row);
+                fragment.appendChild(row);
             });
+            body.appendChild(fragment);
 
             counter.textContent = `0 / ${items.length}`;
             progress.style.width = '0%';
+            panel.style.setProperty('--scan-progress', '0%');
+            if (miniProgress) miniProgress.textContent = `0/${items.length}`;
             const footerRight = document.getElementById('statusScanFooterRight');
             const footerLeft = document.getElementById('statusScanFooterLeft');
-            if (footerRight) footerRight.textContent = '0%';
-            if (footerLeft) footerLeft.textContent = `נבדק רק הסטטוס • ${items.length} קישורים`;
+            if (footerRight) footerRight.textContent = items.length ? '0%' : '100%';
+            if (footerLeft) {
+                footerLeft.textContent = skippedRecent > 0
+                    ? `ממתינים ${items.length} • דולגו ${skippedRecent} שנבדקו ב-30 הימים האחרונים`
+                    : `ממתינים ${items.length} • ${totalAll} קישורים בסריקה`;
+            }
 
-            /* The scanner opens minimized by default so it never steals visual focus. */
-            panel.classList.add('minimized');
+            window.__statusScanFoundInactive = Number(initialFound || 0);
             const minMaxBtn = document.getElementById('statusScanMinMaxBtn');
             if (minMaxBtn) {
-                minMaxBtn.textContent = '🗖';
+                minMaxBtn.textContent = '↗';
                 minMaxBtn.title = 'הרחב חלון סריקה';
                 minMaxBtn.setAttribute('aria-label', 'הרחב חלון סריקה');
             }
+            panel.classList.add('minimized');
             panel.setAttribute('aria-expanded', 'false');
             panel.setAttribute('tabindex', '0');
             updateStatusScanMiniBadge();
@@ -4915,11 +5105,17 @@ ${contentToAnalyze}`;
             const counter = document.getElementById('statusScanCounter');
             const progress = document.getElementById('statusScanProgress');
             const footerRight = document.getElementById('statusScanFooterRight');
+            const miniProgress = document.getElementById('statusScanMiniProgress');
+            const panel = document.getElementById('statusScanPanel');
+            const safeCompleted = Math.max(0, Number(completed) || 0);
+            const safeTotal = Math.max(0, Number(total) || 0);
             if (!counter || !progress || !footerRight) return;
-            const pct = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 100;
-            counter.textContent = `${completed} / ${total}`;
+            const pct = safeTotal > 0 ? Math.min(100, Math.round((safeCompleted / safeTotal) * 100)) : 100;
+            counter.textContent = `${safeCompleted} / ${safeTotal}`;
             progress.style.width = `${pct}%`;
             footerRight.textContent = `${pct}%`;
+            if (miniProgress) miniProgress.textContent = `${safeCompleted}/${safeTotal}`;
+            if (panel) panel.style.setProperty('--scan-progress', `${pct}%`);
         }
 
         function setStatusScanFooter(text) {
@@ -5072,6 +5268,8 @@ ${contentToAnalyze}`;
             window.__statusScanRunActive = false;
             window.__statusScanRunStarted = false;
             window.__statusScanKeyHealth = new Map();
+            window.__statusScanFoundInactive = 0;
+            updateStatusScanMiniBadge();
             const panel = document.getElementById('statusScanPanel');
             if (panel) panel.classList.remove('open');
             const body = document.getElementById('statusScanBody');
@@ -5108,48 +5306,58 @@ ${contentToAnalyze}`;
                 item.content.trim()
             );
 
-            // ה-UNDO חייב לזכור את המצב לפני הסריקה, כולל חותמת זמן הבדיקה.
-            window.__statusScanUndoSnapshot = createStatusScanUndoSnapshot(allLinks);
-            setStatusScanButtons({ running: true, undoAvailable: true });
-            openStatusScanPanel(allLinks);
+            /*
+             * Professional re-check policy: a link with a valid statusCheckedAt
+             * timestamp from the last 30 days is skipped completely. This avoids
+             * unnecessary proxy/API traffic, CPU work, database writes and UI churn.
+             */
+            const linksToScan = allLinks.filter(item => !getRecentStatusCheckInfo(item));
+            const skippedRecent = allLinks.length - linksToScan.length;
+            const totalCount = linksToScan.length;
+            let completed = 0;
+
+            window.__statusScanFoundInactive = 0;
+            window.__statusScanUndoSnapshot = createStatusScanUndoSnapshot(linksToScan);
+            setStatusScanButtons({ running: true, undoAvailable: false });
+            openStatusScanPanel(linksToScan, {
+                totalAll: allLinks.length,
+                skippedRecent,
+                initialFound: 0
+            });
 
             if (allLinks.length === 0) {
                 setStatusScanFooter('אין קישורים לבדיקה');
                 updateStatusScanProgress(0, 0);
                 window.__statusScanRunActive = false;
                 window.__statusScanRunStarted = false;
-                setStatusScanButtons({ running: false, undoAvailable: true });
+                setStatusScanButtons({ running: false, undoAvailable: false });
+                updateStatusScanMiniBadge();
                 return;
             }
 
-            // A user-triggered/background full status pass must actually walk
-            // every link. Recent timestamps are still displayed in the UI, but
-            // they never prevent this run from finishing the entire list.
-            const recentLinks = allLinks.filter(item => getRecentStatusCheckInfo(item));
-            const linksToScan = [...allLinks];
-            const totalCount = allLinks.length;
-            let completed = 0;
+            if (linksToScan.length === 0) {
+                updateStatusScanProgress(0, 0);
+                setStatusScanFooter(`✅ אין צורך לסרוק • כל ${allLinks.length} הקישורים נבדקו ב-30 הימים האחרונים • 0 בקשות רשת`);
+                window.__statusScanRunActive = false;
+                window.__statusScanRunStarted = false;
+                setStatusScanButtons({ running: false, undoAvailable: false });
+                updateStatusScanMiniBadge();
+                return;
+            }
 
-            allLinks.forEach(item => {
-                const recentLabel = getRecentStatusCheckInfo(item);
-                updateStatusScanRow(
-                    item.id,
-                    recentLabel ? 'waiting' : 'waiting',
-                    recentLabel ? `מחדש • ${recentLabel}` : 'ממתין'
-                );
-            });
+            linksToScan.forEach(item => updateStatusScanRow(item.id, 'waiting', 'ממתין'));
 
             updateStatusScanProgress(completed, totalCount);
             setStatusScanFooter(
-                `בודק את כל ${totalCount} הקישורים • ${recentLinks.length} מהם נבדקו לאחרונה אך נבדקים שוב עכשיו`
+                skippedRecent > 0
+                    ? `בודק ${totalCount} קישורים • דולגו ${skippedRecent} שנבדקו ב-30 הימים האחרונים`
+                    : `בודק ${totalCount} קישורים • בדיקת רשת עצמאית`
             );
 
             // Quick status scanning is self-contained and does not require AI keys.
             // AI keys remain available for manual AI analysis, but quota/key problems
             // must never interrupt or downgrade the link-status scan.
-            setStatusScanFooter(
-                `בודק ${linksToScan.length} קישורים • בדיקת רשת עצמאית • ללא חלונות קופצים • אין תלות במפתחות AI`
-            );
+            setStatusScanButtons({ running: true, undoAvailable: true });
 
             let nextIndex = 0;
             let inactiveCount = state.items.filter(it =>
@@ -5191,10 +5399,17 @@ ${contentToAnalyze}`;
                             const updatedItem = state.items.find(it => it.id === item.id);
                             const status = updatedItem?.siteStatus;
 
-                            if (status === 'active') updateStatusScanRow(item.id, 'active', '🟢 פעיל');
-                            else if (status === 'parked') updateStatusScanRow(item.id, 'parked', '🟠 חניה/בעיה');
-                            else if (status === 'dead') updateStatusScanRow(item.id, 'dead', '🔴 לא פעיל');
-                            else updateStatusScanRow(item.id, 'active', '🟢 פעיל — לא נמצאה הוכחה לבעיה');
+                            if (status === 'active') {
+                                updateStatusScanRow(item.id, 'active', '🟢 פעיל');
+                            } else if (status === 'parked') {
+                                updateStatusScanRow(item.id, 'parked', '🟠 חניה/בעיה');
+                                window.__statusScanFoundInactive = Number(window.__statusScanFoundInactive || 0) + 1;
+                            } else if (status === 'dead') {
+                                updateStatusScanRow(item.id, 'dead', '🔴 לא פעיל');
+                                window.__statusScanFoundInactive = Number(window.__statusScanFoundInactive || 0) + 1;
+                            } else {
+                                updateStatusScanRow(item.id, 'active', '🟢 פעיל — לא נמצאה הוכחה לבעיה');
+                            }
                         }
                     } catch (error) {
                         if (window.__statusScanStopRequested || error?.name === 'AbortError') {
@@ -5243,21 +5458,23 @@ ${contentToAnalyze}`;
 
             if (wasStopped) {
                 setStatusScanFooter(
-                    `⏹ הסריקה נעצרה • הושלמו ${completed}/${totalCount} • ניתן לבצע UNDO`
+                    `⏹ הסריקה נעצרה • הושלמו ${completed}/${totalCount} • נמצאו ${window.__statusScanFoundInactive || 0} בעייתיים${skippedRecent ? ` • דולגו ${skippedRecent} שנבדקו החודש` : ''}`
                 );
             } else {
                 updateStatusScanProgress(totalCount, totalCount);
                 setStatusScanFooter(
-                    `✅ הסריקה הושלמה • כל ${linksToScan.length} הקישורים נבדקו • ניתן לבצע UNDO`
+                    `✅ הסריקה הושלמה • נבדקו ${linksToScan.length} • נמצאו ${window.__statusScanFoundInactive || 0} לא פעילים/בעייתיים${skippedRecent ? ` • דולגו ${skippedRecent} שנבדקו ב-30 הימים האחרונים` : ''}`
                 );
             }
 
             setStatusScanButtons({ running: false, undoAvailable: true });
+            updateStatusScanMiniBadge();
         }
 
         function startBackgroundStatusScan() {
             if (window.__statusScanRunActive) return;
             window.__statusScanRunStarted = true;
+            window.__statusScanFoundInactive = 0;
             runBackgroundStatusScan().catch(error => {
                 console.error('[AI Status Scan] Fatal error:', error);
                 window.__statusScanRunActive = false;
