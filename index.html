@@ -1460,9 +1460,11 @@
                     
                     try { if (navigator.onLine) await enableNetwork(db); } catch(e) {}
                     
-                    document.getElementById('userName').textContent = user.displayName;
-                    document.getElementById('userEmailDisplay').textContent = user.email;
-                    document.getElementById('userAvatar').src = user.photoURL;
+                                        document.getElementById('userName').textContent = user.displayName || user.email || 'משתמש';
+                    document.getElementById('userEmailDisplay').textContent = user.email || '';
+                    const avatarEl = document.getElementById('userAvatar');
+                    if (user.photoURL) { avatarEl.src = user.photoURL; avatarEl.style.visibility = 'visible'; }
+                    else { avatarEl.removeAttribute('src'); avatarEl.style.visibility = 'hidden'; }
                     handleLockScreen(true);
                     const isAdmin = ADMIN_EMAILS.some(email => String(email).toLowerCase() === String(user.email || '').toLowerCase());
                     if (!isAdmin) {
@@ -1760,25 +1762,30 @@
             const isDupSearch   = query === '#כפול' || query === '#כפולים';
             const isolateDuplicatesMode = !state.showDuplicates || isDupSearch;
 
-            let filtered = sortedList.filter(item => {
-                const meta = visualMetaMap.get(item.id) || {};
-                const matchesCat = !catFilter || item.category === catFilter;
-                if (state.showOnlyDead) return item.siteStatus === 'dead' && matchesCat;
-                if (state.showOnlyParked) return item.siteStatus === 'parked' && matchesCat;
-                if (isolateDuplicatesMode) return meta.isDup && matchesCat;
+                        const matchesSearchText = (item, meta) => {
                 if (isHashSearch) {
-                    const n = parseInt(query.replace(/\D/g, ''));
+                    const n = parseInt(query.replace(/\D/g, ''), 10);
                     return meta.visualIndex === n;
                 }
+                if (isDupSearch || !query) return true;
                 const safeTags = (item.aiTags || []).join(' ').toLowerCase();
-                const matchesSearch = !query ||
-                    (item.content || '').toLowerCase().includes(query) ||
+                return (item.content || '').toLowerCase().includes(query) ||
                     (item.description || '').toLowerCase().includes(query) ||
                     (item.category || '').toLowerCase().includes(query) ||
                     (item.note || '').toLowerCase().includes(query) ||
                     (item.aiSummary || '').toLowerCase().includes(query) ||
                     safeTags.includes(query);
-                return matchesSearch && matchesCat;
+            };
+
+            let filtered = sortedList.filter(item => {
+                const meta = visualMetaMap.get(item.id) || {};
+                const matchesCat = !catFilter || item.category === catFilter;
+                if (!matchesCat) return false;
+                if (!matchesSearchText(item, meta)) return false;
+                if (state.showOnlyDead) return item.siteStatus === 'dead';
+                if (state.showOnlyParked) return item.siteStatus === 'parked';
+                if (isolateDuplicatesMode) return !!meta.isDup;
+                return true;
             });
 
             state.filteredItems = filtered;
@@ -3331,8 +3338,15 @@ STRICT RULES (ZERO TOLERANCE FOR VIOLATIONS):
             e.preventDefault(); const id = Number(document.getElementById('editItemId').value);
             const item = state.items.find(x=>x.id===id); if (!item) return;
             const content = document.getElementById('editItemContent').value.trim(); if (!content) return;
+                        const contentChanged = (item.content || '').trim() !== content;
             Object.assign(item, {content, description:document.getElementById('editItemDescription').value.trim(), category:document.getElementById('editItemCategory').value.trim() || 'כללי', note:document.getElementById('editItemNote').value.trim(), type:URL_REGEX.test(content)?'link':'text', updatedAt:nowIso()});
-            await saveItemToCloud(item); document.getElementById('editModal').style.display='none'; updateCategoryDropdowns(); renderList(); showToast('✅ הפריט עודכן');
+            if (contentChanged) {
+                // הניתוח הישן שייך לקישור הקודם
+                delete item.aiSummary; delete item.aiTags; delete item.aiModel; delete item.siteStatus; delete item.httpCode;
+                setDoc(doc(db,'users',state.user.uid,'items',String(item.id)), aiClearPatch(), {merge:true}).catch(err=>console.error(err));
+            }
+            await saveItemToCloud(item);
+            document.getElementById('editModal').style.display='none'; updateCategoryDropdowns(); renderList(); showToast('✅ הפריט עודכן');
         }
         window.openEditAiModal = function(item) {
             document.getElementById('editAiItemId').value = item.id;
@@ -3350,8 +3364,20 @@ STRICT RULES (ZERO TOLERANCE FOR VIOLATIONS):
         async function togglePin(id) { const item=state.items.find(x=>x.id===id); if(!item)return; item.isPinned=!item.isPinned; item.updatedAt=nowIso(); await saveItemToCloud(item); renderList(); }
         async function moveToTrash(id) {
             const item=state.items.find(x=>x.id===id); if(!item || !state.user)return;
-            try { await setDoc(doc(db,'users',state.user.uid,'trash',String(id)), {...item, deletedAt:nowIso()}); await deleteDoc(doc(db,'users',state.user.uid,'items',String(id))); showToast('🗑️ הועבר לסל המחזור', async()=>{ await setDoc(doc(db,'users',state.user.uid,'items',String(id)),item); await deleteDoc(doc(db,'users',state.user.uid,'trash',String(id))); }); }
-            catch(e){showToast('❌ המחיקה נכשלה: '+e.message,null,4000,null,true);}
+            const uid=state.user.uid;
+            const clean={...item}; delete clean.isScanning;
+            try {
+                const batch=writeBatch(db);
+                batch.set(doc(db,'users',uid,'trash',String(id)), JSON.parse(JSON.stringify({...clean, deletedAt:nowIso()})));
+                batch.delete(doc(db,'users',uid,'items',String(id)));
+                await commitBatch(batch);
+                showToast('🗑️ הועבר לסל המחזור', async()=>{
+                    const undoBatch=writeBatch(db);
+                    undoBatch.set(doc(db,'users',uid,'items',String(id)), JSON.parse(JSON.stringify(clean)));
+                    undoBatch.delete(doc(db,'users',uid,'trash',String(id)));
+                    await commitBatch(undoBatch);
+                });
+            } catch(e){showToast('❌ המחיקה נכשלה: '+e.message,null,4000,null,true);}
         }
         function openTrashModal() {
             const modal=document.getElementById('trashModal'), list=document.getElementById('trashList'); if(!modal||!list)return;
@@ -3384,7 +3410,16 @@ STRICT RULES (ZERO TOLERANCE FOR VIOLATIONS):
                 } else {
                     list=text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map(content=>({content,category:'כללי'}));
                 }
-                await importItems(list);showToast('✅ ייבוא TXT הושלם');
+                const known=new Set(state.items.map(x=>String(x.content||'').toLowerCase().trim()));
+                const fresh=[];
+                for(const x of list){
+                    const k=String(x.content||'').toLowerCase().trim();
+                    if(!k||known.has(k))continue;
+                    known.add(k);fresh.push(x);
+                }
+                if(!fresh.length){showToast('ℹ️ לא נמצאו פריטים חדשים — כולם כבר קיימים.');return;}
+                await importItems(fresh);
+                showToast(`✅ ייבוא TXT הושלם: ${fresh.length} חדשים, ${list.length-fresh.length} כפולים דולגו`);
             }catch(err){showToast('❌ ייבוא נכשל: '+err.message,null,5000,null,true);}finally{e.target.value='';}
         }
         async function importItems(list){
@@ -3393,10 +3428,10 @@ STRICT RULES (ZERO TOLERANCE FOR VIOLATIONS):
             const prepared=[];let seq=0;const used=new Set(existingById.keys());
             for(const raw of list){
                 const content=String(raw.content??raw.url??'').trim();if(!content)continue;
-                let id=Number.isFinite(Number(raw.id))?Number(raw.id):Date.now()+seq;
+                let id=(raw.id!==null && raw.id!==undefined && raw.id!=='' && Number.isFinite(Number(raw.id)))?Number(raw.id):Date.now()+seq;
                 if(used.has(String(id)) && existingById.get(String(id))!==content){do{id=Date.now()+seq++;}while(used.has(String(id)));}
                 used.add(String(id));
-                const item={id,content,description:String(raw.description||''),category:String(raw.category||'כללי'),note:String(raw.note||''),type:raw.type==='text'?'text':(URL_REGEX.test(content)?'link':'text'),date:raw.date||nowIso(),createdAt:raw.createdAt||raw.date||nowIso(),updatedAt:nowIso(),isPinned:!!raw.isPinned,...(raw.aiSummary?{aiSummary:String(raw.aiSummary)}:{}),...(Array.isArray(raw.aiTags)?{aiTags:raw.aiTags.map(String)}:{})};
+                const item={id,content,description:String(raw.description||''),category:String(raw.category||'כללי'),note:String(raw.note||''),type:raw.type==='text'?'text':(URL_REGEX.test(content)?'link':'text'),date:raw.date||nowIso(),createdAt:raw.createdAt||raw.date||nowIso(),updatedAt:nowIso(),isPinned:!!raw.isPinned,...(raw.aiSummary?{aiSummary:String(raw.aiSummary)}:{}),...(Array.isArray(raw.aiTags)?{aiTags:raw.aiTags.map(String)}:{}),...(['active','parked','dead','unknown','text'].includes(raw.siteStatus)?{siteStatus:raw.siteStatus}:{}),...((raw.httpCode!==null && raw.httpCode!==undefined && raw.httpCode!=='' && Number.isFinite(Number(raw.httpCode)))?{httpCode:Number(raw.httpCode)}:{}),...(raw.aiModel?{aiModel:String(raw.aiModel)}:{})};
                 prepared.push(item);seq++;
             }
             for(let i=0;i<prepared.length;i+=450){
@@ -3405,14 +3440,50 @@ STRICT RULES (ZERO TOLERANCE FOR VIOLATIONS):
                 await batch.commit();
             }
         }
-        function openAiFloatingMenu(id,event){const menu=document.getElementById('aiFloatingMenu');if(!menu)return;menu.dataset.itemId=String(id);const check=document.getElementById('aiUrlOnlyCheckbox');if(check){const q=JSON.parse(localStorage.getItem('aiQuickSettings')||'{}');check.checked=!!q.urlOnly;}menu.style.display='block';const x=event?.clientX ?? 24,y=event?.clientY ?? 120;menu.style.left=Math.max(8,Math.min(x,window.innerWidth-250))+'px';menu.style.top=Math.max(8,Math.min(y,window.innerHeight-260))+'px';}
+        function openAiFloatingMenu(id,event){const menu=document.getElementById('aiFloatingMenu');if(!menu)return;menu.dataset.itemId=String(id);const check=document.getElementById('aiUrlOnlyCheckbox');if(check){const q=JSON.parse(localStorage.getItem('aiQuickSettings')||'{}');check.checked=!!q.urlOnly;}menu.style.display='block';const pt=event?.touches?.[0]||event;const x=pt?.clientX ?? 24,y=pt?.clientY ?? 120;menu.style.left=Math.max(8,Math.min(x,window.innerWidth-250))+'px';menu.style.top=Math.max(8,Math.min(y,window.innerHeight-260))+'px';}
         function enterSelectionMode(id){state.isSelectionMode=true;document.body.classList.add('selection-mode-active');if(id!=null)state.selectedIds.add(id);updateBulkActionBar();renderList();}
         function toggleSelection(id){if(state.selectedIds.has(id))state.selectedIds.delete(id);else state.selectedIds.add(id);state.isSelectionMode=state.selectedIds.size>0;document.body.classList.toggle('selection-mode-active',state.isSelectionMode);updateBulkActionBar();const card=document.querySelector(`.card[data-id="${id}"]`);card?.classList.toggle('selected',state.selectedIds.has(id));const cb=card?.querySelector('.card-checkbox');if(cb)cb.checked=state.selectedIds.has(id);}
         function updateBulkActionBar(){const bar=document.getElementById('bulkActionBar');if(!bar)return;bar.classList.toggle('visible',state.isSelectionMode);document.getElementById('selectedCount').textContent=`${state.selectedIds.size} נבחרו`;const all=document.getElementById('selectAllCheckbox');if(all)all.checked=state.filteredItems.length>0&&state.filteredItems.every(x=>state.selectedIds.has(x.id));}
         function exitSelectionMode(){state.selectedIds.clear();state.isSelectionMode=false;document.body.classList.remove('selection-mode-active');updateBulkActionBar();renderList();}
         async function bulkMove(){const category=prompt('לאיזו קטגוריה להעביר את הפריטים שנבחרו?');if(!category?.trim())return;for(const id of state.selectedIds){const item=state.items.find(x=>x.id===id);if(item){item.category=category.trim();item.updatedAt=nowIso();await saveItemToCloud(item);}}exitSelectionMode();updateCategoryDropdowns();}
-        async function bulkDelete(){if(!confirm(`להעביר ${state.selectedIds.size} פריטים לסל המחזור?`))return;for(const id of [...state.selectedIds])await moveToTrash(id);exitSelectionMode();}
-        async function bulkClearAi(){for(const id of state.selectedIds){const item=state.items.find(x=>x.id===id);if(item){delete item.aiSummary;delete item.aiTags;delete item.aiModel;delete item.siteStatus;delete item.httpCode;await saveItemToCloud(item);}}exitSelectionMode();showToast('🧹 ניתוחי AI נוקו');}
+        async function bulkDelete(){
+            if(!state.user || !confirm(`להעביר ${state.selectedIds.size} פריטים לסל המחזור?`))return;
+            const uid=state.user.uid;
+            const ids=[...state.selectedIds];
+            let moved=0;
+            try{
+                for(let i=0;i<ids.length;i+=200){
+                    const batch=writeBatch(db);
+                    ids.slice(i,i+200).forEach(id=>{
+                        const item=state.items.find(x=>x.id===id); if(!item)return;
+                        const clean={...item}; delete clean.isScanning;
+                        batch.set(doc(db,'users',uid,'trash',String(id)), JSON.parse(JSON.stringify({...clean, deletedAt:nowIso()})));
+                        batch.delete(doc(db,'users',uid,'items',String(id)));
+                        moved++;
+                    });
+                    await commitBatch(batch);
+                }
+                showToast(`🗑️ ${moved} פריטים הועברו לסל המחזור`);
+            }catch(e){showToast('❌ המחיקה נכשלה: '+e.message,null,4000,null,true);}
+            exitSelectionMode();
+        }
+        async function bulkClearAi(){
+            if(!state.user)return;
+            const ids=[...state.selectedIds];
+            try{
+                for(let i=0;i<ids.length;i+=400){
+                    const batch=writeBatch(db);
+                    ids.slice(i,i+400).forEach(id=>{
+                        const item=state.items.find(x=>x.id===id); if(!item)return;
+                        delete item.aiSummary;delete item.aiTags;delete item.aiModel;delete item.siteStatus;delete item.httpCode;
+                        batch.set(doc(db,'users',state.user.uid,'items',String(id)), {...aiClearPatch(), updatedAt:nowIso()}, {merge:true});
+                    });
+                    await commitBatch(batch);
+                }
+                showToast('🧹 ניתוחי AI נוקו');
+            }catch(e){showToast('❌ הניקוי נכשל: '+e.message,null,4000,null,true);}
+            exitSelectionMode();
+        }
         function setupMissingUiActions(){
             document.getElementById('restoreAllBtn')?.addEventListener('click',restoreAllTrash);document.getElementById('emptyTrashBtn')?.addEventListener('click',emptyTrash);
             document.getElementById('fixBadScansBtn')?.addEventListener('click', () => {
@@ -3442,7 +3513,7 @@ STRICT RULES (ZERO TOLERANCE FOR VIOLATIONS):
             document.getElementById('bulkAiBtn')?.addEventListener('click',()=>runBatchScan(state.items.filter(i=>state.selectedIds.has(i.id)),'ai'));
             document.getElementById('bulkQuickCheckBtn')?.addEventListener('click',()=>runBatchScan(state.items.filter(i=>state.selectedIds.has(i.id)),'fast-status'));
             document.getElementById('bulkClearAiBtn')?.addEventListener('click',bulkClearAi);document.getElementById('bulkMoveBtn')?.addEventListener('click',bulkMove);document.getElementById('bulkDeleteBtn')?.addEventListener('click',bulkDelete);
-            document.querySelectorAll('.ai-provider-btn').forEach(btn=>btn.addEventListener('click',()=>{const id=Number(document.getElementById('aiFloatingMenu')?.dataset.itemId);const provider=btn.dataset.provider;const urlOnly=!!document.getElementById('aiUrlOnlyCheckbox')?.checked;localStorage.setItem('aiQuickSettings',JSON.stringify({provider,urlOnly}));closeAllMenus();scanSingleItem(id,provider,urlOnly);}));
+            document.querySelectorAll('.ai-provider-btn').forEach(btn=>btn.addEventListener('click',()=>{const id=Number(document.getElementById('aiFloatingMenu')?.dataset.itemId);const provider=btn.dataset.provider;const urlOnly=!!document.getElementById('aiUrlOnlyCheckbox')?.checked;if(provider!=='fast-status')localStorage.setItem('aiQuickSettings',JSON.stringify({provider,urlOnly}));closeAllMenus();scanSingleItem(id,provider,urlOnly);}));
             document.getElementById('trashModal')?.addEventListener('click',e=>{if(e.target.id==='trashModal')closeTrashModal();});
         }
 
