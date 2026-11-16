@@ -110,19 +110,17 @@
             display: none;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start; /* הצמדה לחלק העליון ללא רווחים מיותרים למעלה */
             text-align: center;
-            padding: 16px;
+            padding: 20px 16px;
             background: var(--glass-bg);
             border-radius: var(--radius);
             border: 1px solid var(--glass-border);
             width: 100%;
             max-width: 100%;
-            min-height: calc(100vh - 40px);
-            margin: 0 auto;
+            margin: 10px auto;
             box-sizing: border-box;
-            gap: 6px;
-            overflow: hidden;
+            gap: 10px;
         }
         
         #welcomeScreen.visible { display: flex !important; }
