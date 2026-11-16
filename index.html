@@ -106,25 +106,21 @@
         .btn-action-sm { background: rgba(127,127,127,0.15); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 6px 10px; border-radius: 20px; cursor: pointer; font-size: 0.75rem; font-weight: 600; box-shadow: 0 2px 5px rgba(0,0,0,0.05); white-space: nowrap; display: flex; align-items: center; gap: 4px; transition: background 0.2s; }
         .btn-action-sm:hover { background: rgba(127,127,127,0.25); }
         
-  #welcomeScreen {
+       #welcomeScreen {
             display: none;
             flex-direction: column;
             align-items: center;
-            justify-content: space-between; /* מותח ומפזר את הרכיבים באופן מושלם לכל גובה המסך */
+            justify-content: center;
             text-align: center;
-            padding: 16px 14px;
+            padding: 10px 14px;
             background: var(--glass-bg);
             border-radius: var(--radius);
             border: 1px solid var(--glass-border);
-            width: 100%;
-            max-width: 100%;
-            height: calc(100vh - 30px); /* תופס בדיוק את כל גובה המסך בנייד בלי לגלוש החוצה */
-            margin: 0 auto;
+            max-width: 480px;
+            margin: 6px auto;
             box-sizing: border-box;
-            gap: 8px;
-            overflow: hidden;
+            gap: 6px;
         }
-        
         #welcomeScreen.visible { display: flex !important; }
         
         .timer-ring { position: relative; width: 40px; height: 40px; margin-bottom: 0px; }
@@ -160,17 +156,17 @@
         }
         .filters-container select option { background: #1e293b; color: white; }
 
-        .actions-container { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; align-items: center; margin-top: 4px; }
-        .dropdown { position: relative; display: inline-block; flex-grow: 1; min-width: 75px; }
+        .actions-container { display: flex; gap: 7px; flex-wrap: wrap; justify-content: center; align-items: center; }
+        .dropdown { position: relative; display: inline-block; flex-grow: 1; min-width: 0; }
 
         .action-btn {
-            width: 100%; height: 36px; color: white; border: none; border-radius: 10px;
+            width: 100%; height: 42px; color: white; border: none; border-radius: var(--radius);
             cursor: pointer; display: flex; align-items: center; justify-content: center;
-            gap: 4px; font-weight: 600; font-size: 0.82rem; white-space: nowrap; padding: 0 8px;
+            gap: 6px; font-weight: 600; font-size: 0.88rem; white-space: nowrap; padding: 0 10px;
             transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.18s ease, background-color 0.2s;
             position: relative; overflow: hidden;
         }
-        .action-btn:hover { box-shadow: 0 3px 10px rgba(0,0,0,0.15); }
+        .action-btn:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.18); }
         .action-btn:active { transform: scale(0.95); }
         .btn-json { background: linear-gradient(135deg, #60a5fa, #2dd4bf); }
         .btn-txt { background: linear-gradient(135deg, #3b82f6, #14b8a6); }
@@ -180,8 +176,7 @@
         .btn-toggle {
             background: rgba(127,127,127,0.1); color: var(--text-primary);
             border: 1px solid var(--glass-border); flex-grow: 0 !important;
-            width: auto; height: 36px; min-width: 38px; padding: 0 8px; font-size: 0.95rem;
-            border-radius: 10px;
+            width: auto; min-width: 44px; padding: 0 10px; font-size: 1.02rem;
             overflow: visible !important;
         }
 
@@ -640,34 +635,24 @@
     </div>
 
     <div id="welcomeScreen" style="display:none;" class="visible">
-        <!-- 1. המנעול למעלה -->
-        <div class="timer-ring" style="margin: 0 auto; flex-shrink: 0;">
+        <div class="timer-ring">
             <svg viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="45"></circle>
                 <circle class="progress" cx="50" cy="50" r="45"></circle>
             </svg>
             <div class="timer-icon">🔒</div>
         </div>
-        
-        <!-- 2. כותרת האתר מתחתיו -->
-        <h2 style="margin: 0; font-size: 1.3rem; line-height: 1.3; flex-shrink: 0;">ברוכים הבאים,<br><span style="color: var(--primary-color);">MH Link Manager Pro</span></h2>
-        
-        <!-- 3. תיבת האזהרה המוגדלת שתמלא את המרחב הפנוי -->
-        <div style="padding: 16px 18px; background: linear-gradient(135deg, rgba(217, 48, 37, 0.18), rgba(217, 48, 37, 0.06)); border: 1px solid rgba(217, 48, 37, 0.45); border-radius: 12px; font-size: 0.9rem; color: #fca5a5; width: 100%; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; line-height: 1.5; box-shadow: 0 4px 15px rgba(0,0,0,0.15); text-align: center; backdrop-filter: blur(5px); box-sizing: border-box;">
-            <div style="display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 1.05rem; margin-bottom: 6px; color: #f87171;">
+        <div style="margin-bottom: 12px; padding: 12px 15px; background: linear-gradient(135deg, rgba(217, 48, 37, 0.15), rgba(217, 48, 37, 0.05)); border: 1px solid rgba(217, 48, 37, 0.4); border-radius: 12px; font-size: 0.85rem; color: #fca5a5; max-width: 450px; width: 95%; line-height: 1.4; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; backdrop-filter: blur(5px); box-sizing: border-box;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 1rem; margin-bottom: 6px; color: #f87171;">
                 <span>⚠️</span><b>הבהרה משפטית</b><span>⚠️</span>
             </div>
             <div>
                 כל שימוש במערכת ובכלים המוצעים בה הוא על אחריות המשתמש בלבד. האתר אינו נושא בשום אחריות לכל נזק, אובדן מידע, או כל תוצאה אחרת שתנבע מהשימוש בו.
             </div>
         </div>
-        
-        <!-- 4. פסקאות הפרטיות בתחתית -->
-        <div style="display: flex; flex-direction: column; gap: 4px; width: 100%; flex-shrink: 0; padding-bottom: 4px;">
-            <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 0;">כדי לשמור על פרטיותך, הקישורים נטענים מהענן בלבד.</p>
-            <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 0;">בעת יציאה הכל נמחק מהמכשיר לחלוטין.</p>
-        </div>
-    </div>
+        <h2 style="margin-top: 0; margin-bottom: 6px; font-size: 1.3rem;">ברוכים הבאים,<br><span style="color: var(--primary-color);">MH Link Manager Pro</span></h2>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 2px; margin-top: 0;">כדי לשמור על פרטיותך, הקישורים נטענים מהענן בלבד.</p>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0; margin-bottom: 5px;">בעת יציאה הכל נמחק מהמכשיר לחלוטין.</p>
     </div>
 
     <div id="protectedContent" class="auth-required locked">
