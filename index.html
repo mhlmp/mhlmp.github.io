@@ -1592,43 +1592,55 @@
             }));
         }
 
-       function handleLockScreen(isLoggedIn) {
-            document.getElementById('loggedInView').style.display  = isLoggedIn ? 'flex' : 'none';
-            document.getElementById('loggedOutView').style.display = isLoggedIn ? 'none' : 'flex';
-            
-            const welcomeScreen    = document.getElementById('welcomeScreen');
+      function handleLockScreen(isLoggedIn) {
+            const loggedInView = document.getElementById('loggedInView');
+            const loggedOutView = document.getElementById('loggedOutView');
+            const welcomeScreen = document.getElementById('welcomeScreen');
             const protectedContent = document.getElementById('protectedContent');
+
+            if (loggedInView) loggedInView.style.display = isLoggedIn ? 'flex' : 'none';
+            if (loggedOutView) loggedOutView.style.display = isLoggedIn ? 'none' : 'flex';
             
-            if (!isLoggedIn) {
-                welcomeScreen.style.display = 'flex';
-                welcomeScreen.classList.add('visible');
-                protectedContent.classList.add('locked');
-                document.getElementById('itemCount').textContent = 'ממתין להתחברות...';
+            if (!isLoggedIn || !state.user) {
+                if (welcomeScreen) {
+                    welcomeScreen.style.display = 'flex';
+                    welcomeScreen.classList.add('visible');
+                }
+                if (protectedContent) protectedContent.classList.add('locked');
+                const itemCountEl = document.getElementById('itemCount');
+                if (itemCountEl) itemCountEl.textContent = 'ממתין להתחברות...';
                 return;
             }
 
-            const email = String(state.user?.email || '').toLowerCase().trim();
-            const isAdmin = ADMIN_EMAILS.some(e => e.toLowerCase() === email);
+            const email = String(state.user.email || '').toLowerCase().trim();
+            // בדיקת התאמה מוחלטת לשתי כתובות הדוא"ל שלך
+            const isMyAccount = ADMIN_EMAILS.map(e => e.toLowerCase()).includes(email);
 
-            // כניסה מיידית, חלקה וללא שום השהייה או מנעול לחשבונות המורשים שלך
-            if (isAdmin) {
-                welcomeScreen.style.display = 'none';
-                welcomeScreen.classList.remove('visible');
-                protectedContent.classList.remove('locked');
+            if (isMyAccount) {
+                // פתיחה מיידית של האתר ללא שום עיכוב וללא הצגת מסך מנעול
+                if (welcomeScreen) {
+                    welcomeScreen.style.display = 'none';
+                    welcomeScreen.classList.remove('visible');
+                }
+                if (protectedContent) {
+                    protectedContent.classList.remove('locked');
+                }
                 isServerDataArrived = true;
                 renderList();
                 return;
             }
 
-            // עבור משתמשים אחרים שאינם מורשים
-            welcomeScreen.style.display = 'flex';
-            welcomeScreen.classList.add('visible');
-            protectedContent.classList.add('locked');
-            document.getElementById('itemCount').textContent = 'אין הרשאה לחשבון זה';
-            const heading = welcomeScreen.querySelector('h2');
+            // גישה לחשבון שאינו מורשה
+            if (welcomeScreen) {
+                welcomeScreen.style.display = 'flex';
+                welcomeScreen.classList.add('visible');
+            }
+            if (protectedContent) protectedContent.classList.add('locked');
+            const itemCountEl = document.getElementById('itemCount');
+            if (itemCountEl) itemCountEl.textContent = 'אין הרשאה לחשבון זה';
+            const heading = welcomeScreen?.querySelector('h2');
             if (heading) heading.innerHTML = 'הגישה למערכת מוגבלת לחשבונות מורשים';
         }
-
         function updateSyncStatus(status, label) {
             const dot = document.getElementById('syncDot');
             const lbl = document.getElementById('syncLabel');
