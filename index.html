@@ -912,7 +912,7 @@
             getFirestore, doc, setDoc, collection, onSnapshot,
             deleteDoc, writeBatch, enableNetwork, disableNetwork,
             initializeFirestore, persistentLocalCache, persistentSingleTabManager,
-            terminate, clearIndexedDbPersistence
+            terminate, clearIndexedDbPersistence, waitForPendingWrites, deleteField
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -947,7 +947,6 @@
             'לא התקבל סיכום',
             'לא התקבל מספיק תוכן',
             'לא חולץ מספיק מידע',
-            'השרת של ',
             'github היא פלטפורמה גלובלית',
             'מערכת ניהול הגרסאות git',
             'בדיקת זמינות הושלמה'
@@ -1085,47 +1084,6 @@
             applyBadge(dupBadge, dupCount);
         }
 
-       // מנוע החלקה מהירה (Swipe to Dismiss) אוניברסלי לחלונות צפים ומודלים
-        function enableSwipeToDismiss(element, onDismiss) {
-            if (!element) return;
-            let startX = 0, currentX = 0, isDragging = false;
-
-            element.addEventListener('touchstart', (e) => {
-                startX = e.touches[0].clientX;
-                isDragging = true;
-                element.style.transition = 'none';
-            }, { passive: true });
-
-            element.addEventListener('touchmove', (e) => {
-                if (!isDragging) return;
-                currentX = e.touches[0].clientX - startX;
-                // מאפשר החלקה חלקה לצדדים
-                element.style.transform = `translateX(${currentX}px)`;
-                element.style.opacity = Math.max(0.3, 1 - Math.abs(currentX) / 180);
-            }, { passive: true });
-
-            element.addEventListener('touchend', () => {
-                if (!isDragging) return;
-                isDragging = false;
-                element.style.transition = 'transform 0.25s ease, opacity 0.25s ease';
-                if (Math.abs(currentX) > 85) {
-                    // החלקה מספקת לסגירה מהירה
-                    element.style.transform = `translateX(${currentX > 0 ? '120%' : '-120%'})`;
-                    element.style.opacity = '0';
-                    setTimeout(() => {
-                        element.style.transform = '';
-                        element.style.opacity = '';
-                        if (typeof onDismiss === 'function') onDismiss();
-                    }, 220);
-                } else {
-                    // חזרה למקום אם ההחלקה הייתה קטנה מדי
-                    element.style.transform = 'translateX(0)';
-                    element.style.opacity = '1';
-                }
-                currentX = 0;
-            });
-        }
-
         function setupScanDockControls() {
             const dock = document.getElementById('scanDock');
             const minBtn = document.getElementById('scanMinimizeBtn');
@@ -1149,14 +1107,29 @@
             });
 
             // הפעלת החלקה מהירה על חלון הסריקה הצף ועל מודלים קופצים
-            enableSwipeToDismiss(dock, () => {
-                scanController.isAborted = true;
+                        enableSwipeToDismiss(dock, () => {
+                if (scanController.isRunning) {
+                    scanController.isAborted = true;
+                    scanController.isPaused = false;
+                    scanController.activeAbortControllers.forEach(ctrl => {
+                        try { ctrl.abort(); } catch (_) {}
+                    });
+                    scanController.activeAbortControllers.clear();
+                }
+                scanController.isMinimized = false;
                 dock.classList.remove('active', 'minimized');
             });
 
             document.querySelectorAll('.modal-content, .edit-modal-box').forEach(box => {
-                enableSwipeToDismiss(box, () => {
-                    box.closest('#trashModal, .edit-modal-wrap')?.style.setProperty('display', 'none');
+                                enableSwipeToDismiss(box, () => {
+                    const wrap = box.closest('#trashModal, .edit-modal-wrap');
+                    if (!wrap) return;
+                    if (wrap.id === 'trashModal') {
+                        wrap.classList.remove('open');
+                        wrap.style.removeProperty('display');
+                    } else {
+                        wrap.style.display = 'none';
+                    }
                 });
             });
 
@@ -1287,8 +1260,10 @@
             if (!element) return;
             let startX = 0, currentX = 0, isDragging = false;
 
-            element.addEventListener('touchstart', (e) => {
+                       element.addEventListener('touchstart', (e) => {
+                if (e.target.closest('input, textarea, select, button, a, label')) { isDragging = false; return; }
                 startX = e.touches[0].clientX;
+                currentX = 0;
                 isDragging = true;
                 element.style.transition = 'none';
             }, { passive: true });
@@ -1415,6 +1390,16 @@
                 const item = state.items.find(i => i.id === id);
                 if (!item) return;
 
+                const tagChip = e.target.closest('.ai-tag-chip');
+                if (tagChip) {
+                    e.stopPropagation();
+                    const searchEl = document.getElementById('searchInput');
+                    if (searchEl) {
+                        searchEl.value = tagChip.getAttribute('data-tag') || '';
+                        searchEl.dispatchEvent(new Event('input'));
+                    }
+                    return;
+                }
                 if (e.target.closest('.btn-share')) { e.stopPropagation(); shareItem(item); return; }
                 if (e.target.closest('.btn-copy')) { e.stopPropagation(); copyText(item.content); return; }
                 if (e.target.closest('.btn-edit')) { e.stopPropagation(); editItem(item); return; }
@@ -1569,15 +1554,41 @@
             });
         }
 
+                function aiClearPatch() {
+            return {
+                aiSummary: deleteField(),
+                aiTags: deleteField(),
+                aiModel: deleteField(),
+                siteStatus: deleteField(),
+                httpCode: deleteField()
+            };
+        }
+
+        function commitBatch(batch) {
+            const p = batch.commit();
+            if (!navigator.onLine) {
+                p.catch(e => console.error('Offline batch error:', e));
+                return Promise.resolve();
+            }
+            return p;
+        }
+
         async function saveItemToCloud(item) {
-            if (!state.user || state.isOffline) return;
+            if (!state.user) return;
             try {
                 const itemRef = doc(db, 'users', state.user.uid, 'items', item.id.toString());
-                const cleanItem = { ...item };
-                delete cleanItem.isScanning; 
-                await setDoc(itemRef, cleanItem, { merge: true });
+                const cleanItem = JSON.parse(JSON.stringify(item)); // מסיר undefined
+                delete cleanItem.isScanning;
+                const writePromise = setDoc(itemRef, cleanItem, { merge: true });
+                if (!navigator.onLine || state.isOffline) {
+                    // Firestore שומר בתור מקומי וישלח כשהרשת תחזור; אין להמתין
+                    writePromise.catch(e => console.error('Offline save error:', e));
+                    return;
+                }
+                await writePromise;
             } catch (e) {
                 console.error('Error saving item:', e);
+                showToast('❌ השמירה לענן נכשלה: ' + e.message, null, 4000, null, true);
             }
         }
 
@@ -1648,10 +1659,20 @@
             if (lbl) lbl.textContent = label || status;
         }
 
-        async function cloudLogout() {
+         async function cloudLogout() {
+            if (!navigator.onLine && !confirm('אין חיבור לרשת. שינויים שלא סונכרנו יימחקו ביציאה. להמשיך?')) return;
             if (state.unsubItems) state.unsubItems();
             if (state.unsubTrash) state.unsubTrash();
-            try { await signOut(auth); } catch(e){}
+            try {
+                if (navigator.onLine && db) {
+                    await Promise.race([waitForPendingWrites(db), new Promise(r => setTimeout(r, 4000))]);
+                }
+            } catch (_) {}
+            try { await signOut(auth); } catch (_) {}
+            try {
+                await terminate(db);
+                await clearIndexedDbPersistence(db);
+            } catch (_) {}
             window.location.reload();
         }
 
@@ -1866,9 +1887,11 @@
             div.className = `card ${item.isPinned ? 'pinned' : ''} ${statusCardClass} ${state.selectedIds.has(item.id) ? 'selected' : ''} ${state.expandAllCards ? 'is-expanded' : ''}`;
             div.setAttribute('data-id', item.id);
 
-            const safeContent = escapeHtml(item.content);
+                        const safeContent = escapeHtml(item.content);
+            const rawHref = String(item.content || '').trim().replace(/^[\/\\]+/, '');
+            const safeHref = escapeHtml(/^https?:\/\//i.test(rawHref) ? rawHref : 'https://' + rawHref);
             const contentHtml = item.type === 'link'
-                ? `<a href="${safeContent}" class="card-link" target="_blank" rel="noopener noreferrer">${safeContent}</a>`
+                ? `<a href="${safeHref}" class="card-link" target="_blank" rel="noopener noreferrer">${safeContent}</a>`
                 : `<div class="card-text-content">${safeContent}</div>`;
             const noteHtml = item.note ? `<div class="card-note">📝 ${escapeHtml(item.note)}</div>` : '';
 
@@ -1918,10 +1941,8 @@
                 let tagsHtml = '';
                 if (item.aiTags && item.aiTags.length > 0) {
                     tagsHtml = `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;">
-                        ${item.aiTags.map(tag => {
-                            const safeTagValue = escapeHtml(tag).replace(/'/g, "\\'");
-                            return `<span style="background:rgba(96,165,250,0.15);color:var(--primary-color);padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid rgba(96,165,250,0.3);font-weight:bold;cursor:pointer;"
-                                onclick="event.stopPropagation();document.getElementById('searchInput').value='${safeTagValue}';document.getElementById('searchInput').dispatchEvent(new Event('input'));">${escapeHtml(tag)}</span>`;
+                                                ${item.aiTags.map(tag => {
+                            return `<span class="ai-tag-chip" data-tag="${escapeHtml(tag)}" style="background:rgba(96,165,250,0.15);color:var(--primary-color);padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid rgba(96,165,250,0.3);font-weight:bold;cursor:pointer;">${escapeHtml(tag)}</span>`;
                         }).join('')}
                     </div>`;
                 }
@@ -2198,7 +2219,8 @@
                 l.includes('failed to fetch') || l.includes('networkerror');
         }
 
-        const fetchWithScanSignal = async (url, options = {}, time = 14000) => {
+                const fetchWithScanSignal = async (url, options = {}, time = 14000) => {
+            if (scanController.isAborted) throw new DOMException('Scan aborted', 'AbortError');
             const ctrl = new AbortController();
             scanController.activeAbortControllers.add(ctrl);
             const tid = setTimeout(() => ctrl.abort(), time);
@@ -2496,6 +2518,27 @@
         // =========================================================================
         // 3. מנוע אבחון קישורים רב-שכבתי (כולל זיהוי 504/502/500/404 ו-Jina SPA Reader)
         // =========================================================================
+        async function isNxDomain(domain) {
+            try {
+                const dohRes = await fetchWithScanSignal(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A`, {}, 3500);
+                if (!dohRes.ok) return false;
+                const dohData = await dohRes.json();
+                if (dohData.Status !== 3) return false;
+                try {
+                    const cfRes = await fetchWithScanSignal(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=A`, {
+                        headers: { 'accept': 'application/dns-json' }
+                    }, 3000);
+                    if (!cfRes.ok) return false;
+                    const cfData = await cfRes.json();
+                    return cfData.Status === 3;
+                } catch (_) {
+                    return false; // resolver שני שנכשל אינו הוכחה ל-NXDOMAIN
+                }
+            } catch (_) {
+                return false;
+            }
+        }
+
         async function diagnoseLinkStatus(cleanUrl) {
             const domainMatch = cleanUrl.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?#]+)/im);
             const domain = domainMatch ? domainMatch[1].toLowerCase() : '';
@@ -2536,24 +2579,7 @@
             }
 
             // ג. בדיקת DNS-over-HTTPS (לזיהוי דומיין שאינו קיים כלל ברשת - NXDOMAIN)
-            let nxDomainConfirmed = false;
-            try {
-                const dohRes = await fetchWithScanSignal(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A`, {}, 3500);
-                if (dohRes.ok) {
-                    const dohData = await dohRes.json();
-                    if (dohData.Status === 3) {
-                        try {
-                            const cfRes = await fetchWithScanSignal(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=A`, {
-                                headers: { 'accept': 'application/dns-json' }
-                            }, 3000);
-                            if (cfRes.ok) {
-                                const cfData = await cfRes.json();
-                                if (cfData.Status === 3) nxDomainConfirmed = true;
-                            }
-                        } catch (_) { /* A failed second resolver is inconclusive, not NXDOMAIN proof. */ }
-                    }
-                }
-            } catch (_) {}
+                        const nxDomainConfirmed = await isNxDomain(domain);
 
             if (nxDomainConfirmed) {
                 result.verifiedStatus = 'dead';
@@ -2763,12 +2789,17 @@
 
             // ז. זיהוי דומיין בחניה / למכירה (Parked Domain)
             const combLower = `${lowerAll} ${jinaText.toLowerCase()}`;
-            const parkedSignals = [
+                        const parkedSignals = [
                 'sedoparking', 'domain is for sale', 'buy this domain', 'this domain may be for sale',
-                'hugedomains', 'afternic', 'dan.com', 'parked free, courtesy of godaddy',
+                'hugedomains', 'afternic', 'parked free, courtesy of godaddy',
                 'this web page is parked for free', 'inquire about this domain'
             ];
-            if (parkedSignals.some(s => combLower.includes(s))) {
+            const isSmallPage = bodyText.length < 2500 && jinaText.length < 2500;
+            const looksParked = isSmallPage && (
+                parkedSignals.some(s => combLower.includes(s)) ||
+                /\bdan\.com\b/.test(combLower)
+            );
+            if (looksParked) {
                 result.verifiedStatus = 'parked';
                 result.isDefinitive = true;
                 result.reason = `הדומיין ${domain} נמצא בחניה או מוצע למכירה ואינו מכיל אתר פעיל.`;
@@ -2787,6 +2818,22 @@
                 result.reason = `העמוד המבוקש בכתובת ${domain} אינו קיים (שגיאת HTTP ${result.httpCode}).`;
                 result.fallbackSummary = result.reason;
                 result.tags = ['#לא_זמין', `#HTTP_${result.httpCode}`];
+                return result;
+            }
+
+                        // אם שום שכבה לא החזירה תגובה, אי אפשר לקבוע שהאתר פעיל
+            const reachedSomething =
+                Boolean(rawHtml && rawHtml.length >= 30) ||
+                Boolean(microlinkData) ||
+                Boolean(jinaText) ||
+                Boolean(httpCode && httpCode >= 200 && httpCode < 400);
+            if (!reachedSomething) {
+                result.verifiedStatus = 'unknown';
+                result.httpCode = null;
+                result.isDefinitive = false;
+                result.reason = `לא ניתן היה לאמת את ${domain}: שירותי הבדיקה החיצוניים לא החזירו תגובה, ואין הוכחה שהאתר פעיל או מושבת.`;
+                result.fallbackSummary = result.reason;
+                result.tags = ['#לא_אומת'];
                 return result;
             }
 
@@ -2863,11 +2910,7 @@
             }
 
             // 4. בדיקת עקביות: אם הטקסט עצמו אומר שהאתר ב-504/502 או לא זמין, עדכן את הסטטוס ל-dead!
-            if (lowerSum.includes('504') || lowerSum.includes('502') || lowerSum.includes('אינו זמין') || lowerSum.includes('לא זמין') || lowerSum.includes('פג תוקף')) {
-                if (netDiag.verifiedStatus === 'active' && (lowerSum.includes('504') || lowerSum.includes('502') || lowerSum.includes('שגיאת שרת'))) {
-                    netDiag.verifiedStatus = 'dead';
-                }
-            }
+            // הסטטוס נקבע אך ורק לפי בדיקות הרשת, לא לפי טקסט שה-AI כתב
 
             return { valid: true, summary };
         }
@@ -2897,8 +2940,11 @@
                 return;
             }
 
-            const item = state.items.find(i => i.id === id);
+                        const item = state.items.find(i => i.id === id);
             if (!item) return;
+
+            // סריקה בודדת שמתחילה מחוץ לסריקה קבוצתית לא יורשת ביטול ישן
+            if (!scanController.isRunning) scanController.isAborted = false;
 
             item.isScanning = true;
             updateCardInPlace(id);
@@ -2924,20 +2970,47 @@
                     tags: []
                 };
 
-                if (isWebsite && !forceUrlOnly) {
+                                if (isWebsite && !forceUrlOnly) {
                     netDiag = await diagnoseLinkStatus(cleanContent);
+                } else if (isWebsite && forceUrlOnly) {
+                    const dnsDomainMatch = cleanContent.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?#]+)/im);
+                    const dnsDomain = dnsDomainMatch ? dnsDomainMatch[1].toLowerCase() : '';
+                    const nx = dnsDomain ? await isNxDomain(dnsDomain) : false;
+                    if (nx) {
+                        netDiag.verifiedStatus = 'dead';
+                        netDiag.httpCode = 404;
+                        netDiag.isDefinitive = true;
+                        netDiag.reason = `הדומיין ${dnsDomain} אינו רשום או לא קיים ברשת (NXDOMAIN).`;
+                        netDiag.fallbackSummary = netDiag.reason;
+                        netDiag.tags = ['#לא_זמין', '#NXDOMAIN'];
+                    } else {
+                        netDiag.verifiedStatus = (item.siteStatus === 'active' || item.siteStatus === 'unknown') ? item.siteStatus : 'unknown';
+                        netDiag.httpCode = item.httpCode || null;
+                        netDiag.isDefinitive = false;
+                    }
                 }
+
+                if (scanController.isAborted) return;
 
                 // אם המשתמש בחר בדיקת סטטוס מהירה, או שהאתר מת/504/בחניה בוודאות מוחלטת
                 if (overrideProvider === 'fast-status' || (isWebsite && (netDiag.verifiedStatus === 'dead' || netDiag.verifiedStatus === 'parked'))) {
                     const ci = state.items.find(i => i.id === id);
                     if (ci) {
-                        ci.siteStatus = isWebsite ? netDiag.verifiedStatus : 'text';
-                        ci.httpCode = netDiag.httpCode || null;
-                        ci.aiSummary = netDiag.reason || netDiag.fallbackSummary || 'בדיקת זמינות הושלמה.';
-                        if (netDiag.tags && netDiag.tags.length > 0) ci.aiTags = netDiag.tags;
-                        ci.aiModel = '⚡ אימות שרת ורשת';
-                        ci.updatedAt = nowIso();
+                                                const newStatus = isWebsite ? netDiag.verifiedStatus : 'text';
+                        const prevStatus = ci.siteStatus;
+                        const inconclusive = newStatus === 'unknown' && prevStatus && prevStatus !== 'unknown';
+                        if (!inconclusive) {
+                            const keepExisting = Boolean(ci.aiSummary) && !isBadOrGuessedSummary(ci.aiSummary) &&
+                                ((newStatus === 'active' && prevStatus === 'active') || newStatus === 'text');
+                            ci.siteStatus = newStatus;
+                            ci.httpCode = netDiag.httpCode || null;
+                            if (!keepExisting) {
+                                ci.aiSummary = netDiag.reason || netDiag.fallbackSummary || 'בדיקת זמינות הושלמה.';
+                                if (netDiag.tags && netDiag.tags.length > 0) ci.aiTags = netDiag.tags;
+                                ci.aiModel = '⚡ אימות שרת ורשת';
+                            }
+                            ci.updatedAt = nowIso();
+                        }
                     }
                     return;
                 }
@@ -3002,7 +3075,7 @@ STRICT RULES (ZERO TOLERANCE FOR VIOLATIONS):
                     const { provider: currentProvider, key: activeKey } = fallbackChain[i];
 
                     if (currentProvider === 'gemini') {
-                        const defaultGeminiModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'];
+                        const defaultGeminiModels = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-flash-lite-latest'];
                         let models = window.cachedGeminiModelsList ? [...window.cachedGeminiModelsList] : defaultGeminiModels;
 
                         for (const model of models) {
@@ -3163,18 +3236,20 @@ STRICT RULES (ZERO TOLERANCE FOR VIOLATIONS):
             if (typeof undo === 'function') {
                 const btn = document.createElement('button');
                 btn.className = 'toast-undo-btn'; btn.type = 'button'; btn.textContent = 'ביטול';
-                btn.addEventListener('click', async () => { try { await undo(); } finally { removeToast(id || toast.id); } });
+                btn.addEventListener('click', async () => { try { await undo(); } finally { removeToast(toast); } });
                 content.appendChild(btn);
             }
             toast.appendChild(content);
             host.appendChild(toast);
             requestAnimationFrame(() => toast.classList.add('visible'));
-            if (duration > 0) window.setTimeout(() => removeToast(id || toast.id), duration);
+            if (duration > 0) window.setTimeout(() => removeToast(toast), duration);
             return toast;
         }
-        function removeToast(id) {
-            const el = id ? document.getElementById(id) : null;
-            if (!el) return;
+                function removeToast(target) {
+            const el = typeof target === 'string' ? document.getElementById(target) : target;
+            if (!el || el.dataset.leaving === '1') return;
+            el.dataset.leaving = '1';
+            if (el.id) el.removeAttribute('id');
             el.classList.remove('visible'); el.classList.add('leaving');
             window.setTimeout(() => el.remove(), 280);
         }
