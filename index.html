@@ -1282,23 +1282,66 @@
             }).catch(() => {});
         }
 
+        // מנוע החלקה מהירה (Swipe to Dismiss) אוניברסלי לחלונות צפים ומודלים
+        function enableSwipeToDismiss(element, onDismiss) {
+            if (!element) return;
+            let startX = 0, currentX = 0, isDragging = false;
+
+            element.addEventListener('touchstart', (e) => {
+                startX = e.touches[0].clientX;
+                isDragging = true;
+                element.style.transition = 'none';
+            }, { passive: true });
+
+            element.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                currentX = e.touches[0].clientX - startX;
+                element.style.transform = `translateX(${currentX}px)`;
+                element.style.opacity = Math.max(0.3, 1 - Math.abs(currentX) / 160);
+            }, { passive: true });
+
+            element.addEventListener('touchend', () => {
+                if (!isDragging) return;
+                isDragging = false;
+                element.style.transition = 'transform 0.22s ease, opacity 0.22s ease';
+                if (Math.abs(currentX) > 75) {
+                    element.style.transform = `translateX(${currentX > 0 ? '120%' : '-120%'})`;
+                    element.style.opacity = '0';
+                    setTimeout(() => {
+                        element.style.transform = '';
+                        element.style.opacity = '';
+                        if (typeof onDismiss === 'function') onDismiss();
+                    }, 200);
+                } else {
+                    element.style.transform = 'translateX(0)';
+                    element.style.opacity = '1';
+                }
+                currentX = 0;
+            });
+        }
+
         function setupEventListeners() {
             document.querySelectorAll('.drop-trigger').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const menu = document.getElementById(btn.getAttribute('data-target'));
-                    const isOpen = menu.classList.contains('show');
+                    const isOpen = menu?.classList.contains('show');
                     closeAllMenus();
-                    if (!isOpen) {
+                    if (!isOpen && menu) {
                         menu.classList.add('show');
                         btn.classList.add('active');
                         repositionDropdown(menu);
                     }
                 });
             });
-            window.addEventListener('click', () => closeAllMenus());
-            window.addEventListener('resize', closeAllMenus);
 
+            // סגירה חכמה ומיידית בלחיצה מחוץ לכל תפריט או חלון נפתח
+            window.addEventListener('click', (e) => {
+                if (!e.target.closest('.dropdown') && !e.target.closest('.dropdown-content') && !e.target.closest('#aiFloatingMenu')) {
+                    closeAllMenus();
+                }
+            });
+            window.addEventListener('resize', closeAllMenus);
             let searchTimeout;
             document.getElementById('searchInput')?.addEventListener('input', () => {
                 clearTimeout(searchTimeout);
