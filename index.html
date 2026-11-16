@@ -106,15 +106,28 @@
         .btn-action-sm { background: rgba(127,127,127,0.15); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 6px 10px; border-radius: 20px; cursor: pointer; font-size: 0.75rem; font-weight: 600; box-shadow: 0 2px 5px rgba(0,0,0,0.05); white-space: nowrap; display: flex; align-items: center; gap: 4px; transition: background 0.2s; }
         .btn-action-sm:hover { background: rgba(127,127,127,0.25); }
         
-        #welcomeScreen { display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 12px; background: var(--glass-bg); border-radius: var(--radius); border: 1px solid var(--glass-border); min-height: auto; margin-bottom: 8px; }
+       #welcomeScreen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 10px 14px;
+            background: var(--glass-bg);
+            border-radius: var(--radius);
+            border: 1px solid var(--glass-border);
+            max-width: 480px;
+            margin: 6px auto;
+            box-sizing: border-box;
+            gap: 6px;
+        }
         #welcomeScreen.visible { display: flex !important; }
         
-        .timer-ring { position: relative; width: 60px; height: 60px; margin-bottom: 12px; }
+        .timer-ring { position: relative; width: 40px; height: 40px; margin-bottom: 0px; }
         .timer-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-        .timer-ring circle { fill: none; stroke-width: 6; stroke: rgba(127,127,127,0.2); }
-        .timer-ring .progress { stroke: var(--primary-color); stroke-dasharray: 283; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear; }
-        .timer-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.8rem; text-shadow: 0 0 10px rgba(255,255,255,0.2); }
-        
+        .timer-ring circle { fill: none; stroke-width: 4; stroke: rgba(127,127,127,0.2); }
+        .timer-ring .progress { stroke: var(--primary-color); stroke-dasharray: 283; stroke-dashoffset: 0; }
+        .timer-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.1rem; }        
         .auth-required { transition: opacity 0.3s ease; }
         .auth-required.locked { display: none !important; }
 
@@ -1457,62 +1470,41 @@
             }));
         }
 
-        function handleLockScreen(isLoggedIn) {
+       function handleLockScreen(isLoggedIn) {
             document.getElementById('loggedInView').style.display  = isLoggedIn ? 'flex' : 'none';
             document.getElementById('loggedOutView').style.display = isLoggedIn ? 'none' : 'flex';
             
             const welcomeScreen    = document.getElementById('welcomeScreen');
             const protectedContent = document.getElementById('protectedContent');
-            const progressCircle   = document.querySelector('.timer-ring .progress');
             
             if (!isLoggedIn) {
                 welcomeScreen.style.display = 'flex';
                 welcomeScreen.classList.add('visible');
                 protectedContent.classList.add('locked');
                 document.getElementById('itemCount').textContent = 'ממתין להתחברות...';
-                if (progressCircle) { progressCircle.style.transition = 'none'; progressCircle.style.strokeDashoffset = '0'; }
                 return;
             }
 
-            const isAdmin = !!state.user && ADMIN_EMAILS.some(email => String(email).toLowerCase() === String(state.user.email || '').toLowerCase());
+            const email = String(state.user?.email || '').toLowerCase().trim();
+            const isAdmin = ADMIN_EMAILS.some(e => e.toLowerCase() === email);
+
+            // כניסה מיידית, חלקה וללא שום השהייה או מנעול לחשבונות המורשים שלך
+            if (isAdmin) {
+                welcomeScreen.style.display = 'none';
+                welcomeScreen.classList.remove('visible');
+                protectedContent.classList.remove('locked');
+                isServerDataArrived = true;
+                renderList();
+                return;
+            }
+
+            // עבור משתמשים אחרים שאינם מורשים
             welcomeScreen.style.display = 'flex';
             welcomeScreen.classList.add('visible');
             protectedContent.classList.add('locked');
-            if (!isAdmin) {
-                document.getElementById('itemCount').textContent = 'אין הרשאה לחשבון זה';
-                const heading = welcomeScreen.querySelector('h2');
-                if (heading) heading.innerHTML = 'הגישה למערכת מוגבלת לחשבונות מורשים';
-                const paragraphs = welcomeScreen.querySelectorAll('p');
-                if (paragraphs[0]) paragraphs[0].textContent = 'יש להתחבר באמצעות חשבון Google שהוגדר כמורשה.';
-                if (paragraphs[1]) paragraphs[1].textContent = 'הנתונים נשארים נעולים עד לאימות הרשאה.';
-                if (progressCircle) progressCircle.style.strokeDashoffset = '0';
-                return;
-            }
-            if (forceHideLockScreenTimer) clearTimeout(forceHideLockScreenTimer);
-            welcomeScreen.style.display = 'flex';
-            document.getElementById('itemCount').textContent = 'מוריד נתונים מהענן...';
-            if (progressCircle) {
-                progressCircle.style.transition = 'stroke-dashoffset 2s linear';
-                progressCircle.style.strokeDashoffset = '283';
-            }
-            const waitInterval = setInterval(() => {
-                if (isServerDataArrived) {
-                    clearInterval(waitInterval);
-                    clearTimeout(forceHideLockScreenTimer);
-                    welcomeScreen.style.display = 'none';
-                    welcomeScreen.classList.remove('visible');
-                    protectedContent.classList.remove('locked');
-                    renderList();
-                }
-            }, 250);
-            // Never unlock protected content merely because a timer elapsed.
-            forceHideLockScreenTimer = setTimeout(() => {
-                clearInterval(waitInterval);
-                if (!isServerDataArrived) {
-                    document.getElementById('itemCount').textContent = 'הנתונים עדיין לא התקבלו מהענן';
-                    showToast('⚠️ לא התקבל אישור מהשרת. התוכן נשאר נעול.', null, 4500, null, true);
-                }
-            }, 12000);
+            document.getElementById('itemCount').textContent = 'אין הרשאה לחשבון זה';
+            const heading = welcomeScreen.querySelector('h2');
+            if (heading) heading.innerHTML = 'הגישה למערכת מוגבלת לחשבונות מורשים';
         }
 
         function updateSyncStatus(status, label) {
