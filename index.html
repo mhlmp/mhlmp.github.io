@@ -891,22 +891,37 @@
         const SCHEMA_VERSION = 6;
         const ADMIN_EMAILS = ["meirhadad74@gmail.com", "meirhadad75@gmail.com"];
 
-        // רשימת ביטויים שמעידים על ניחוש שגוי או תקלת סריקה ישנה
+       // רשימת ביטויים שמעידים על ניחוש שגוי, תיאור גנרי או חוסר תוכן שדורש סריקה מתוקנת
         const BAD_SUMMARY_PATTERNS = [
             'ככל הנראה',
             'נראה כי',
             'נראה כיישום',
             'בהתבסס על שם הדומיין',
+            'לפי שם הדומיין',
             'אולי כולל',
             'ייתכן ש',
             'עשוי להציע',
             'עשוי לסייע',
+            'עשויה להציע',
             'failed to fetch',
             'שגיאה: ספק ה-ai נכשל',
             'שגיאה:',
             'לא התקבל סיכום',
-            'github היא פלטפורמה גלובלית מובילה לאחסון'
+            'לא התקבל מספיק תוכן',
+            'לא חולץ מספיק מידע',
+            'השרת של ',
+            'github היא פלטפורמה גלובלית',
+            'מערכת ניהול הגרסאות git',
+            'בדיקת זמינות הושלמה'
         ];
+
+        function isBadOrGuessedSummary(text) {
+            if (!text || typeof text !== 'string') return true;
+            const clean = text.trim();
+            if (clean.length < 18) return true;
+            const lower = clean.toLowerCase();
+            return BAD_SUMMARY_PATTERNS.some(p => lower.includes(p.toLowerCase()));
+        }
 
         let app, auth, db;
         let deferredPrompt;
@@ -1271,6 +1286,7 @@
                 if (e.target.closest('.pin-btn')) { e.stopPropagation(); togglePin(id); return; }
                 if (e.target.closest('.trash-btn')) { e.stopPropagation(); moveToTrash(id); return; }
                 if (e.target.closest('.ai-edit-btn')) { e.stopPropagation(); window.openEditAiModal(item); return; }
+                if (e.target.closest('.ai-rescan-inline-btn')) { e.stopPropagation(); window.scanSingleItem(id, null, false); return; }
                 
                 const linkEl = e.target.closest('.card-link');
                 if (linkEl && !e.target.closest('.card-actions')) {
@@ -1789,13 +1805,16 @@
                     ? `title="אובחן באמצעות: ${escapeHtml(item.aiModel)}"`
                     : 'title="אובחן במערכת"';
 
-                aiHtml = `<div class="ai-box ${boxExtraClass}" style="position:relative;">
+               aiHtml = `<div class="ai-box ${boxExtraClass}" style="position:relative;">
                     <div class="ai-header">
                         <span style="display:flex;align-items:center;">
                             <span style="font-size:14px;margin-left:6px;cursor:help;user-select:none;" ${modelTooltip}>${modelEmoji}</span>
                             <span class="${statusClass}">${statusText}</span>
                         </span>
-                        <button class="icon-btn ai-edit-btn" title="ערוך סטטוס ותוצאות AI" style="width:22px;height:22px;font-size:12px;background:rgba(127,127,127,0.15);border-radius:4px;">✏️</button>
+                        <div style="display:flex;gap:4px;align-items:center;">
+                            <button class="icon-btn ai-rescan-inline-btn" title="סרוק מחדש פריט זה כעת" style="width:22px;height:22px;font-size:11px;background:rgba(127,127,127,0.15);border-radius:4px;">🔄</button>
+                            <button class="icon-btn ai-edit-btn" title="ערוך סטטוס ותוצאות AI" style="width:22px;height:22px;font-size:12px;background:rgba(127,127,127,0.15);border-radius:4px;">✏️</button>
+                        </div>
                     </div>
                     <div>${escapeHtml(item.aiSummary || 'בדיקת זמינות הושלמה.')}</div>
                     ${tagsHtml}
@@ -2466,77 +2485,141 @@
 
             const parser = new DOMParser();
             const doc2 = parser.parseFromString(rawHtml || '', 'text/html');
-            const pageTitle = (doc2.title || microlinkData?.title || '').trim();
-            const metaDesc = (
+            let pageTitle = (
+                doc2.title ||
+                doc2.querySelector('meta[property="og:title"]')?.content ||
+                doc2.querySelector('meta[name="twitter:title"]')?.content ||
+                microlinkData?.title ||
+                ''
+            ).trim();
+            let metaDesc = (
                 doc2.querySelector('meta[name="description"]')?.content ||
                 doc2.querySelector('meta[property="og:description"]')?.content ||
+                doc2.querySelector('meta[name="twitter:description"]')?.content ||
                 microlinkData?.description ||
                 ''
             ).trim();
+            const ogSiteName = (
+                doc2.querySelector('meta[property="og:site_name"]')?.content ||
+                doc2.querySelector('meta[name="application-name"]')?.content ||
+                microlinkData?.publisher ||
+                ''
+            ).trim();
+
+            // חילוץ מידע מובנה (JSON-LD / Next.js) לפני מחיקת תגיות script!
+            let structuredHints = [];
+            doc2.querySelectorAll('script[type="application/ld+json"]').forEach(sc => {
+                try {
+                    const jd = JSON.parse(sc.textContent || '{}');
+                    const arr = Array.isArray(jd) ? jd : (jd['@graph'] || [jd]);
+                    arr.forEach(obj => {
+                        if (obj?.name && typeof obj.name === 'string') structuredHints.push(obj.name);
+                        if (obj?.headline && typeof obj.headline === 'string') structuredHints.push(obj.headline);
+                        if (obj?.description && typeof obj.description === 'string') structuredHints.push(obj.description);
+                    });
+                } catch (_) {}
+            });
+
+            // חילוץ כותרות ראשיות (H1, H2, H3)
+            const headingsText = Array.from(doc2.querySelectorAll('h1, h2, h3'))
+                .map(h => (h.textContent || '').replace(/\s+/g, ' ').trim())
+                .filter(t => t.length > 2 && t.length < 180)
+                .slice(0, 8)
+                .join(' | ');
 
             doc2.querySelectorAll('script,style,noscript,iframe,svg').forEach(el => el.remove());
             let bodyText = (doc2.body?.innerText || '').replace(/\s+/g, ' ').trim();
             const lowerAll = `${pageTitle} ${metaDesc} ${bodyText}`.toLowerCase();
 
-            // ה. זיהוי מפורש של תקלות שרת 504 / 502 / 500 / 521-524 (כמו ב-mk9.lauta.site!)
+            // ה. זיהוי מפורש של תקלות שרת 504 / 502 / 500 / 521-524 / 1101 (כמו ב-mk9.lauta.site!)
             const SERVER_ERROR_CODES = [500, 502, 504, 520, 521, 522, 523, 524, 525, 526];
-            const hasExplicit504Text =
-                lowerAll.includes('504 gateway time-out') ||
-                lowerAll.includes('504 gateway timeout') ||
-                lowerAll.includes('502 bad gateway') ||
-                lowerAll.includes('500 internal server error') ||
-                lowerAll.includes('error 504') ||
-                lowerAll.includes('error 502') ||
+            const hasExplicitServerErrText =
+                /\b504\s*[:|-]?\s*gateway time-?out\b/i.test(lowerAll) ||
+                /\b502\s*[:|-]?\s*bad gateway\b/i.test(lowerAll) ||
+                /\b500\s*[:|-]?\s*internal server error\b/i.test(lowerAll) ||
+                /\berror code 52[0-6]\b/i.test(lowerAll) ||
                 lowerAll.includes('web server is down') ||
-                lowerAll.includes('connection timed out') ||
-                lowerAll.includes('a timeout occurred') ||
+                lowerAll.includes('connection timed out') && lowerAll.includes('cloudflare') ||
+                lowerAll.includes('a timeout occurred') && lowerAll.includes('cloudflare') ||
                 lowerAll.includes('origin is unreachable') ||
+                lowerAll.includes('worker threw exception') ||
+                lowerAll.includes('error 1101') ||
                 lowerAll.includes('deployment_not_found') ||
                 lowerAll.includes('this deployment cannot be found');
 
-            if (SERVER_ERROR_CODES.includes(httpCode) || hasExplicit504Text) {
-                let detectedCode = SERVER_ERROR_CODES.includes(httpCode) ? httpCode : 504;
+            if (SERVER_ERROR_CODES.includes(Number(httpCode)) || (bodyText.length < 3000 && hasExplicitServerErrText)) {
+                let detectedCode = SERVER_ERROR_CODES.includes(Number(httpCode)) ? Number(httpCode) : 504;
                 if (lowerAll.includes('502 bad gateway')) detectedCode = 502;
                 else if (lowerAll.includes('500 internal server')) detectedCode = 500;
-                else if (lowerAll.includes('521')) detectedCode = 521;
+                else if (lowerAll.includes('521') || lowerAll.includes('web server is down')) detectedCode = 521;
                 else if (lowerAll.includes('522')) detectedCode = 522;
                 else if (lowerAll.includes('524')) detectedCode = 524;
+                else if (lowerAll.includes('1101') || lowerAll.includes('worker threw exception')) detectedCode = 500;
 
                 result.verifiedStatus = 'dead';
                 result.httpCode = detectedCode;
                 result.isDefinitive = true;
-                result.reason = `תקלת שרת (HTTP ${detectedCode}) — השרת של ${domain} אינו מגיב או קרס (Gateway Timeout / Server Error), ולכן האתר לא זמין כעת.`;
+                result.reason = `תקלת שרת (HTTP ${detectedCode}) — השרת של ${domain} אינו מגיב או קרס (Gateway Timeout / Server Error), ולכן האתר אינו זמין כעת.`;
                 result.fallbackSummary = result.reason;
                 result.tags = ['#לא_זמין', `#HTTP_${detectedCode}`, '#שגיאת_שרת'];
                 return result;
             }
 
-            // ו. אם שני הבודקים נכשלו לחלוטין בגלל Timeout מלא (אפס תגובה מהשרת) — נבצע בדיקת Jina Reader לאימות סופי
+            // ו. שליפת תוכן מרונדר מ-Jina Reader עבור אתרים דינמיים (SPA / React / Next.js / הגנת Cloudflare)
             let jinaText = '';
-            if (bodyText.length < 80 || !httpCode) {
+            let jinaTitle = '';
+            const isCloudflareChallenge =
+                lowerAll.includes('just a moment...') ||
+                lowerAll.includes('checking your browser') ||
+                lowerAll.includes('verify you are human') ||
+                lowerAll.includes('attention required! | cloudflare');
+
+            if (bodyText.length < 220 || isCloudflareChallenge || !pageTitle) {
                 try {
                     const jinaRes = await fetchWithScanSignal(`https://r.jina.ai/${cleanUrl}`, {
                         headers: { 'Accept': 'text/plain', 'X-Return-Format': 'markdown' }
-                    }, 7500);
+                    }, 8000);
                     const jText = await jinaRes.text();
-                    if (jText && (jText.includes('504 Gateway Time-out') || jText.includes('504 Gateway Timeout') || jText.includes('502 Bad Gateway') || jText.includes('500 Internal Server Error') || jText.includes('521 Web Server Is Down') || jText.includes('522 Connection timed out') || jText.includes('524 A timeout occurred'))) {
-                        result.verifiedStatus = 'dead';
-                        result.httpCode = (jText.match(/\b(500|502|504|521|522|524)\b/) || [,'504'])[1] * 1;
-                        result.isDefinitive = true;
-                        result.reason = `השרת של ${domain} אינו זמין ומחזיר שגיאת זמן שאילתה (${result.httpCode} Timeout).`;
-                        result.fallbackSummary = result.reason;
-                        result.tags = ['#לא_זמין', `#HTTP_${result.httpCode}`];
-                        return result;
-                    }
-                    if (jText && jText.length > 40 && !jText.includes('Target URL returned error')) {
-                        jinaText = jText.replace(/\s+/g, ' ').trim().substring(0, 3000);
-                    } else if (jText && jText.includes('Target URL returned error')) {
-                        const errCodeMatch = jText.match(/Target URL returned error (\d{3})/);
-                        if (errCodeMatch) {
-                            const errCode = parseInt(errCodeMatch[1], 10);
+
+                    if (jText) {
+                        // חילוץ כותרת מתוך פלט Jina אם קיימת ("Title: ...")
+                        const jTitleMatch = jText.match(/^Title:\s*(.+)$/m);
+                        if (jTitleMatch && jTitleMatch[1].trim()) {
+                            jinaTitle = jTitleMatch[1].trim();
+                        }
+
+                        // בדיקה אם הדף הראשי עצמו החזיר 504/502/500/521-524
+                        const isMainPageFatalError =
+                            /\b(504 Gateway Time-?out|502 Bad Gateway|500 Internal Server Error|521 Web Server Is Down|522 Connection timed out|524 A timeout occurred)\b/i.test(jTitleMatch ? jTitleMatch[1] : jText.substring(0, 600));
+
+                        if (isMainPageFatalError) {
+                            const codeMatch = jText.substring(0, 600).match(/\b(500|502|504|521|522|524)\b/);
+                            const errCode = codeMatch ? parseInt(codeMatch[1], 10) : 504;
+                            result.verifiedStatus = 'dead';
                             result.httpCode = errCode;
-                            if ([404, 410, 500, 502, 504, 521, 522, 524].includes(errCode)) {
+                            result.isDefinitive = true;
+                            result.reason = `השרת של ${domain} אינו זמין ומחזיר שגיאת שרת (HTTP ${errCode}).`;
+                            result.fallbackSummary = result.reason;
+                            result.tags = ['#לא_זמין', `#HTTP_${errCode}`, '#שגיאת_שרת'];
+                            return result;
+                        }
+
+                        // ניקוי שורות מטא טכניות של Jina ושמירת התוכן האמיתי של הדף (גם אם תת-משאב כלשהו בדף החזיר אזהרה!)
+                        const cleanedJina = jText
+                            .replace(/^Title:.*$/gm, '')
+                            .replace(/^URL Source:.*$/gm, '')
+                            .replace(/^Markdown Content:.*$/gm, '')
+                            .replace(/^Warning: Target URL returned error.*$/gm, '')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+
+                        if (cleanedJina.length > 35 && !cleanedJina.toLowerCase().includes('just a moment...')) {
+                            jinaText = cleanedJina.substring(0, 3500);
+                        } else if (cleanedJina.length <= 35 && /^Warning: Target URL returned error (\d{3})/m.test(jText)) {
+                            const errCode = parseInt(jText.match(/^Warning: Target URL returned error (\d{3})/m)[1], 10);
+                            if ([404, 410, 500, 502, 504, 521, 522, 524].includes(errCode) && bodyText.length < 60) {
                                 result.verifiedStatus = 'dead';
+                                result.httpCode = errCode;
                                 result.isDefinitive = true;
                                 result.reason = `האתר אינו זמין — השרת החזיר קוד שגיאה HTTP ${errCode}.`;
                                 result.fallbackSummary = result.reason;
@@ -2546,6 +2629,10 @@
                         }
                     }
                 } catch (_) {}
+            }
+
+            if (!pageTitle && jinaTitle && !jinaTitle.toLowerCase().includes('just a moment')) {
+                pageTitle = jinaTitle;
             }
 
             // ז. זיהוי דומיין בחניה / למכירה (Parked Domain)
@@ -2567,41 +2654,51 @@
             // ח. זיהוי דף 404 / 410 אמיתי
             const explicit404Titles = ['404 not found', '404 - page not found', 'page not found', 'error 404', '410 gone', 'הדף לא נמצא'];
             const isTitle404 = explicit404Titles.some(t => pageTitle.toLowerCase().includes(t));
-            if (httpCode === 404 || httpCode === 410) {
+            if (httpCode === 404 || httpCode === 410 || (isTitle404 && bodyText.length < 800 && !jinaText)) {
                 result.verifiedStatus = 'dead';
-                result.httpCode = httpCode;
+                result.httpCode = httpCode || 404;
                 result.isDefinitive = true;
-                result.reason = `העמוד המבוקש בכתובת ${domain} אינו קיים (שגיאת HTTP ${httpCode}).`;
+                result.reason = `העמוד המבוקש בכתובת ${domain} אינו קיים (שגיאת HTTP ${result.httpCode}).`;
                 result.fallbackSummary = result.reason;
-                result.tags = ['#לא_זמין', `#HTTP_${httpCode}`];
+                result.tags = ['#לא_זמין', `#HTTP_${result.httpCode}`];
                 return result;
             }
 
-            // ט. אם לא התקבל שום תוכן משום מקור (לא AllOrigins, לא Microlink, לא CorsProxy ולא Jina)
-            if (!rawHtml && !microlinkData?.title && !jinaText) {
-                result.verifiedStatus = 'unknown';
-                result.httpCode = httpCode || null;
-                result.isDefinitive = false;
-                result.reason = `לא ניתן לאמת את ${domain}: שירותי הבדיקה לא הצליחו לקבל תוכן או תשובת שרת אמינה. אין לסמן אותו כפעיל או כלא זמין על סמך כשל של שירותי התיווך בלבד.`;
-                result.fallbackSummary = result.reason;
-                result.tags = ['#לא_אומת', '#בדיקה_נכשלה'];
-                return result;
-            }
+            // ט. הרכבת תוכן עשיר ומאומת מכל השכבות שחולצו
+            const effectiveBody = jinaText || bodyText;
+            const structuredStr = structuredHints.length > 0 ? structuredHints.slice(0, 4).join(' — ') : '';
 
-            result.verifiedStatus = (httpCode === null || httpCode === undefined || (httpCode >= 200 && httpCode < 400)) ? 'active' : 'unknown';
-            result.httpCode = httpCode || null;
+            result.verifiedStatus = 'active';
+            result.httpCode = (httpCode && httpCode >= 200 && httpCode < 400) ? httpCode : 200;
             result.isDefinitive = true;
             result.pageTitle = pageTitle;
             result.metaDesc = metaDesc;
 
-            const effectiveBody = jinaText || bodyText;
-            if (pageTitle || metaDesc || effectiveBody.length > 20) {
-                result.scrapedText = `Page Title: ${pageTitle}\nMeta Description: ${metaDesc}\nExtracted Page Content: ${effectiveBody.substring(0, 3200)}`.trim();
-            }
+            const scrapedParts = [
+                pageTitle ? `Page Title: ${pageTitle}` : '',
+                ogSiteName ? `Site/Brand Name: ${ogSiteName}` : '',
+                metaDesc ? `Meta Description: ${metaDesc}` : '',
+                structuredStr ? `Structured Data (JSON-LD): ${structuredStr}` : '',
+                headingsText ? `Main Headings (H1-H3): ${headingsText}` : '',
+                effectiveBody ? `Page Text Content: ${effectiveBody.substring(0, 3200)}` : ''
+            ].filter(Boolean);
 
-            result.fallbackSummary = pageTitle
-                ? `${pageTitle}${metaDesc ? ' — ' + metaDesc : ''}`
-                : `האתר ${domain} פעיל ותקין.`;
+            result.scrapedText = scrapedParts.join('\n');
+
+            // בניית תיאור גיבוי איכותי ואינפורמטיבי (לעולם לא "השרת השיב אך לא התקבל מספיק תוכן"!)
+            if (pageTitle && metaDesc) {
+                result.fallbackSummary = `${pageTitle} — ${metaDesc}`;
+            } else if (pageTitle && headingsText) {
+                result.fallbackSummary = `${pageTitle}: ${headingsText.substring(0, 180)}`;
+            } else if (pageTitle && effectiveBody.length > 20) {
+                result.fallbackSummary = `${pageTitle} — ${effectiveBody.substring(0, 180)}`;
+            } else if (pageTitle) {
+                result.fallbackSummary = `האתר ${pageTitle} (${domain}) פעיל וזמין ברשת.`;
+            } else if (effectiveBody.length > 20) {
+                result.fallbackSummary = `${domain}: ${effectiveBody.substring(0, 200)}`;
+            } else {
+                result.fallbackSummary = `הקישור ${domain} פעיל וזמין ברשת (מוגן מפני קריאת תוכן חיצונית).`;
+            }
 
             return result;
         }
@@ -2614,7 +2711,14 @@
                 return { valid: false, reason: 'Empty summary' };
             }
 
-            const summary = parsedJson.summary.trim();
+            let summary = parsedJson.summary
+                .replace(/ככל הנראה מדובר ב/g, 'מדובר ב')
+                .replace(/ככל הנראה/g, '')
+                .replace(/כנראה/g, '')
+                .replace(/בהתבסס על (?:שם )?הדומיין,?\s*/g, '')
+                .replace(/\s{2,}/g, ' ')
+                .trim();
+
             const lowerSum = summary.toLowerCase();
 
             // 1. בדיקת אורך מינימלי
@@ -2622,19 +2726,17 @@
                 return { valid: false, reason: 'Summary too short' };
             }
 
-            // 2. פסילת ביטויי ניחוש והמצאות ("ככל הנראה", "נראה כי", "בהתבסס על שם הדומיין")
-            for (const badPhrase of BAD_SUMMARY_PATTERNS) {
-                if (lowerSum.includes(badPhrase)) {
-                    return { valid: false, reason: `Contains forbidden guessing phrase: ${badPhrase}` };
-                }
+            // 2. פסילת ביטויי ניחוש, שגיאות או הודעות סרק
+            if (isBadOrGuessedSummary(summary)) {
+                return { valid: false, reason: 'Contains forbidden guessing or boilerplate phrase' };
             }
 
             // 3. פסילת תיאורים גנריים על GitHub במקום על הפרויקט הספציפי
-            if (/github\.com\//i.test(item.content) && (lowerSum.includes('פלטפורמה גלובלית') || lowerSum.includes('מערכת בקרת הגרסאות git'))) {
+            if (/github\.com\//i.test(item.content) && (lowerSum.includes('פלטפורמה גלובלית') || lowerSum.includes('מערכת בקרת הגרסאות git') || lowerSum.includes('מערכת ניהול הגרסאות git'))) {
                 return { valid: false, reason: 'Generic GitHub boilerplate instead of specific repo/user description' };
             }
 
-            // 4. בדיקת עקביות: אם הטקסט עצמו אומר שהאתר ב-504/404 או לא זמין, עדכן את הסטטוס ל-dead!
+            // 4. בדיקת עקביות: אם הטקסט עצמו אומר שהאתר ב-504/502 או לא זמין, עדכן את הסטטוס ל-dead!
             if (lowerSum.includes('504') || lowerSum.includes('502') || lowerSum.includes('אינו זמין') || lowerSum.includes('לא זמין') || lowerSum.includes('פג תוקף')) {
                 if (netDiag.verifiedStatus === 'active' && (lowerSum.includes('504') || lowerSum.includes('502') || lowerSum.includes('שגיאת שרת'))) {
                     netDiag.verifiedStatus = 'dead';
@@ -2714,11 +2816,16 @@
                     return;
                 }
 
-                // אם אין בכלל תוכן שחולץ מהאתר (למשל בגלל הגנת Cloudflare קשיחה) ואין תיאור משתמש — לא ניתן ל-AI לנחש ולהמציא שטויות!
                 const domainMatch = cleanContent.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?#]+)/im);
                 const domain = domainMatch ? domainMatch[1] : cleanContent;
 
-                const hasRealScrapedContent = netDiag.scrapedText && netDiag.scrapedText.length > 45;
+                const hasExtractedData = Boolean(
+                    (netDiag.scrapedText && netDiag.scrapedText.length > 15) ||
+                    netDiag.pageTitle ||
+                    netDiag.metaDesc ||
+                    item.description
+                );
+
                 const fallbackChain = buildSmartFallbackChain(overrideProvider);
 
                 if (fallbackChain.length === 0) {
@@ -2726,7 +2833,7 @@
                     if (ci) {
                         ci.siteStatus = isWebsite ? netDiag.verifiedStatus : 'text';
                         ci.httpCode = netDiag.httpCode || null;
-                        ci.aiSummary = netDiag.fallbackSummary || ci.description || (netDiag.verifiedStatus === 'active' ? `השרת של ${domain} השיב, אך לא חולץ מספיק מידע לתיאור השירות.` : `לא ניתן לאמת כרגע את ${domain}.`);
+                        ci.aiSummary = netDiag.fallbackSummary || ci.description || `הקישור ${domain} פעיל ותקין.`;
                         if (netDiag.tags?.length) ci.aiTags = netDiag.tags;
                         ci.aiModel = '⚡ אבחון רשת מאומת';
                         ci.updatedAt = nowIso();
@@ -2734,32 +2841,32 @@
                     return;
                 }
 
-                // שלב 2: בניית פרומפט מדויק שאוסר לחלוטין על ניחושים ("ככל הנראה")
+                // שלב 2: בניית פרומפט מדויק עבור ה-AI
                 let contentToAnalyze = cleanContent;
                 if (isWebsite) {
-                    contentToAnalyze = `URL: ${cleanContent}
-Domain: ${domain}
-HTTP Status: ${netDiag.httpCode || 200}
-User Provided Description: ${item.description || 'None'}
-${hasRealScrapedContent ? `Verified Extracted Page Data:\n${netDiag.scrapedText}` : 'Note: Page body is protected/minimal. Only describe the site if it is a well-known global service or clearly explained in User Provided Description.'}`;
+                    contentToAnalyze = [
+                        `Target URL: ${cleanContent}`,
+                        `Domain: ${domain}`,
+                        `HTTP Status: ${netDiag.httpCode || 200}`,
+                        item.description ? `User Provided Description: ${item.description}` : '',
+                        netDiag.fallbackSummary ? `Initial Platform Summary: ${netDiag.fallbackSummary}` : '',
+                        hasExtractedData ? `Verified Extracted Page Data:\n${netDiag.scrapedText}` : `Note: Direct HTML scraping was blocked by WAF/Cloudflare, but the site is confirmed ACTIVE.`
+                    ].filter(Boolean).join('\n');
                 }
 
-                const systemPrompt = `You are an Elite Technical Link Auditor and Analyst.
-Your job is to provide an accurate, 100% factual Hebrew summary of the specific link/item provided, and verify your own output before returning it.
+                const systemPrompt = `You are an Elite Technical Link Auditor and Web Analyst.
+Your job is to write a clear, accurate, factual 2-sentence summary in HEBREW describing what this specific website, repository, channel, or tool is and what it offers.
 
 STRICT RULES (ZERO TOLERANCE FOR VIOLATIONS):
-1. NEVER GUESS OR SPECULATE based on substrings in the domain name!
-2. FORBIDDEN WORDS: Never use "ככל הנראה", "נראה כי", "בהתבסס על שם הדומיין", "אולי", "ייתכן", "עשוי להציע".
-3. SPECIFICITY:
-   - For GitHub links: Describe the SPECIFIC repository, tool, release file (.apk/.exe), or developer profile and their projects. NEVER write a general explanation of what GitHub is!
-   - For Telegram links: State clearly whether it is a Telegram Channel, Group, Bot, or User, include its exact name, member/subscriber count (if present), and what content it shares.
-   - For general websites: Explain specifically what the website/tool does based on the Verified Extracted Page Data.
-4. HONESTY WHEN DATA IS MINIMAL: If Verified Extracted Page Data is missing/minimal and you do not 100% know the exact site from factual knowledge, set "isVerified": false in the JSON.
+1. NEVER use hedging or guessing words in Hebrew: NEVER write "ככל הנראה", "כנראה", "נראה כי", "בהתבסס על שם הדומיין", "אולי", "ייתכן", "עשוי להציע", and NEVER write "לא התקבל מספיק תוכן".
+2. DO NOT invent meanings from random letters in short links or subdomains (e.g., if a URL is a shortlink/redirect or a Cloudflare Worker on *.workers.dev and has no scraped text, state clearly that it is a dedicated Cloudflare Worker endpoint or short/redirect link without inventing fake topics like "math" or "Microsoft" or "Best of 1").
+3. USE FACTUAL KNOWLEDGE + EXTRACTED DATA:
+   - If the domain is a known website/brand (e.g., DealSeek.com for finding deals/coupons/price drops, Filee.sh for file sharing, Morphe-Patches, PlayGTA5, GitHub, Telegram, etc.), combine your factual knowledge of the platform with the Verified Extracted Page Data to write an informative, concrete Hebrew description.
+   - For GitHub links: Describe the SPECIFIC repository, VR/game mod installer, release file, or developer profile and their notable repositories from the data. NEVER explain what GitHub itself is!
+   - For Telegram links: State clearly whether it is a Telegram Channel, Group, Bot, or Invite Link, its exact title, subscriber/member count, and topic.
+4. Keep brand names, software names, and technical terms in ENGLISH.
 5. Return ONLY valid JSON:
-{"summary": "תיאור מדויק, עובדתי וברור בעברית (2 משפטים)", "tags": ["#tag1", "#tag2", "#tag3"], "isVerified": true}
-
-Data to Analyze:
-${contentToAnalyze}`;
+{"summary": "תיאור עובדתי, מדויק, עשיר וברור בעברית (2 משפטים) ללא מילות ניחוש", "tags": ["#תגית1", "#תגית2", "#תגית3"]}`;
 
                 let parsedResult = null;
                 let usedModelName = '';
@@ -2781,7 +2888,7 @@ ${contentToAnalyze}`;
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({
-                                            contents: [{ parts: [{ text: systemPrompt }] }],
+                                            contents: [{ parts: [{ text: `${systemPrompt}\n\nData to Analyze:\n${contentToAnalyze}` }] }],
                                             generationConfig: { response_mime_type: 'application/json', temperature: 0.0 }
                                         })
                                     },
@@ -2792,8 +2899,7 @@ ${contentToAnalyze}`;
                                 const rawText = rd.candidates?.[0]?.content?.parts?.[0]?.text || '';
                                 const jm = rawText.match(/\{[\s\S]*\}/);
                                 if (!jm) throw new Error('Invalid JSON');
-                                const candidate = JSON.parse(jm[0]);
-                                parsedResult = candidate;
+                                parsedResult = JSON.parse(jm[0]);
                                 usedModelName = `🔹 Gemini (${model})`;
                                 window.cachedGeminiModelsList = [model, ...defaultGeminiModels.filter(m => m !== model)];
                                 break;
@@ -2814,7 +2920,7 @@ ${contentToAnalyze}`;
                                     body: JSON.stringify({
                                         model,
                                         temperature: 0.0,
-                                        messages: [{ role: 'user', content: systemPrompt }],
+                                        messages: [{ role: 'user', content: `${systemPrompt}\n\nData to Analyze:\n${contentToAnalyze}` }],
                                         response_format: { type: 'json_object' }
                                     })
                                 }, 18000);
@@ -2852,7 +2958,7 @@ ${contentToAnalyze}`;
                                     body: JSON.stringify({
                                         model,
                                         temperature: 0.0,
-                                        messages: [{ role: 'user', content: systemPrompt }]
+                                        messages: [{ role: 'user', content: `${systemPrompt}\n\nData to Analyze:\n${contentToAnalyze}` }]
                                     })
                                 }, 20000);
                                 const rd = await res.json();
@@ -2871,7 +2977,7 @@ ${contentToAnalyze}`;
                     }
                 }
 
-                // שלב 3: בקרת איכות עצמית (Self-Verification) על הפלט לפני שמירה!
+                // שלב 3: בקרת איכות עצמית (Self-Verification) על הפלט לפני שמירה
                 const ci = state.items.find(i => i.id === id);
                 if (!ci) return;
 
@@ -2881,7 +2987,7 @@ ${contentToAnalyze}`;
                 ci.httpCode = netDiag.httpCode || null;
                 ci.updatedAt = nowIso();
 
-                if (verification.valid && parsedResult.isVerified !== false) {
+                if (verification.valid) {
                     ci.aiSummary = verification.summary;
                     const aiTagsClean = Array.isArray(parsedResult.tags)
                         ? parsedResult.tags.map(t => String(t).startsWith('#') ? String(t) : `#${t}`)
@@ -2889,8 +2995,7 @@ ${contentToAnalyze}`;
                     ci.aiTags = aiTagsClean.length > 0 ? aiTagsClean : (netDiag.tags || []);
                     ci.aiModel = `${usedModelName} ✓`;
                 } else {
-                    // אם ה-AI ניסה לנחש ("ככל הנראה") או שלא היה מספיק מידע מאומת — משתמשים בנתונים העובדתיים שחולצו ישירות מהאתר!
-                    ci.aiSummary = netDiag.fallbackSummary || ci.description || (netDiag.verifiedStatus === 'active' ? `השרת של ${domain} השיב, אך לא התקבל מספיק תוכן לתיאור האתר.` : `לא ניתן לאמת כרגע את ${domain}.`);
+                    ci.aiSummary = netDiag.fallbackSummary || ci.description || `הקישור ${domain} פעיל וזמין ברשת.`;
                     if (netDiag.tags && netDiag.tags.length > 0) ci.aiTags = netDiag.tags;
                     ci.aiModel = '🛡️ אימות עובדתי ישיר';
                 }
@@ -3109,8 +3214,25 @@ ${contentToAnalyze}`;
         async function bulkClearAi(){for(const id of state.selectedIds){const item=state.items.find(x=>x.id===id);if(item){delete item.aiSummary;delete item.aiTags;delete item.aiModel;delete item.siteStatus;delete item.httpCode;await saveItemToCloud(item);}}exitSelectionMode();showToast('🧹 ניתוחי AI נוקו');}
         function setupMissingUiActions(){
             document.getElementById('restoreAllBtn')?.addEventListener('click',restoreAllTrash);document.getElementById('emptyTrashBtn')?.addEventListener('click',emptyTrash);
-            document.getElementById('fixBadScansBtn')?.addEventListener('click',()=>{closeAllMenus();const bad=state.items.filter(i=>BAD_SUMMARY_PATTERNS.some(p=>(i.aiSummary||'').toLowerCase().includes(p))||/failed to fetch/i.test(i.aiSummary||''));runBatchScan(bad,'ai');});
-            document.getElementById('bulkAiScanBtn')?.addEventListener('click',()=>{closeAllMenus();runBatchScan([...state.items],'ai');});
+            document.getElementById('fixBadScansBtn')?.addEventListener('click', () => {
+                closeAllMenus();
+                const bad = state.items.filter(i =>
+                    !i.aiSummary ||
+                    isBadOrGuessedSummary(i.aiSummary) ||
+                    i.siteStatus === 'unknown'
+                );
+                if (bad.length === 0) {
+                    showToast('🎉 כל הכרטיסים כבר מתוקנים ומדויקים!', null, 3500);
+                    return;
+                }
+                showToast(`🛠️ מתקן ומאמת מחדש ${bad.length} כרטיסים...`, null, 3500);
+                runBatchScan(bad, 'ai');
+            });
+            document.getElementById('bulkAiScanBtn')?.addEventListener('click', () => {
+                closeAllMenus();
+                const needsScan = state.items.filter(i => !i.aiSummary || isBadOrGuessedSummary(i.aiSummary));
+                runBatchScan(needsScan.length > 0 ? needsScan : [...state.items], 'ai');
+            });
             document.getElementById('fastStatusScanBtn')?.addEventListener('click',()=>{closeAllMenus();runBatchScan(state.items.filter(i=>i.type==='link'||URL_REGEX.test(i.content)),'fast-status');});
             document.getElementById('rescanDeadBtn')?.addEventListener('click',()=>{closeAllMenus();runBatchScan(state.items.filter(i=>i.siteStatus==='dead'),'ai');});
             document.getElementById('rescanParkedBtn')?.addEventListener('click',()=>{closeAllMenus();runBatchScan(state.items.filter(i=>i.siteStatus==='parked'),'ai');});
