@@ -349,7 +349,7 @@
         .modal-body { padding: 16px; overflow-y: auto; }
         .trash-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: rgba(127,127,127,0.05); margin-bottom: 8px; border-radius: 8px; border: 1px solid var(--glass-border); }
 
-       /* --- חלון סריקה צף חכם וקומפקטי (Scan Dock + בועה צפה בפינה) --- */
+       /* --- חלון סריקה צף וחלונות קופצים ניתנים להחלקה מהירה (Swipe to Dismiss) --- */
         #scanDock {
             position: fixed;
             bottom: 20px;
@@ -368,8 +368,13 @@
             display: none;
             flex-direction: column;
             gap: 7px;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: transform 0.2s ease, opacity 0.2s ease, background-color 0.25s;
+            touch-action: pan-y;
             direction: rtl;
+        }
+        .modal-content, .edit-modal-box {
+            transition: transform 0.2s ease, opacity 0.2s ease;
+            touch-action: pan-y;
         }
         #scanDock.active { display: flex; }
         #scanDock.minimized {
@@ -1080,7 +1085,48 @@
             applyBadge(dupBadge, dupCount);
         }
 
-       function setupScanDockControls() {
+       // מנוע החלקה מהירה (Swipe to Dismiss) אוניברסלי לחלונות צפים ומודלים
+        function enableSwipeToDismiss(element, onDismiss) {
+            if (!element) return;
+            let startX = 0, currentX = 0, isDragging = false;
+
+            element.addEventListener('touchstart', (e) => {
+                startX = e.touches[0].clientX;
+                isDragging = true;
+                element.style.transition = 'none';
+            }, { passive: true });
+
+            element.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                currentX = e.touches[0].clientX - startX;
+                // מאפשר החלקה חלקה לצדדים
+                element.style.transform = `translateX(${currentX}px)`;
+                element.style.opacity = Math.max(0.3, 1 - Math.abs(currentX) / 180);
+            }, { passive: true });
+
+            element.addEventListener('touchend', () => {
+                if (!isDragging) return;
+                isDragging = false;
+                element.style.transition = 'transform 0.25s ease, opacity 0.25s ease';
+                if (Math.abs(currentX) > 85) {
+                    // החלקה מספקת לסגירה מהירה
+                    element.style.transform = `translateX(${currentX > 0 ? '120%' : '-120%'})`;
+                    element.style.opacity = '0';
+                    setTimeout(() => {
+                        element.style.transform = '';
+                        element.style.opacity = '';
+                        if (typeof onDismiss === 'function') onDismiss();
+                    }, 220);
+                } else {
+                    // חזרה למקום אם ההחלקה הייתה קטנה מדי
+                    element.style.transform = 'translateX(0)';
+                    element.style.opacity = '1';
+                }
+                currentX = 0;
+            });
+        }
+
+        function setupScanDockControls() {
             const dock = document.getElementById('scanDock');
             const minBtn = document.getElementById('scanMinimizeBtn');
             const pauseBtn = document.getElementById('scanPauseBtn');
@@ -1100,6 +1146,18 @@
                     dock.classList.remove('minimized');
                     if (minBtn) minBtn.textContent = '🗕';
                 }
+            });
+
+            // הפעלת החלקה מהירה על חלון הסריקה הצף ועל מודלים קופצים
+            enableSwipeToDismiss(dock, () => {
+                scanController.isAborted = true;
+                dock.classList.remove('active', 'minimized');
+            });
+
+            document.querySelectorAll('.modal-content, .edit-modal-box').forEach(box => {
+                enableSwipeToDismiss(box, () => {
+                    box.closest('#trashModal, .edit-modal-wrap')?.style.setProperty('display', 'none');
+                });
             });
 
             pauseBtn?.addEventListener('click', () => {
