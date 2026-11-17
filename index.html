@@ -960,17 +960,21 @@
             'מכיוון שמדובר בקישור הזמנה מוצפן',
             'ללא הצטרפות אליו',
             'הקישור מפנה להזמנה לקבוצה או ערוץ פרטי',
-            'הקישור מוביל ל-telegram bot בשם',
-            'הבוט מיועד לסייע למשתמשים',
+            'להצטרף באופן מרוכז או אוטומטי',
             'מוגן מפני קריאת תוכן חיצונית'
         ];
+
+        function hasForbiddenSummaryPattern(text) {
+            if (!text || typeof text !== 'string') return false;
+            const lower = text.trim().toLowerCase();
+            return BAD_SUMMARY_PATTERNS.some(p => lower.includes(p.toLowerCase()));
+        }
 
         function isBadOrGuessedSummary(text) {
             if (!text || typeof text !== 'string') return true;
             const clean = text.trim();
-            if (clean.length < 18) return true;
-            const lower = clean.toLowerCase();
-            return BAD_SUMMARY_PATTERNS.some(p => lower.includes(p.toLowerCase()));
+            if (clean.length < 12) return true;
+            return hasForbiddenSummaryPattern(clean);
         }
 
         let app, auth, db;
@@ -1910,7 +1914,7 @@
             const hasCorruptedErrorSummary = item.aiSummary && (
                 item.aiSummary.toLowerCase().includes('failed to fetch') ||
                 item.aiSummary.startsWith('שגיאה: ספק ה-AI נכשל') ||
-                (item.siteStatus !== 'dead' && item.siteStatus !== 'parked' && isBadOrGuessedSummary(item.aiSummary))
+                (item.siteStatus === 'active' && hasForbiddenSummaryPattern(item.aiSummary))
             );
 
             const effectiveStatus = hasCorruptedErrorSummary ? null : item.siteStatus;
@@ -2441,7 +2445,7 @@
                 out.entityType = 'חשבון / ערוץ טלגרם';
             }
 
-            out.title = rawTitle;
+           out.title = rawTitle || ogTitle;
             out.extraInfo = rawExtra;
             const cleanDesc = !isBoilerplateDesc(rawDesc) ? rawDesc : (!isBoilerplateDesc(ogDesc) ? ogDesc : '');
             out.description = cleanDesc;
