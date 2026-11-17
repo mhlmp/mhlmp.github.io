@@ -45,7 +45,7 @@
             --note-bg: rgba(60, 50, 30, 0.82);
         }
 
-        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+       * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
         html, body { overflow-x: hidden; max-width: 100vw; scroll-behavior: smooth; }
         
         body {
@@ -248,19 +248,22 @@
             border-color: var(--primary-color) !important;
         }
 
-        .dropdown-content {
+       .dropdown-content {
             display: none; position: absolute;
             background: var(--glass-bg); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
-            min-width: 255px; box-shadow: 0 15px 40px rgba(0,0,0,0.35);
+            min-width: 220px; width: max-content; max-width: calc(100vw - 16px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.35);
             border-radius: var(--radius); border: 1px solid var(--glass-border);
             z-index: 9000; top: calc(100% + 8px); right: 0; left: auto; padding: 8px 0;
+            box-sizing: border-box;
             animation: fadeIn 0.15s ease;
         }
         .dropdown-content.show { display: block; }
         .dropdown-content button, .dropdown-content label {
             color: var(--text-primary); padding: 11px 16px; display: block;
             background: none; border: none; width: 100%; text-align: right;
-            cursor: pointer; font-size: 13.5px; white-space: nowrap;
+            cursor: pointer; font-size: 13.5px; white-space: normal; line-height: 1.35;
+            box-sizing: border-box;
             transition: background 0.15s, color 0.15s;
         }
         .dropdown-content button:hover, .dropdown-content label:hover { background-color: rgba(127,127,127,0.12); color: var(--primary-color); }
@@ -713,7 +716,7 @@
                         <button id="rescanParkedBtn">🔄 בדוק מחדש דומיינים בחניה (🟠)</button>
                     </div>
                 </div>
-                <button id="trashBtn" class="action-btn btn-trash-view" title="סל מחזור" style="flex-grow:0; width:42px; font-size:1.1rem;">🗑️</button>
+                <button id="trashBtn" class="action-btn btn-toggle" title="סל מחזור">🗑️</button>
                 <button id="toggleDeadBtn" class="action-btn btn-toggle" title="הצג קישורים לא זמינים או עם שגיאת שרת (504/404)">
                     <span>🔴</span>
                     <span id="deadCountBadge" class="status-count-badge dead-badge zero-items">0</span>
@@ -755,7 +758,9 @@
                 <span class="scan-dock-counter" id="scanDockCounter">0/0</span>
             </div>
             <div class="scan-dock-header-btns">
-                <button type="button" class="scan-icon-btn" id="scanMinimizeBtn" title="מזער / הרחב חלון סריקה">🗕</button>
+                <button type="button" class="scan-icon-btn" id="scanMinimizeBtn" title="מזער / הרחב חלון סריקה" aria-label="מזער">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </button>
             </div>
         </div>
         <div class="scan-dock-body">
@@ -929,7 +934,7 @@
         const SCHEMA_VERSION = 6;
         const ADMIN_EMAILS = ["meirhadad74@gmail.com", "meirhadad75@gmail.com"];
 
-       // רשימת ביטויים שמעידים על ניחוש שגוי, תיאור גנרי או חוסר תוכן שדורש סריקה מתוקנת
+      // רשימת ביטויים שמעידים על ניחוש שגוי, תיאור גנרי או חוסר תוכן שדורש סריקה מתוקנת
         const BAD_SUMMARY_PATTERNS = [
             'ככל הנראה',
             'נראה כי',
@@ -949,7 +954,15 @@
             'לא חולץ מספיק מידע',
             'github היא פלטפורמה גלובלית',
             'מערכת ניהול הגרסאות git',
-            'בדיקת זמינות הושלמה'
+            'בדיקת זמינות הושלמה',
+            'לא ניתן לאמת את התוכן',
+            'הסריקה הפיזית נחסמה',
+            'מכיוון שמדובר בקישור הזמנה מוצפן',
+            'ללא הצטרפות אליו',
+            'הקישור מפנה להזמנה לקבוצה או ערוץ פרטי',
+            'הקישור מוביל ל-telegram bot בשם',
+            'הבוט מיועד לסייע למשתמשים',
+            'מוגן מפני קריאת תוכן חיצונית'
         ];
 
         function isBadOrGuessedSummary(text) {
@@ -1090,11 +1103,14 @@
             const pauseBtn = document.getElementById('scanPauseBtn');
             const cancelBtn = document.getElementById('scanCancelBtn');
 
+            const MINIMIZE_LINE_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
+            const EXPAND_BOX_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>';
+
             minBtn?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 scanController.isMinimized = !scanController.isMinimized;
                 dock.classList.toggle('minimized', scanController.isMinimized);
-                minBtn.textContent = scanController.isMinimized ? '⤢' : '🗕';
+                minBtn.innerHTML = scanController.isMinimized ? EXPAND_BOX_SVG : MINIMIZE_LINE_SVG;
                 minBtn.title = scanController.isMinimized ? 'הגדל חלון סריקה' : 'מזער לבועה';
             });
 
@@ -1102,7 +1118,7 @@
                 if (scanController.isMinimized) {
                     scanController.isMinimized = false;
                     dock.classList.remove('minimized');
-                    if (minBtn) minBtn.textContent = '🗕';
+                    if (minBtn) minBtn.innerHTML = MINIMIZE_LINE_SVG;
                 }
             });
 
@@ -1433,14 +1449,22 @@
         function repositionDropdown(menu) {
             menu.style.right = '0';
             menu.style.left = 'auto';
-            menu.style.maxWidth = '';
+            menu.style.transform = 'none';
+            menu.style.maxWidth = 'calc(100vw - 16px)';
             requestAnimationFrame(() => {
+                const vw = document.documentElement.clientWidth || window.innerWidth;
+                const margin = 8;
                 const rect = menu.getBoundingClientRect();
-                const vw = window.innerWidth;
-                if (rect.left < 8) { menu.style.right = 'auto'; menu.style.left = '0'; }
-                if (rect.right > vw - 8) { menu.style.left = 'auto'; menu.style.right = '0'; }
-                const r2 = menu.getBoundingClientRect();
-                if (r2.right > vw - 4) menu.style.maxWidth = (vw - 16) + 'px';
+                let shiftX = 0;
+                if (rect.left < margin) {
+                    shiftX = margin - rect.left;
+                }
+                if (rect.right + shiftX > vw - margin) {
+                    shiftX = (vw - margin) - rect.right;
+                }
+                if (shiftX !== 0) {
+                    menu.style.transform = `translateX(${shiftX}px)`;
+                }
             });
         }
 
@@ -1902,17 +1926,31 @@
                 : `<div class="card-text-content">${safeContent}</div>`;
             const noteHtml = item.note ? `<div class="card-note">📝 ${escapeHtml(item.note)}</div>` : '';
 
+            const sumLower = (item.aiSummary || '').toLowerCase();
+            const isRemovedOrExpired = effectiveStatus === 'dead' && (
+                item.httpCode === 404 ||
+                item.httpCode === 410 ||
+                /הוסר|פג תוקף|אינו קיים|נמחק|בוטל|אינם קיימים/.test(sumLower)
+            );
+            const isServerDown = effectiveStatus === 'dead' && item.httpCode && item.httpCode >= 500;
+
             let headerStatusPill = '';
             if (item.isScanning) {
                 headerStatusPill = `<span class="status-pill-mini"><span class="spinner-small" style="width:10px;height:10px;margin:0;"></span> מאבחן...</span>`;
             } else if (hasCorruptedErrorSummary) {
                 headerStatusPill = `<span class="status-pill-mini parked" title="לחץ על ✨ לסריקה חוזרת">⚠️ דורש סריקה</span>`;
             } else if (effectiveStatus === 'active') {
-                headerStatusPill = `<span class="status-pill-mini active">🟢 פעיל${item.httpCode ? ` (${item.httpCode})` : ''}</span>`;
+                headerStatusPill = `<span class="status-pill-mini active">🟢 פעיל</span>`;
             } else if (effectiveStatus === 'parked') {
                 headerStatusPill = `<span class="status-pill-mini parked">🟠 חניה</span>`;
             } else if (effectiveStatus === 'dead') {
-                headerStatusPill = `<span class="status-pill-mini dead">🔴 ${item.httpCode ? `תקלה ${item.httpCode}` : 'לא זמין'}</span>`;
+                if (isRemovedOrExpired) {
+                    headerStatusPill = `<span class="status-pill-mini dead">🔴 הוסר / לא קיים</span>`;
+                } else if (isServerDown) {
+                    headerStatusPill = `<span class="status-pill-mini dead">🔴 לא פעיל (${item.httpCode})</span>`;
+                } else {
+                    headerStatusPill = `<span class="status-pill-mini dead">🔴 לא פעיל</span>`;
+                }
             } else if (effectiveStatus === 'unknown') {
                 headerStatusPill = `<span class="status-pill-mini parked">⚪ לא אומת</span>`;
             }
@@ -1938,7 +1976,13 @@
                     boxExtraClass = 'ai-parked-box';
                 } else if (effectiveStatus === 'dead') {
                     statusClass = 'ai-status-dead';
-                    statusText = item.httpCode ? `🔴 לא זמין (שגיאת ${item.httpCode})` : '🔴 לא זמין / קישור שבור';
+                    if (isRemovedOrExpired) {
+                        statusText = '🔴 הוסר / פג תוקף / לא קיים';
+                    } else if (isServerDown) {
+                        statusText = `🔴 האתר לא פעיל (שגיאת שרת ${item.httpCode})`;
+                    } else {
+                        statusText = '🔴 קישור לא תקין / לא פעיל';
+                    }
                     boxExtraClass = 'ai-dead-box';
                 } else if (effectiveStatus === 'unknown') {
                     statusClass = 'ai-status-text';
@@ -2243,7 +2287,7 @@
             }
         };
 
-        // =========================================================================
+       // =========================================================================
         // 1. מפענח עומק ייעודי לקישורי טלגרם (Telegram Deep Inspector)
         // =========================================================================
         async function inspectTelegramLink(cleanUrl) {
@@ -2258,12 +2302,24 @@
                 recentPostsText: '',
                 directSummary: '',
                 tags: ['#Telegram', '#טלגרם'],
-                isDefinitive: true
+                isDefinitive: true,
+                skipAiGuessing: false
             };
 
-            const urlObj = new URL(cleanUrl.replace(/^telegram\.me/i, 't.me'));
+            const normalizedUrl = cleanUrl.replace(/^https?:\/\/(?:www\.)?telegram\.me\//i, 'https://t.me/');
+            const urlObj = new URL(normalizedUrl);
             const pathParts = urlObj.pathname.split('/').filter(Boolean);
-            const isInvite = cleanUrl.includes('t.me/+') || pathParts[0] === 'joinchat';
+            const isInvite = normalizedUrl.includes('t.me/+') || pathParts[0] === 'joinchat';
+            const isPrivatePost = pathParts[0] === 'c' && pathParts.length >= 2;
+
+            if (isPrivatePost) {
+                out.verifiedStatus = 'active';
+                out.skipAiGuessing = true;
+                out.entityType = 'הודעה בערוץ/קבוצת טלגרם פרטית';
+                out.directSummary = `קישור ישיר להודעה (#${pathParts[2] || ''}) בתוך קבוצה או ערוץ טלגרם פרטי (נגיש לחברי הקבוצה בלבד).`;
+                out.tags = ['#Telegram', '#קבוצה_פרטית'];
+                return out;
+            }
 
             const proxies = [
                 u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
@@ -2274,15 +2330,15 @@
             let html = '';
             for (const pFn of proxies) {
                 try {
-                    const r = await fetchWithScanSignal(pFn(cleanUrl), {}, 6500);
+                    const r = await fetchWithScanSignal(pFn(normalizedUrl), {}, 6500);
                     if (!r.ok) continue;
-                    if (pFn(cleanUrl).includes('allorigins')) {
-                        const d = await r.json();
-                        html = d.contents || '';
-                    } else {
-                        html = await r.text();
+                    const textData = pFn(normalizedUrl).includes('allorigins')
+                        ? ((await r.json()).contents || '')
+                        : (await r.text());
+                    if (textData && (textData.includes('tgme_') || textData.includes('og:title'))) {
+                        html = textData;
+                        break;
                     }
-                    if (html && html.includes('tgme_')) break;
                 } catch (_) {}
             }
 
@@ -2290,7 +2346,8 @@
                 out.verifiedStatus = 'unknown';
                 out.httpCode = null;
                 out.isDefinitive = false;
-                out.directSummary = 'לא ניתן לאמת את קישור הטלגרם: שירותי התיווך לא החזירו את עמוד Telegram. אין בכך הוכחה שהקישור פעיל או שפג תוקפו.';
+                out.skipAiGuessing = true;
+                out.directSummary = 'לא ניתן היה ליצור קשר עם שרתי Telegram לבדיקת הקישור כעת — לחץ על 🔄 לבדיקה חוזרת.';
                 out.tags = ['#Telegram', '#לא_אומת'];
                 return out;
             }
@@ -2305,77 +2362,81 @@
             const ogTitle     = (doc2.querySelector('meta[property="og:title"]')?.content || '').trim();
             const ogDesc      = (doc2.querySelector('meta[property="og:description"]')?.content || '').trim();
 
-            const rawTitle = (pageTitleEl?.textContent || '').trim();
-            const rawExtra = (pageExtraEl?.textContent || '').trim();
-            const rawDesc  = (pageDescEl?.innerText || '').trim();
+            const rawTitle = (pageTitleEl?.textContent || '').replace(/\s+/g, ' ').trim();
+            const rawExtra = (pageExtraEl?.textContent || '').replace(/\s+/g, ' ').trim();
+            const rawDesc  = (pageDescEl?.innerText || '').replace(/\s+/g, ' ').trim();
             const actionText = (actionBtnEl?.textContent || '').toLowerCase();
-
-            // בדיקה מוחלטת של קישורי טלגרם מתים / פגי תוקף
             const lowerBody = (doc2.body?.innerText || '').toLowerCase();
-            const isGenericInviteTitle = !rawTitle || ogTitle === 'Join group chat on Telegram' || ogTitle.startsWith('Telegram: Contact @') || ogTitle === 'Telegram Messenger';
 
+            const isBoilerplateDesc = (txt) => {
+                if (!txt) return true;
+                const l = txt.toLowerCase();
+                return (
+                    l.includes('if you have telegram, you can contact') ||
+                    l.includes('you can contact @') ||
+                    l.includes('you are invited to a group chat on telegram') ||
+                    l.includes('if you have telegram, you can view and join') ||
+                    l.includes('join group chat on telegram')
+                );
+            };
+
+            // 1. בדיקת קישור הזמנה (t.me/+... או t.me/joinchat/...)
+            // בטלגרם: כל קישור הזמנה תקף ופעיל מציג .tgme_page_title עם שם הקבוצה/ערוץ. אם אין .tgme_page_title — הקישור פג תוקף או בוטל!
             if (isInvite) {
-                // קישור הזמנה תקין חייב להכיל .tgme_page_title עם שם הקבוצה/ערוץ!
-                if (!rawTitle && !rawExtra) {
-                    const explicitExpired = /invite link is invalid|this link has expired|link is expired|קישור ההזמנה אינו תקף/i.test(lowerBody);
-                    if (explicitExpired) {
-                        out.verifiedStatus = 'dead'; out.httpCode = 404;
-                        out.directSummary = 'Telegram מציג הודעה מפורשת שקישור ההזמנה אינו תקף או שפג תוקפו.';
-                        out.tags = ['#Telegram', '#לא_זמין', '#קישור_פג_תוקף'];
-                    } else {
-                        out.verifiedStatus = 'unknown'; out.httpCode = null; out.isDefinitive = false;
-                        out.directSummary = 'Telegram לא הציג פרטי קבוצה או ערוץ. לא ניתן לקבוע אם ההזמנה פגה או אם העמוד לא נטען כראוי.';
-                        out.tags = ['#Telegram', '#לא_אומת'];
-                    }
+                if (!rawTitle) {
+                    out.verifiedStatus = 'dead';
+                    out.httpCode = 404;
+                    out.isDefinitive = true;
+                    out.skipAiGuessing = true;
+                    out.directSummary = 'קישור ההזמנה לטלגרם אינו תקין, בוטל או שפג תוקפו — הקבוצה או הערוץ אינם קיימים עוד תחת קישור זה.';
+                    out.tags = ['#Telegram', '#הוסר', '#פג_תוקף'];
                     return out;
                 }
             } else {
-                // ערוץ / משתמש / בוט ציבורי: אם אין כותרת כלל ואין מונה או תיאור
+                // 2. בדיקת ערוץ / קבוצה / בוט / משתמש ציבורי (t.me/username)
+                const username = pathParts[0] || '';
                 const hasExplicitDead =
                     lowerBody.includes('this channel cannot be displayed') ||
                     lowerBody.includes('this group cannot be displayed') ||
+                    lowerBody.includes('this bot cannot be displayed') ||
                     lowerBody.includes('invite link is invalid') ||
                     lowerBody.includes('this link has expired');
 
-                if (hasExplicitDead) {
+                // אם אין .tgme_page_title בכלל (מופיע רק הדף הגנרי "Telegram: Contact @..."), הישות לא קיימת או הוסרה!
+                if (hasExplicitDead || !rawTitle) {
                     out.verifiedStatus = 'dead';
                     out.httpCode = 404;
-                    out.directSummary = `Telegram מציג הודעה מפורשת שהערוץ, הקבוצה או המשתמש (@${pathParts[0] || ''}) אינם זמינים.`;
-                    out.tags = ['#Telegram', '#לא_זמין'];
-                    return out;
-                }
-                if (!rawTitle && isGenericInviteTitle && !rawExtra) {
-                    out.verifiedStatus = 'unknown';
-                    out.httpCode = null;
-                    out.isDefinitive = false;
-                    out.directSummary = `Telegram לא החזיר פרטי זיהוי עבור @${pathParts[0] || ''}. לא ניתן לקבוע אם הישות נמחקה, הוגבלה או שהעמוד לא נטען.`;
-                    out.tags = ['#Telegram', '#לא_אומת'];
+                    out.isDefinitive = true;
+                    out.skipAiGuessing = true;
+                    out.directSummary = `הקישור בטלגרם (@${username}) אינו פעיל — הבוט, הערוץ או הקבוצה הוסרו או שאינם קיימים.`;
+                    out.tags = ['#Telegram', '#הוסר', '#לא_קיים'];
                     return out;
                 }
             }
 
-            // זיהוי סוג הישות המדויק בטלגרם
+            // 3. הקישור תקין ופעיל — זיהוי מדויק של סוג הישות
             const username = pathParts[0] || '';
             const postNum  = pathParts[1] && /^\d+$/.test(pathParts[1]) ? pathParts[1] : null;
 
-            if (actionText.includes('start bot') || actionText.includes('send message') && username.toLowerCase().endsWith('bot') || rawExtra.toLowerCase().endsWith('bot')) {
+            if (actionText.includes('start bot') || ( !isInvite && username.toLowerCase().endsWith('bot') ) || rawExtra.toLowerCase().endsWith('bot')) {
                 out.entityType = 'בוט טלגרם (Bot)';
                 out.tags.push('#TelegramBot', '#בוט');
             } else if (/subscriber|מנויים/i.test(rawExtra) || actionText.includes('view channel') || actionText.includes('preview channel')) {
                 out.entityType = postNum ? `פוסט בערוץ טלגרם (#${postNum})` : 'ערוץ טלגרם (Channel)';
                 out.tags.push('#ערוץ_טלגרם');
             } else if (/member|online|חברים|משתתפים/i.test(rawExtra) || isInvite || actionText.includes('join group')) {
-                out.entityType = isInvite ? 'קבוצת/ערוץ טלגרם (קישור הזמנה פרטי)' : 'קבוצת טלגרם (Group)';
+                out.entityType = isInvite ? 'קבוצת/ערוץ טלגרם (קישור הזמנה)' : 'קבוצת טלגרם (Group)';
                 out.tags.push('#קבוצת_טלגרם');
             } else {
                 out.entityType = 'חשבון / ערוץ טלגרם';
             }
 
-            out.title = rawTitle || ogTitle;
+            out.title = rawTitle;
             out.extraInfo = rawExtra;
-            out.description = rawDesc || ogDesc;
+            const cleanDesc = !isBoilerplateDesc(rawDesc) ? rawDesc : (!isBoilerplateDesc(ogDesc) ? ogDesc : '');
+            out.description = cleanDesc;
 
-            // אם זה ערוץ ציבורי, ננסה לשלוף תקציר מהפוסטים האחרונים ב-t.me/s/username להבנה מושלמת של תוכן הערוץ
+            // שליפת פוסטים אחרונים מערוץ ציבורי (אם קיים)
             if (!isInvite && username && !username.startsWith('+') && out.entityType.includes('ערוץ')) {
                 try {
                     const sUrl = `https://t.me/s/${username}`;
@@ -2386,7 +2447,7 @@
                             const sDoc = parser.parseFromString(sd.contents, 'text/html');
                             const msgs = Array.from(sDoc.querySelectorAll('.tgme_widget_message_text'))
                                 .slice(-4)
-                                .map(el => el.innerText.trim().substring(0, 220))
+                                .map(el => el.innerText.replace(/\s+/g, ' ').trim().substring(0, 220))
                                 .filter(Boolean);
                             if (msgs.length > 0) {
                                 out.recentPostsText = msgs.join(' | ');
@@ -2396,16 +2457,19 @@
                 } catch (_) {}
             }
 
-            // בניית סיכום עובדתי עשיר ומדויק
             const statsPart = out.extraInfo ? ` (${out.extraInfo})` : '';
-            const descPart = out.description && !out.description.includes('You can contact @') && !out.description.includes('You are invited to')
-                ? ` — תיאור: ${out.description}`
-                : '';
-            out.directSummary = `${out.entityType}: "${out.title}"${statsPart}${descPart}`.trim();
+            if (out.description) {
+                out.directSummary = `${out.entityType} פעיל בשם "${out.title}"${statsPart} — ${out.description}`;
+            } else if (out.recentPostsText) {
+                out.directSummary = `${out.entityType} פעיל בשם "${out.title}"${statsPart}.`;
+            } else {
+                // אין תיאור ואין פוסטים — חוסמים ניחוש של ה-AI לפי שם המשתמש באנגלית ומציגים עובדות בלבד!
+                out.skipAiGuessing = true;
+                out.directSummary = `${out.entityType} פעיל ותקין בשם "${out.title}"${statsPart} (ללא טקסט תיאור נוסף בעמוד הטלגרם).`;
+            }
 
             return out;
         }
-
         // =========================================================================
         // 2. מפענח עומק ייעודי לקישורי GitHub (GitHub API Inspector)
         // =========================================================================
@@ -2569,7 +2633,8 @@
                 const tgInfo = await inspectTelegramLink(cleanUrl);
                 result.verifiedStatus = tgInfo.verifiedStatus;
                 result.httpCode = tgInfo.httpCode;
-                result.isDefinitive = true;
+                result.isDefinitive = tgInfo.isDefinitive;
+                result.skipAiGuessing = !!tgInfo.skipAiGuessing;
                 result.pageTitle = tgInfo.title;
                 result.metaDesc = tgInfo.description;
                 result.fallbackSummary = tgInfo.directSummary;
@@ -2815,20 +2880,42 @@
                 return result;
             }
 
-            // ח. זיהוי דף 404 / 410 אמיתי
-            const explicit404Titles = ['404 not found', '404 - page not found', 'page not found', 'error 404', '410 gone', 'הדף לא נמצא'];
+            // ח. זיהוי דף 404 / 410 / תוכן שהוסר / חשבון מושעה / קישור פג תוקף (Soft-404)
+            const explicit404Titles = [
+                '404 not found', '404 - page not found', 'page not found', 'error 404', '410 gone',
+                'file not found', 'site not found', 'הדף לא נמצא', 'העמוד הוסר', 'הקובץ הוסר'
+            ];
+            const softDeadSignals = [
+                'there isn\'t a github pages site here',
+                'the file you are trying to download is no longer available',
+                'this file is no longer available',
+                'file has been removed',
+                'this paste has been removed',
+                'this link has expired',
+                'invite invalid',
+                'this invite may be expired',
+                'this account has been suspended',
+                'cgi-sys/suspendedpage.cgi',
+                'this video is unavailable',
+                'video unavailable',
+                'this content is no longer available',
+                'no such app'
+            ];
             const isTitle404 = explicit404Titles.some(t => pageTitle.toLowerCase().includes(t));
-            if (httpCode === 404 || httpCode === 410 || (isTitle404 && bodyText.length < 800 && !jinaText)) {
+            const isSoftDead = isSmallPage && softDeadSignals.some(s => combLower.includes(s));
+
+            if (httpCode === 404 || httpCode === 410 || httpCode === 451 || isSoftDead || (isTitle404 && bodyText.length < 1200 && !jinaText)) {
                 result.verifiedStatus = 'dead';
-                result.httpCode = httpCode || 404;
+                result.httpCode = (httpCode === 410 || httpCode === 451) ? httpCode : 404;
                 result.isDefinitive = true;
-                result.reason = `העמוד המבוקש בכתובת ${domain} אינו קיים (שגיאת HTTP ${result.httpCode}).`;
+                result.skipAiGuessing = true;
+                result.reason = `הקישור בכתובת ${domain} הוסר, פג תוקפו או שהעמוד המבוקש אינו קיים עוד (404).`;
                 result.fallbackSummary = result.reason;
-                result.tags = ['#לא_זמין', `#HTTP_${result.httpCode}`];
+                result.tags = ['#הוסר', '#לא_קיים', `#HTTP_${result.httpCode}`];
                 return result;
             }
 
-                        // אם שום שכבה לא החזירה תגובה, אי אפשר לקבוע שהאתר פעיל
+            // אם שום שכבה לא החזירה תגובה, אי אפשר לקבוע שהאתר פעיל
             const reachedSomething =
                 Boolean(rawHtml && rawHtml.length >= 30) ||
                 Boolean(microlinkData) ||
@@ -2838,7 +2925,8 @@
                 result.verifiedStatus = 'unknown';
                 result.httpCode = null;
                 result.isDefinitive = false;
-                result.reason = `לא ניתן היה לאמת את ${domain}: שירותי הבדיקה החיצוניים לא החזירו תגובה, ואין הוכחה שהאתר פעיל או מושבת.`;
+                result.skipAiGuessing = true;
+                result.reason = `לא ניתן היה לאמת את ${domain}: השרת לא החזיר תגובה לבדיקה.`;
                 result.fallbackSummary = result.reason;
                 result.tags = ['#לא_אומת'];
                 return result;
@@ -2865,7 +2953,7 @@
 
             result.scrapedText = scrapedParts.join('\n');
 
-            // בניית תיאור גיבוי איכותי ואינפורמטיבי (לעולם לא "השרת השיב אך לא התקבל מספיק תוכן"!)
+            // בניית תיאור גיבוי עובדתי (וחסימת ניחושי AI אם העמוד ריק מתוכן טקסטואלי)
             if (pageTitle && metaDesc) {
                 result.fallbackSummary = `${pageTitle} — ${metaDesc}`;
             } else if (pageTitle && headingsText) {
@@ -2873,11 +2961,12 @@
             } else if (pageTitle && effectiveBody.length > 20) {
                 result.fallbackSummary = `${pageTitle} — ${effectiveBody.substring(0, 180)}`;
             } else if (pageTitle) {
-                result.fallbackSummary = `האתר ${pageTitle} (${domain}) פעיל וזמין ברשת.`;
+                result.fallbackSummary = `האתר "${pageTitle}" (${domain}) פעיל ותקין.`;
             } else if (effectiveBody.length > 20) {
                 result.fallbackSummary = `${domain}: ${effectiveBody.substring(0, 200)}`;
             } else {
-                result.fallbackSummary = `הקישור ${domain} פעיל וזמין ברשת (מוגן מפני קריאת תוכן חיצונית).`;
+                result.skipAiGuessing = true;
+                result.fallbackSummary = `הקישור ${domain} פעיל ומגיב ברשת (ללא טקסט ציבורי גלוי בעמוד הראשי).`;
             }
 
             return result;
@@ -2999,25 +3088,33 @@
 
                 if (scanController.isAborted) return;
 
-                // אם המשתמש בחר בדיקת סטטוס מהירה, או שהאתר מת/504/בחניה בוודאות מוחלטת
-                if (overrideProvider === 'fast-status' || (isWebsite && (netDiag.verifiedStatus === 'dead' || netDiag.verifiedStatus === 'parked'))) {
+               // עצירה מיידית ושמירת תוצאה עובדתית כאשר: בדיקה מהירה, קישור מת/הוסר/בחניה/לא אומת, או כשאין תוכן טקסטואלי אמיתי לניתוח AI (כדי למנוע המצאות!)
+                if (
+                    overrideProvider === 'fast-status' ||
+                    (isWebsite && (
+                        netDiag.verifiedStatus === 'dead' ||
+                        netDiag.verifiedStatus === 'parked' ||
+                        netDiag.verifiedStatus === 'unknown' ||
+                        netDiag.skipAiGuessing
+                    ))
+                ) {
                     const ci = state.items.find(i => i.id === id);
                     if (ci) {
-                                                const newStatus = isWebsite ? netDiag.verifiedStatus : 'text';
-                        const prevStatus = ci.siteStatus;
-                        const inconclusive = newStatus === 'unknown' && prevStatus && prevStatus !== 'unknown';
-                        if (!inconclusive) {
-                            const keepExisting = Boolean(ci.aiSummary) && !isBadOrGuessedSummary(ci.aiSummary) &&
-                                ((newStatus === 'active' && prevStatus === 'active') || newStatus === 'text');
-                            ci.siteStatus = newStatus;
-                            ci.httpCode = netDiag.httpCode || null;
-                            if (!keepExisting) {
-                                ci.aiSummary = netDiag.reason || netDiag.fallbackSummary || 'בדיקת זמינות הושלמה.';
-                                if (netDiag.tags && netDiag.tags.length > 0) ci.aiTags = netDiag.tags;
-                                ci.aiModel = '⚡ אימות שרת ורשת';
-                            }
-                            ci.updatedAt = nowIso();
+                        const newStatus = isWebsite ? netDiag.verifiedStatus : 'text';
+                        const keepExisting = overrideProvider === 'fast-status' &&
+                            Boolean(ci.aiSummary) &&
+                            !isBadOrGuessedSummary(ci.aiSummary) &&
+                            newStatus === 'active' &&
+                            ci.siteStatus === 'active';
+
+                        ci.siteStatus = newStatus;
+                        ci.httpCode = netDiag.httpCode || null;
+                        if (!keepExisting) {
+                            ci.aiSummary = netDiag.reason || netDiag.fallbackSummary || 'בדיקת זמינות הושלמה.';
+                            if (netDiag.tags && netDiag.tags.length > 0) ci.aiTags = netDiag.tags;
+                            ci.aiModel = '⚡ אימות שרת ורשת';
                         }
+                        ci.updatedAt = nowIso();
                     }
                     return;
                 }
