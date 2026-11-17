@@ -1447,13 +1447,14 @@
         }
 
         function repositionDropdown(menu) {
-            menu.style.right = '0';
-            menu.style.left = 'auto';
-            menu.style.transform = 'none';
-            menu.style.maxWidth = 'calc(100vw - 16px)';
-            requestAnimationFrame(() => {
+            const alignMenu = () => {
                 const vw = document.documentElement.clientWidth || window.innerWidth;
-                const margin = 8;
+                const margin = 10;
+                menu.style.right = '0';
+                menu.style.left = 'auto';
+                menu.style.transform = 'none';
+                menu.style.maxWidth = (vw - margin * 2) + 'px';
+
                 const rect = menu.getBoundingClientRect();
                 let shiftX = 0;
                 if (rect.left < margin) {
@@ -1463,9 +1464,11 @@
                     shiftX = (vw - margin) - rect.right;
                 }
                 if (shiftX !== 0) {
-                    menu.style.transform = `translateX(${shiftX}px)`;
+                    menu.style.transform = `translateX(${Math.round(shiftX)}px)`;
                 }
-            });
+            };
+            alignMenu();
+            requestAnimationFrame(alignMenu);
         }
 
         function setupFirebaseListeners() {
@@ -1903,10 +1906,11 @@
         function createCard(item, meta) {
             const { visualIndex = 0, isDup = false } = meta;
 
-            // זיהוי אם נותר בטעות סיכום שגיאה ישן כמו "Failed to fetch" כדי שלא יוצג כ"פעיל ותקין"
+           // זיהוי אם נותר סיכום שגיאה ישן או ניחוש לא מאומת כדי שלא יוצג כ"פעיל ומאומת"
             const hasCorruptedErrorSummary = item.aiSummary && (
                 item.aiSummary.toLowerCase().includes('failed to fetch') ||
-                item.aiSummary.startsWith('שגיאה: ספק ה-AI נכשל')
+                item.aiSummary.startsWith('שגיאה: ספק ה-AI נכשל') ||
+                (item.siteStatus !== 'dead' && item.siteStatus !== 'parked' && isBadOrGuessedSummary(item.aiSummary))
             );
 
             const effectiveStatus = hasCorruptedErrorSummary ? null : item.siteStatus;
@@ -2402,8 +2406,14 @@
                     lowerBody.includes('invite link is invalid') ||
                     lowerBody.includes('this link has expired');
 
-                // אם אין .tgme_page_title בכלל (מופיע רק הדף הגנרי "Telegram: Contact @..."), הישות לא קיימת או הוסרה!
-                if (hasExplicitDead || !rawTitle) {
+                const isPostLink = pathParts.length >= 2 && /^\d+$/.test(pathParts[1]);
+                const hasValidOgTitle = ogTitle &&
+                    !ogTitle.startsWith('Telegram: Contact @') &&
+                    ogTitle !== 'Telegram Messenger' &&
+                    ogTitle !== 'Join group chat on Telegram';
+
+                // אם אין כותרת ערוץ/בוט אמיתית או שטלגרם מציג שהישות/פוסט לא קיימים
+                if (hasExplicitDead || (!rawTitle && !(isPostLink && hasValidOgTitle))) {
                     out.verifiedStatus = 'dead';
                     out.httpCode = 404;
                     out.isDefinitive = true;
@@ -2650,16 +2660,51 @@
                 if (ghInfo) return { ...result, ...ghInfo };
             }
 
+            // ב-2. בדיקה ייעודית להזמנות Discord
+            const discordMatch = cleanUrl.match(/(?:discord\.gg|discord(?:app)?\.com\/invite)\/([a-zA-Z0-9-]+)/i);
+            if (discordMatch) {
+                try {
+                    const invCode = discordMatch[1];
+                    const dRes = await fetchWithScanSignal(`https://discord.com/api/v9/invites/${invCode}?with_counts=true`, {}, 5500);
+                    if (dRes.status === 404) {
+                        result.verifiedStatus = 'dead';
+                        result.httpCode = 404;
+                        result.isDefinitive = true;
+                        result.skipAiGuessing = true;
+                        result.reason = `קישור ההזמנה לשרת ה-Discord (${invCode}) פג תוקף, בוטל או שאינו קיים עוד.`;
+                        result.fallbackSummary = result.reason;
+                        result.tags = ['#Discord', '#הוסר', '#פג_תוקף'];
+                        return result;
+                    }
+                    if (dRes.ok) {
+                        const dData = await dRes.json();
+                        const gName = dData.guild?.name || invCode;
+                        const gDesc = dData.guild?.description || '';
+                        const members = dData.approximate_member_count ? ` (${dData.approximate_member_count} חברים)` : '';
+                        result.verifiedStatus = 'active';
+                        result.httpCode = 200;
+                        result.isDefinitive = true;
+                        result.skipAiGuessing = true;
+                        result.pageTitle = gName;
+                        result.fallbackSummary = `קישור הזמנה פעיל לשרת ה-Discord "${gName}"${members}${gDesc ? ` — ${gDesc}` : '.'}`;
+                        result.reason = result.fallbackSummary;
+                        result.tags = ['#Discord', '#שרת_דיסקורד'];
+                        return result;
+                    }
+                } catch (_) {}
+            }
+
             // ג. בדיקת DNS-over-HTTPS (לזיהוי דומיין שאינו קיים כלל ברשת - NXDOMAIN)
-                        const nxDomainConfirmed = await isNxDomain(domain);
+            const nxDomainConfirmed = await isNxDomain(domain);
 
             if (nxDomainConfirmed) {
                 result.verifiedStatus = 'dead';
                 result.httpCode = 404;
                 result.isDefinitive = true;
-                result.reason = `הדומיין ${domain} אינו רשום או לא קיים ברשת (NXDOMAIN).`;
+                result.skipAiGuessing = true;
+                result.reason = `הדומיין ${domain} אינו קיים ברשת או שהוסר (NXDOMAIN).`;
                 result.fallbackSummary = result.reason;
-                result.tags = ['#לא_זמין', '#NXDOMAIN'];
+                result.tags = ['#הוסר', '#לא_קיים', '#NXDOMAIN'];
                 return result;
             }
 
@@ -2667,6 +2712,7 @@
             let httpCode = null;
             let rawHtml = '';
             let microlinkData = null;
+            let microlinkFailedCode = null;
 
             // בדיקה דרך AllOrigins + Microlink במקביל לקבלת קוד HTTP אמיתי (כמו 504/502/404)
             const [allOriginsProbe, microlinkProbe] = await Promise.allSettled([
@@ -2684,24 +2730,30 @@
             if (allOriginsProbe.status === 'fulfilled' && allOriginsProbe.value) {
                 const ao = allOriginsProbe.value;
                 if (ao.status?.http_code) httpCode = ao.status.http_code;
-                if (ao.contents) rawHtml = ao.contents;
+                if (ao.contents && typeof ao.contents === 'string') rawHtml = ao.contents;
             }
 
             if (microlinkProbe.status === 'fulfilled' && microlinkProbe.value) {
                 const ml = microlinkProbe.value;
-                if (ml.data) {
+                if (ml.status === 'success' && ml.data) {
                     microlinkData = ml.data;
-                    const targetStatus = Number(ml.data.status || ml.data.statusCode || 0);
+                    const targetStatus = Number(ml.statusCode || ml.data.status || ml.data.statusCode || 0);
                     if (targetStatus >= 100 && targetStatus <= 599 && (!httpCode || httpCode === 200)) httpCode = targetStatus;
+                } else if (ml.status === 'fail') {
+                    microlinkFailedCode = ml.code || 'FAIL';
+                    if (['ENOTFOUND', 'ECONNREFUSED', 'EHOSTUNREACH'].includes(microlinkFailedCode) && !httpCode) {
+                        httpCode = microlinkFailedCode === 'ENOTFOUND' ? 404 : 503;
+                    }
                 }
             }
 
-            // אם לא התקבל HTML מ-AllOrigins, ננסה CorsProxy
+            // אם לא התקבל HTML מ-AllOrigins, ננסה CorsProxy רק אם התגובה תקינה
             if (!rawHtml || rawHtml.length < 30) {
                 try {
                     const cpRes = await fetchWithScanSignal(`https://corsproxy.io/?${encodeURIComponent(cleanUrl)}`, {}, 6000);
-                    // corsproxy's HTTP status belongs to the proxy, not the target URL.
-                    rawHtml = await cpRes.text();
+                    if (cpRes.ok) {
+                        rawHtml = await cpRes.text();
+                    }
                 } catch (_) {}
             }
 
@@ -2828,7 +2880,23 @@
                             return result;
                         }
 
-                        // ניקוי שורות מטא טכניות של Jina ושמירת התוכן האמיתי של הדף (גם אם תת-משאב כלשהו בדף החזיר אזהרה!)
+                        // בדיקה אם Jina מדווח שהשרת נכשל לחלוטין (DNS / חיבור נדחה / שגיאת שרת)
+                        const isJinaNetworkFailure = /net::ERR_(?:NAME_NOT_RESOLVED|CONNECTION_REFUSED|CONNECTION_TIMED_OUT|ADDRESS_UNREACHABLE|SSL_PROTOCOL_ERROR)|AssertionFailureError|Failed to goto/i.test(jText);
+                        if (isJinaNetworkFailure && bodyText.length < 60) {
+                            const isDnsErr = /ERR_NAME_NOT_RESOLVED/i.test(jText);
+                            result.verifiedStatus = 'dead';
+                            result.httpCode = isDnsErr ? 404 : 503;
+                            result.isDefinitive = true;
+                            result.skipAiGuessing = true;
+                            result.reason = isDnsErr
+                                ? `הקישור בכתובת ${domain} הוסר או שהדומיין אינו קיים עוד ברשת.`
+                                : `האתר בכתובת ${domain} לא פעיל — השרת אינו מגיב או דחה את החיבור.`;
+                            result.fallbackSummary = result.reason;
+                            result.tags = isDnsErr ? ['#הוסר', '#לא_קיים'] : ['#לא_פעיל', '#שגיאת_שרת'];
+                            return result;
+                        }
+
+                        // ניקוי שורות מטא טכניות של Jina ושמירת התוכן האמיתי של הדף
                         const cleanedJina = jText
                             .replace(/^Title:.*$/gm, '')
                             .replace(/^URL Source:.*$/gm, '')
@@ -2837,19 +2905,24 @@
                             .replace(/\s+/g, ' ')
                             .trim();
 
-                        if (cleanedJina.length > 35 && !cleanedJina.toLowerCase().includes('just a moment...')) {
-                            jinaText = cleanedJina.substring(0, 3500);
-                        } else if (cleanedJina.length <= 35 && /^Warning: Target URL returned error (\d{3})/m.test(jText)) {
+                        if (/^Warning: Target URL returned error (\d{3})/m.test(jText) && cleanedJina.length < 180 && bodyText.length < 100) {
                             const errCode = parseInt(jText.match(/^Warning: Target URL returned error (\d{3})/m)[1], 10);
-                            if ([404, 410, 500, 502, 504, 521, 522, 524].includes(errCode) && bodyText.length < 60) {
+                            if ([404, 410, 451, 500, 502, 503, 504, 521, 522, 524].includes(errCode)) {
                                 result.verifiedStatus = 'dead';
                                 result.httpCode = errCode;
                                 result.isDefinitive = true;
-                                result.reason = `האתר אינו זמין — השרת החזיר קוד שגיאה HTTP ${errCode}.`;
+                                result.skipAiGuessing = true;
+                                result.reason = (errCode === 404 || errCode === 410)
+                                    ? `הקישור בכתובת ${domain} הוסר או שהעמוד אינו קיים עוד (HTTP ${errCode}).`
+                                    : `האתר בכתובת ${domain} לא פעיל — השרת החזיר שגיאת HTTP ${errCode}.`;
                                 result.fallbackSummary = result.reason;
-                                result.tags = ['#לא_זמין', `#HTTP_${errCode}`];
+                                result.tags = (errCode === 404 || errCode === 410) ? ['#הוסר', `#HTTP_${errCode}`] : ['#לא_פעיל', `#HTTP_${errCode}`];
                                 return result;
                             }
+                        }
+
+                        if (jinaRes.ok && cleanedJina.length > 35 && !cleanedJina.toLowerCase().includes('just a moment...')) {
+                            jinaText = cleanedJina.substring(0, 3500);
                         }
                     }
                 } catch (_) {}
@@ -2861,7 +2934,7 @@
 
             // ז. זיהוי דומיין בחניה / למכירה (Parked Domain)
             const combLower = `${lowerAll} ${jinaText.toLowerCase()}`;
-                        const parkedSignals = [
+            const parkedSignals = [
                 'sedoparking', 'domain is for sale', 'buy this domain', 'this domain may be for sale',
                 'hugedomains', 'afternic', 'parked free, courtesy of godaddy',
                 'this web page is parked for free', 'inquire about this domain'
@@ -2874,13 +2947,14 @@
             if (looksParked) {
                 result.verifiedStatus = 'parked';
                 result.isDefinitive = true;
+                result.skipAiGuessing = true;
                 result.reason = `הדומיין ${domain} נמצא בחניה או מוצע למכירה ואינו מכיל אתר פעיל.`;
                 result.fallbackSummary = result.reason;
                 result.tags = ['#דומיין_בחניה', '#Parked'];
                 return result;
             }
 
-            // ח. זיהוי דף 404 / 410 / תוכן שהוסר / חשבון מושעה / קישור פג תוקף (Soft-404)
+            // ח. זיהוי דף 404 / 410 / תוכן שהוסר / שירות מבוטל / קישור פג תוקף (Soft-404)
             const explicit404Titles = [
                 '404 not found', '404 - page not found', 'page not found', 'error 404', '410 gone',
                 'file not found', 'site not found', 'הדף לא נמצא', 'העמוד הוסר', 'הקובץ הוסר'
@@ -2899,7 +2973,13 @@
                 'this video is unavailable',
                 'video unavailable',
                 'this content is no longer available',
-                'no such app'
+                'no such app',
+                'error code: 1042',
+                'error 1016',
+                'origin dns error',
+                'deployment_paused',
+                'deployment_disabled',
+                'looks like you\'ve followed a broken link'
             ];
             const isTitle404 = explicit404Titles.some(t => pageTitle.toLowerCase().includes(t));
             const isSoftDead = isSmallPage && softDeadSignals.some(s => combLower.includes(s));
@@ -2912,6 +2992,17 @@
                 result.reason = `הקישור בכתובת ${domain} הוסר, פג תוקפו או שהעמוד המבוקש אינו קיים עוד (404).`;
                 result.fallbackSummary = result.reason;
                 result.tags = ['#הוסר', '#לא_קיים', `#HTTP_${result.httpCode}`];
+                return result;
+            }
+
+            if (httpCode === 503 && !rawHtml && !jinaText) {
+                result.verifiedStatus = 'dead';
+                result.httpCode = 503;
+                result.isDefinitive = true;
+                result.skipAiGuessing = true;
+                result.reason = `האתר בכתובת ${domain} לא פעיל — השרת אינו מגיב או דחה את החיבור.`;
+                result.fallbackSummary = result.reason;
+                result.tags = ['#לא_פעיל', '#שגיאת_שרת'];
                 return result;
             }
 
