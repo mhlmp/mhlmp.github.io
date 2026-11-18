@@ -1534,18 +1534,29 @@
                 border-radius: 14px !important;
             }
 
-            /* כרטיס המידע – מילוי מאוזן של הגובה */
+                       /* כרטיס הפתיחה – הצמדה טבעית לפאנל ההתחברות */
             body.pre-login-screen > #welcomeScreen {
-                justify-content: center !important;
+                justify-content: flex-start !important;
                 align-items: center !important;
 
-                gap: clamp(6px, 1.05dvh, 11px) !important;
+                /* מרווח קטן ואחיד בין הרכיבים */
+                gap: clamp(5px, 0.7dvh, 8px) !important;
 
-                padding: clamp(10px, 1.8dvh, 19px) 12px !important;
+                /* ביטול החלל המיותר מעל המנעול */
+                padding: 3px 12px 8px !important;
 
+                margin-top: 0 !important;
                 height: auto !important;
                 min-height: 0 !important;
+
                 overflow: visible !important;
+            }
+
+            /* המנעול מתחיל כמעט מיד אחרי פאנל ההתחברות */
+            body.pre-login-screen #welcomeScreen .timer-ring {
+                margin-top: 0 !important;
+                margin-bottom: 0 !important;
+                flex-shrink: 0 !important;
             }
 
             /* מנעול גדול וברור */
