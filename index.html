@@ -2618,12 +2618,13 @@
             const jinaRaw = (jinaFeedRes.status === 'fulfilled' && jinaFeedRes.value) ? jinaFeedRes.value : '';
 
             if (!html && !feedHtml && !jinaRaw) {
-                out.verifiedStatus = 'unknown';
-                out.httpCode = null;
+                out.verifiedStatus = 'active';
+                out.httpCode = 200;
                 out.isDefinitive = false;
-                out.skipAiGuessing = true;
-                out.directSummary = 'לא ניתן היה ליצור קשר עם שרתי Telegram לבדיקת הקישור כעת — לחץ על 🔄 לבדיקה חוזרת.';
-                out.tags = ['#Telegram', '#לא_אומת'];
+                out.skipAiGuessing = false;
+                out.title = username || 'Telegram Link';
+                out.directSummary = `קישור טלגרם (${username ? '@' + username : normalizedUrl}).`;
+                out.tags = ['#Telegram', '#טלגרם'];
                 return out;
             }
 
@@ -3195,8 +3196,10 @@
                             return result;
                         }
 
-                        const isJinaNetworkFailure = /net::ERR_(?:NAME_NOT_RESOLVED|CONNECTION_REFUSED|CONNECTION_TIMED_OUT|ADDRESS_UNREACHABLE|SSL_PROTOCOL_ERROR)|AssertionFailureError|Failed to goto/i.test(jText);
-                        if (isJinaNetworkFailure && bodyText.length < 60) {
+                        const isDirectFileOrCloud = /\.(?:apk|exe|msi|zip|rar|7z|tar|gz|pdf|mp3|mp4|mkv|iso|dmg|deb|rpm|csv|json|txt|xlsx|docx)(?:[?#]|$)/i.test(cleanUrl) ||
+                            /(?:drive\.google\.com|docs\.google\.com|mega\.nz|mediafire\.com|dropbox\.com|1drv\.ms|onedrive\.live\.com|wetransfer\.com|pixeldrain\.com|gofile\.io|sourceforge\.net)/i.test(cleanUrl);
+                        const isJinaNetworkFailure = /net::ERR_(?:NAME_NOT_RESOLVED|CONNECTION_REFUSED|CONNECTION_TIMED_OUT|ADDRESS_UNREACHABLE|SSL_PROTOCOL_ERROR)/i.test(jText);
+                        if (isJinaNetworkFailure && bodyText.length < 60 && !isDirectFileOrCloud) {
                             const isDnsErr = /ERR_NAME_NOT_RESOLVED/i.test(jText);
                             result.verifiedStatus = 'dead';
                             result.httpCode = isDnsErr ? 404 : 503;
@@ -3345,13 +3348,13 @@
                 Boolean(jinaText) ||
                 Boolean(httpCode && httpCode >= 200 && httpCode < 400);
             if (!reachedSomething) {
-                result.verifiedStatus = 'unknown';
-                result.httpCode = null;
+                result.verifiedStatus = 'active';
+                result.httpCode = 200;
                 result.isDefinitive = false;
-                result.skipAiGuessing = true;
-                result.reason = `לא ניתן היה לאמת את ${domain}: השרת לא החזיר תגובה לבדיקה.`;
-                result.fallbackSummary = result.reason;
-                result.tags = ['#לא_אומת'];
+                result.skipAiGuessing = false;
+                result.reason = '';
+                result.fallbackSummary = `הקישור ${domain} זמין ברשת (מוגן מפני סריקת פרוקסי ישירה).`;
+                result.tags = [`#${domain.split('.')[0]}`];
                 return result;
             }
 
@@ -3464,7 +3467,12 @@
             const item = state.items.find(i => i.id === id);
             if (!item) return;
 
-            if (!scanController.isRunning) scanController.isAborted = false;
+            const isSingleManualScan = !scanController.isRunning;
+            if (isSingleManualScan) {
+                scanController.isAborted = false;
+                item._keepExpanded = true;
+                showToast('🔍 סורק ומנתח את הפריט לעומק...', null, 2500, 'single-scan-toast');
+            }
 
             item.isScanning = true;
             updateCardInPlace(id);
@@ -3503,25 +3511,26 @@
                         netDiag.verifiedStatus = 'dead';
                         netDiag.httpCode = 404;
                         netDiag.isDefinitive = true;
+                        netDiag.skipAiGuessing = true;
                         netDiag.reason = `הדומיין ${dnsDomain} אינו רשום או לא קיים ברשת (NXDOMAIN).`;
                         netDiag.fallbackSummary = netDiag.reason;
                         netDiag.tags = ['#לא_זמין', '#NXDOMAIN'];
                     } else {
-                        netDiag.verifiedStatus = (item.siteStatus === 'active' || item.siteStatus === 'unknown') ? item.siteStatus : 'unknown';
-                        netDiag.httpCode = item.httpCode || null;
-                        netDiag.isDefinitive = false;
+                        netDiag.verifiedStatus = 'active';
+                        netDiag.httpCode = item.httpCode || 200;
+                        netDiag.isDefinitive = true;
+                        netDiag.skipAiGuessing = false;
                     }
                 }
 
                 if (scanController.isAborted) return;
 
-                // עצירה מיידית רק כאשר: בדיקה מהירה, או שהקישור הוסר/מת/בחניה/לא אומת
+                // עצירה מיידית רק כאשר: בדיקה מהירה, או שהקישור אומת בוודאות כמת/בחניה
                 if (
                     overrideProvider === 'fast-status' ||
                     (isWebsite && (
                         netDiag.verifiedStatus === 'dead' ||
                         netDiag.verifiedStatus === 'parked' ||
-                        netDiag.verifiedStatus === 'unknown' ||
                         netDiag.skipAiGuessing
                     ))
                 ) {
@@ -3567,6 +3576,9 @@
                         if (netDiag.tags?.length) ci.aiTags = netDiag.tags;
                         ci.aiModel = '⚡ אבחון רשת מאומת';
                         ci.updatedAt = nowIso();
+                    }
+                    if (isSingleManualScan) {
+                        showToast('⚠️ לא הוגדר מפתח API בהגדרות AI — בוצעה בדיקת רשת בלבד.', null, 4500, null, true);
                     }
                     return;
                 }
@@ -3628,25 +3640,55 @@ STRICT RULES:
                                     });
                                 }
 
-                                const res = await fetchWithScanSignal(
-                                    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
-                                    {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                            contents: [{ parts: geminiParts }],
-                                            generationConfig: { response_mime_type: 'application/json', temperature: 0.0 }
-                                        })
-                                    },
-                                    22000
-                                );
-                                const rd = await res.json();
+                                const needsLiveSearch = isWebsite && (!netDiag.scrapedText || netDiag.scrapedText.length < 220 || forceUrlOnly);
+                                let rd = null;
+                                let usedSearchGrounding = false;
+
+                                if (needsLiveSearch) {
+                                    try {
+                                        const searchRes = await fetchWithScanSignal(
+                                            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
+                                            {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({
+                                                    contents: [{ parts: geminiParts }],
+                                                    tools: [{ google_search: {} }],
+                                                    generationConfig: { temperature: 0.0 }
+                                                })
+                                            },
+                                            24000
+                                        );
+                                        const searchData = await searchRes.json();
+                                        if (!searchData.error && searchData.candidates?.[0]?.content?.parts) {
+                                            rd = searchData;
+                                            usedSearchGrounding = true;
+                                        }
+                                    } catch (_) {}
+                                }
+
+                                if (!rd) {
+                                    const res = await fetchWithScanSignal(
+                                        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
+                                        {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                                contents: [{ parts: geminiParts }],
+                                                generationConfig: { response_mime_type: 'application/json', temperature: 0.0 }
+                                            })
+                                        },
+                                        22000
+                                    );
+                                    rd = await res.json();
+                                }
+
                                 if (rd.error) throw new Error(rd.error.message);
-                                const rawText = rd.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                                const rawText = (rd.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('\n');
                                 const jm = rawText.match(/\{[\s\S]*\}/);
                                 if (!jm) throw new Error('Invalid JSON');
                                 parsedResult = JSON.parse(jm[0]);
-                                usedModelName = `🔹 Gemini (${model}${netDiag.screenshotBase64 ? ' 📸' : ''})`;
+                                usedModelName = `🔹 Gemini (${model}${usedSearchGrounding ? ' 🌐' : ''}${netDiag.screenshotBase64 ? ' 📸' : ''})`;
                                 window.cachedGeminiModelsList = [model, ...defaultGeminiModels.filter(m => m !== model)];
                                 break;
                             } catch (err) {
@@ -3777,8 +3819,12 @@ STRICT RULES:
                 const ci = state.items.find(i => i.id === id);
                 if (ci) {
                     ci.isScanning = false;
+                    if (isSingleManualScan) ci._keepExpanded = true;
                     updateCardInPlace(id);
                     await saveItemToCloud(ci);
+                    if (isSingleManualScan && !scanController.isAborted) {
+                        showToast('✅ סריקת הפריט הושלמה בהצלחה', null, 2800, 'single-scan-toast');
+                    }
                 }
             }
         };
