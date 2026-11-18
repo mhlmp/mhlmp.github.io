@@ -2565,7 +2565,7 @@
         }
 
         // =========================================================================
-        // 1. מפענח עומק ייעודי לקישורי טלגרם + צילום מסך ועמוד ערוץ ראשי
+        // 1. מפענח עומק רב-שכבתי לקישורי טלגרם (5 שכבות אימות + אפס מחיקות שווא)
         // =========================================================================
         async function inspectTelegramLink(cleanUrl, captureScreenshot = true) {
             const out = {
@@ -2584,91 +2584,189 @@
                 skipAiGuessing: false
             };
 
-            const normalizedUrl = cleanUrl.replace(/^https?:\/\/(?:www\.)?telegram\.me\//i, 'https://t.me/');
-            const urlObj = new URL(normalizedUrl);
+            const normalizedUrl = cleanUrl.replace(/^https?:\/\/(?:www\.)?telegram\.(?:me|dog)\//i, 'https://t.me/');
+            let urlObj;
+            try {
+                urlObj = new URL(normalizedUrl);
+            } catch (_) {
+                out.directSummary = `קישור טלגרם פעיל (${cleanUrl}).`;
+                return out;
+            }
+
             const rawParts = urlObj.pathname.split('/').filter(Boolean);
             const pathParts = rawParts[0] === 's' ? rawParts.slice(1) : rawParts;
-            const isInvite = normalizedUrl.includes('t.me/+') || pathParts[0] === 'joinchat';
-            const isPrivatePost = pathParts[0] === 'c' && pathParts.length >= 2;
+            const firstSeg = (pathParts[0] || '').toLowerCase();
 
-            if (isPrivatePost) {
+            // קישורי פרוקסי או הגדרות ישירות בטלגרם
+            if (firstSeg === 'proxy' || firstSeg === 'socks') {
+                const server = urlObj.searchParams.get('server') || '';
+                const port = urlObj.searchParams.get('port') || '';
+                out.verifiedStatus = 'active';
+                out.skipAiGuessing = true;
+                out.entityType = 'שרת פרוקסי לטלגרם (Proxy)';
+                out.title = server ? `Proxy ${server}${port ? ':' + port : ''}` : 'Telegram Proxy';
+                out.directSummary = `קישור התחברות מהירה לשרת פרוקסי (${firstSeg.toUpperCase()}) בטלגרם${server ? ` בכתובת ${server}${port ? ':' + port : ''}` : ''}.`;
+                out.tags = ['#Telegram', '#Proxy', '#פרוקסי'];
+                return out;
+            }
+
+            // קישור להודעה פרטית (t.me/c/...)
+            if (firstSeg === 'c' && pathParts.length >= 2) {
                 out.verifiedStatus = 'active';
                 out.skipAiGuessing = true;
                 out.entityType = 'הודעה בערוץ/קבוצת טלגרם פרטית';
+                out.title = `הודעה #${pathParts[2] || pathParts[1]}`;
                 out.directSummary = `קישור ישיר להודעה (#${pathParts[2] || ''}) בתוך קבוצה או ערוץ טלגרם פרטי (נגיש לחברי הקבוצה בלבד).`;
                 out.tags = ['#Telegram', '#קבוצה_פרטית'];
                 return out;
             }
 
-            const username = (!isInvite && pathParts[0]) ? pathParts[0] : '';
-            const mainCardUrl = (!isInvite && username) ? `https://t.me/${username}` : normalizedUrl;
-            const publicFeedUrl = (!isInvite && username && !username.startsWith('+')) ? `https://t.me/s/${username}` : '';
+            const isInvite = normalizedUrl.includes('t.me/+') || firstSeg === 'joinchat';
+            const isFolderInvite = firstSeg === 'addlist';
+            const isStickerOrEmoji = firstSeg === 'addstickers' || firstSeg === 'addemoji';
+            const isLanguagePack = firstSeg === 'setlanguage';
+            const isThemePack = firstSeg === 'addtheme';
+            const isBoostLink = firstSeg === 'boost';
+            const isSpecialPath = isFolderInvite || isStickerOrEmoji || isLanguagePack || isThemePack || isBoostLink;
+
+            const username = (!isInvite && !isSpecialPath && pathParts[0]) ? pathParts[0] : '';
+            const postNum = (!isInvite && !isSpecialPath && pathParts[1] && /^\d+$/.test(pathParts[1])) ? pathParts[1] : null;
+            const miniAppName = (!isInvite && !isSpecialPath && pathParts[1] && !/^\d+$/.test(pathParts[1]) && pathParts[1] !== 's') ? pathParts[1] : null;
+
+            const mainCardUrl = (!isInvite && !isSpecialPath && username) ? `https://t.me/${username}` : normalizedUrl;
+            const publicFeedUrl = (!isInvite && !isSpecialPath && username && !username.startsWith('+') && !username.toLowerCase().endsWith('bot'))
+                ? `https://t.me/s/${username}`
+                : '';
+            const postEmbedUrl = (username && postNum)
+                ? `https://t.me/${username}/${postNum}?embed=1&mode=tme`
+                : '';
 
             const fetchTelegramHtml = async (u) => {
+                if (!u) return '';
                 const proxies = [
-                    x => `https://api.allorigins.win/get?url=${encodeURIComponent(x)}`,
-                    x => `https://corsproxy.io/?${encodeURIComponent(x)}`,
-                    x => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(x)}`
+                    x => ({ url: `https://corsproxy.io/?${encodeURIComponent(x)}`, json: false }),
+                    x => ({ url: `https://api.allorigins.win/raw?url=${encodeURIComponent(x)}`, json: false }),
+                    x => ({ url: `https://api.allorigins.win/get?url=${encodeURIComponent(x)}`, json: true }),
+                    x => ({ url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(x)}`, json: false })
                 ];
                 for (const pFn of proxies) {
                     try {
-                        const r = await fetchWithScanSignal(pFn(u), {}, 6000);
+                        const cfg = pFn(u);
+                        const r = await fetchWithScanSignal(cfg.url, {}, 6500);
                         if (!r.ok) continue;
-                        const txt = pFn(u).includes('allorigins')
-                            ? ((await r.json()).contents || '')
-                            : (await r.text());
-                        if (txt && (txt.includes('tgme_') || txt.includes('og:title'))) return txt;
+                        const txt = cfg.json ? ((await r.json()).contents || '') : (await r.text());
+                        if (txt && (txt.includes('tgme_') || txt.includes('og:title') || txt.includes('tgme_widget_message'))) {
+                            return txt;
+                        }
                     } catch (_) {}
                 }
                 return '';
             };
 
-            // שליפה מקבילית של כרטיס הטלגרם הראשי + עמוד הערוץ הציבורי (/s/) + רינדור Jina
-            const [cardHtmlRes, feedHtmlRes, jinaFeedRes] = await Promise.allSettled([
+            // שליפה מקבילית מ-5 ערוצים בלתי תלויים: כרטיס ראשי, עמוד ערוץ (/s/), ווידג'ט פוסט (?embed=1), Microlink ו-Jina
+            const [cardHtmlRes, feedHtmlRes, embedHtmlRes, microlinkRes, jinaFeedRes] = await Promise.allSettled([
                 fetchTelegramHtml(mainCardUrl),
                 publicFeedUrl ? fetchTelegramHtml(publicFeedUrl) : Promise.resolve(''),
+                postEmbedUrl ? fetchTelegramHtml(postEmbedUrl) : Promise.resolve(''),
                 (async () => {
-                    const jTarget = publicFeedUrl || mainCardUrl;
+                    const mr = await fetchWithScanSignal(`https://api.microlink.io/?url=${encodeURIComponent(normalizedUrl)}`, {}, 6500);
+                    if (!mr.ok) return null;
+                    const mj = await mr.json();
+                    return mj?.status === 'success' ? mj.data : null;
+                })(),
+                (async () => {
+                    const jTarget = publicFeedUrl || normalizedUrl;
                     const jr = await fetchWithScanSignal(`https://r.jina.ai/${jTarget}`, {
                         headers: { 'Accept': 'text/plain', 'X-Return-Format': 'markdown' }
-                    }, 6500);
+                    }, 7000);
                     return jr.ok ? await jr.text() : '';
                 })()
             ]);
 
             const html = (cardHtmlRes.status === 'fulfilled' && cardHtmlRes.value) ? cardHtmlRes.value : '';
             const feedHtml = (feedHtmlRes.status === 'fulfilled' && feedHtmlRes.value) ? feedHtmlRes.value : '';
+            const embedHtml = (embedHtmlRes.status === 'fulfilled' && embedHtmlRes.value) ? embedHtmlRes.value : '';
+            const mlData = (microlinkRes.status === 'fulfilled' && microlinkRes.value) ? microlinkRes.value : null;
             const jinaRaw = (jinaFeedRes.status === 'fulfilled' && jinaFeedRes.value) ? jinaFeedRes.value : '';
 
-            if (!html && !feedHtml && !jinaRaw) {
-                out.verifiedStatus = 'active';
-                out.httpCode = 200;
-                out.isDefinitive = false;
-                out.skipAiGuessing = false;
-                out.title = username || 'Telegram Link';
-                out.directSummary = `קישור טלגרם (${username ? '@' + username : normalizedUrl}).`;
-                out.tags = ['#Telegram', '#טלגרם'];
-                return out;
-            }
-
             const parser = new DOMParser();
-            const doc2 = parser.parseFromString(html || feedHtml, 'text/html');
+            const doc2 = html ? parser.parseFromString(html, 'text/html') : null;
             const feedDoc = feedHtml ? parser.parseFromString(feedHtml, 'text/html') : null;
+            const embedDoc = embedHtml ? parser.parseFromString(embedHtml, 'text/html') : null;
 
-            const pageTitleEl = doc2.querySelector('.tgme_page_title, .tgme_channel_info_header_title') || feedDoc?.querySelector('.tgme_channel_info_header_title, .tgme_page_title');
-            const pageExtraEl = doc2.querySelector('.tgme_page_extra, .tgme_channel_info_counters') || feedDoc?.querySelector('.tgme_channel_info_counters, .tgme_page_extra');
-            const pageDescEl  = doc2.querySelector('.tgme_page_description, .tgme_channel_info_description') || feedDoc?.querySelector('.tgme_channel_info_description, .tgme_page_description');
-            const actionBtnEl = doc2.querySelector('.tgme_action_button_new, .tgme_page_action a');
-            const photoImgEl  = doc2.querySelector('.tgme_page_photo_image, .tgme_channel_info_header_photo img') || feedDoc?.querySelector('.tgme_page_photo_image');
-            const ogTitle     = (doc2.querySelector('meta[property="og:title"]')?.content || feedDoc?.querySelector('meta[property="og:title"]')?.content || '').trim();
-            const ogDesc      = (doc2.querySelector('meta[property="og:description"]')?.content || feedDoc?.querySelector('meta[property="og:description"]')?.content || '').trim();
-            const ogImage     = (doc2.querySelector('meta[property="og:image"]')?.content || photoImgEl?.getAttribute('src') || '').trim();
+            const isGenericTelegramTitle = (t) => {
+                if (!t) return true;
+                const low = t.trim().toLowerCase();
+                return (
+                    low === 'telegram' ||
+                    low === 'telegram messenger' ||
+                    low === 'join group chat on telegram' ||
+                    low.startsWith('telegram: contact @') ||
+                    low.startsWith('telegram: join group chat') ||
+                    low.includes('just a moment')
+                );
+            };
+
+            const cleanMetaTitle = (t) => {
+                if (!t || isGenericTelegramTitle(t)) return '';
+                return t
+                    .replace(/\s*[-–|]\s*Telegram\s*$/i, '')
+                    .replace(/^Telegram:\s*Contact\s*/i, '')
+                    .trim();
+            };
+
+            const jinaTitleMatch = jinaRaw.match(/^Title:\s*(.+)$/m);
+            const jinaTitle = jinaTitleMatch ? cleanMetaTitle(jinaTitleMatch[1]) : '';
+            const mlTitle = cleanMetaTitle(mlData?.title || '');
+
+            const pageTitleEl =
+                doc2?.querySelector('.tgme_page_title, .tgme_channel_info_header_title') ||
+                feedDoc?.querySelector('.tgme_channel_info_header_title, .tgme_page_title') ||
+                embedDoc?.querySelector('.tgme_widget_message_owner_name, .tgme_widget_message_author_name');
+
+            const pageExtraEl =
+                doc2?.querySelector('.tgme_page_extra, .tgme_channel_info_counters') ||
+                feedDoc?.querySelector('.tgme_channel_info_counters, .tgme_page_extra');
+
+            const pageDescEl =
+                doc2?.querySelector('.tgme_page_description, .tgme_channel_info_description') ||
+                feedDoc?.querySelector('.tgme_channel_info_description, .tgme_page_description');
+
+            const actionBtnEl = doc2?.querySelector('.tgme_action_button_new, .tgme_page_action a');
+            const photoImgEl =
+                doc2?.querySelector('.tgme_page_photo_image, .tgme_channel_info_header_photo img') ||
+                feedDoc?.querySelector('.tgme_page_photo_image, .tgme_channel_info_header_photo img') ||
+                embedDoc?.querySelector('.tgme_widget_message_user_photo img');
+
+            const rawOgTitle = (
+                doc2?.querySelector('meta[property="og:title"]')?.content ||
+                feedDoc?.querySelector('meta[property="og:title"]')?.content ||
+                ''
+            ).trim();
+            const validOgTitle = cleanMetaTitle(rawOgTitle);
+
+            const ogDesc = (
+                doc2?.querySelector('meta[property="og:description"]')?.content ||
+                feedDoc?.querySelector('meta[property="og:description"]')?.content ||
+                mlData?.description ||
+                ''
+            ).trim();
+
+            const ogImage = (
+                doc2?.querySelector('meta[property="og:image"]')?.content ||
+                feedDoc?.querySelector('meta[property="og:image"]')?.content ||
+                photoImgEl?.getAttribute('src') ||
+                mlData?.image?.url ||
+                ''
+            ).trim();
 
             const rawTitle = (pageTitleEl?.textContent || '').replace(/\s+/g, ' ').trim();
             const rawExtra = (pageExtraEl?.textContent || '').replace(/\s+/g, ' ').trim();
             const rawDesc  = (pageDescEl?.innerText || pageDescEl?.textContent || '').replace(/\s+/g, ' ').trim();
+            const embedPostText = (embedDoc?.querySelector('.tgme_widget_message_text')?.innerText || '').replace(/\s+/g, ' ').trim();
+            const embedErrorText = (embedDoc?.querySelector('.tgme_widget_message_error')?.innerText || '').replace(/\s+/g, ' ').trim();
             const actionText = (actionBtnEl?.textContent || '').toLowerCase();
-            const lowerBody = ((doc2.body?.innerText || '') + ' ' + jinaRaw).toLowerCase();
+            const lowerCardBody = (doc2?.body?.innerText || '').toLowerCase();
 
             const isBoilerplateDesc = (txt) => {
                 if (!txt) return true;
@@ -2678,13 +2776,39 @@
                     l.includes('you can contact @') ||
                     l.includes('you are invited to a group chat on telegram') ||
                     l.includes('if you have telegram, you can view and join') ||
-                    l.includes('join group chat on telegram')
+                    l.includes('join group chat on telegram') ||
+                    l.includes('view and join @')
                 );
             };
 
-            // 1. בדיקת קישור הזמנה שפג תוקפו או בוטל
-            if (isInvite) {
-                if (!rawTitle) {
+            const effectiveTitle = rawTitle || validOgTitle || mlTitle || jinaTitle;
+            const hasRealTelegramCardDom = Boolean(doc2 && doc2.querySelector('.tgme_page, .tgme_body_wrap'));
+            const hasFeedMessages = Boolean(feedDoc?.querySelectorAll('.tgme_widget_message_text')?.length);
+            const hasPhoto = Boolean(photoImgEl);
+
+            // בדיקה מחמירה ומדויקת: מסמנים כ-dead אך ורק אם טלגרם החזיר עמוד אמיתי שמאשר מפורשות שהישות אינה קיימת
+            const hasExplicitBanOrExpire =
+                lowerCardBody.includes('this channel cannot be displayed') ||
+                lowerCardBody.includes('this group cannot be displayed') ||
+                lowerCardBody.includes('this bot cannot be displayed') ||
+                lowerCardBody.includes('invite link is invalid') ||
+                lowerCardBody.includes('this link has expired');
+
+            if (hasExplicitBanOrExpire && !effectiveTitle && !hasFeedMessages && !embedPostText) {
+                out.verifiedStatus = 'dead';
+                out.httpCode = 404;
+                out.isDefinitive = true;
+                out.skipAiGuessing = true;
+                out.directSummary = 'הקישור בטלגרם אינו פעיל — הערוץ, הקבוצה או קישור ההזמנה בוטלו או פג תוקפם.';
+                out.tags = ['#Telegram', '#הוסר', '#לא_קיים'];
+                return out;
+            }
+
+            if (isInvite && hasRealTelegramCardDom && !effectiveTitle && !rawExtra && !hasPhoto) {
+                const isGenericInviteFallback =
+                    rawOgTitle.toLowerCase() === 'join group chat on telegram' ||
+                    lowerCardBody.includes('you are invited to a group chat on telegram');
+                if (isGenericInviteFallback) {
                     out.verifiedStatus = 'dead';
                     out.httpCode = 404;
                     out.isDefinitive = true;
@@ -2693,54 +2817,66 @@
                     out.tags = ['#Telegram', '#הוסר', '#פג_תוקף'];
                     return out;
                 }
-            } else {
-                // 2. בדיקת ערוץ / קבוצה / בוט / משתמש ציבורי שהוסרו או לא קיימים
-                const hasExplicitDead =
-                    lowerBody.includes('this channel cannot be displayed') ||
-                    lowerBody.includes('this group cannot be displayed') ||
-                    lowerBody.includes('this bot cannot be displayed') ||
-                    lowerBody.includes('invite link is invalid') ||
-                    lowerBody.includes('this link has expired');
+            }
 
-                const isPostLink = pathParts.length >= 2 && /^\d+$/.test(pathParts[1]);
-                const hasValidOgTitle = ogTitle &&
-                    !ogTitle.startsWith('Telegram: Contact @') &&
-                    ogTitle !== 'Telegram Messenger' &&
-                    ogTitle !== 'Join group chat on Telegram';
-
-                if (hasExplicitDead || (!rawTitle && !(isPostLink && hasValidOgTitle))) {
+            if (!isInvite && !isSpecialPath && username && hasRealTelegramCardDom && !effectiveTitle && !rawExtra && !hasPhoto && !hasFeedMessages && !embedPostText) {
+                const isGenericContactFallback =
+                    rawOgTitle.toLowerCase() === `telegram: contact @${username.toLowerCase()}` &&
+                    lowerCardBody.includes('if you have telegram, you can contact');
+                if (isGenericContactFallback) {
                     out.verifiedStatus = 'dead';
                     out.httpCode = 404;
                     out.isDefinitive = true;
                     out.skipAiGuessing = true;
-                    out.directSummary = `הקישור בטלגרם (@${username}) אינו פעיל — הבוט, הערוץ או הקבוצה הוסרו או שאינם קיימים.`;
+                    out.directSummary = `הקישור בטלגרם (@${username}) אינו פעיל — הבוט, הערוץ או המשתמש הוסרו או שאינם קיימים.`;
                     out.tags = ['#Telegram', '#הוסר', '#לא_קיים'];
                     return out;
                 }
             }
 
-            // 3. הקישור פעיל — חילוץ מלא של העמוד הראשי, הפוסטים האחרונים וצילום המסך!
-            const postNum = pathParts[1] && /^\d+$/.test(pathParts[1]) ? pathParts[1] : null;
-
-            if (actionText.includes('start bot') || (!isInvite && username.toLowerCase().endsWith('bot')) || rawExtra.toLowerCase().endsWith('bot')) {
+            // סיווג מדויק של סוג הקישור בטלגרם
+            if (isFolderInvite) {
+                out.entityType = 'תיקיית ערוצים/קבוצות בטלגרם (Folder)';
+                out.tags.push('#תיקיית_טלגרם');
+            } else if (isStickerOrEmoji) {
+                out.entityType = 'חבילת מדבקות / אימוג׳י בטלגרם';
+                out.tags.push('#מדבקות_טלגרם');
+            } else if (isLanguagePack) {
+                out.entityType = 'חבילת שפה ותרגום לטלגרם';
+                out.tags.push('#תרגום_טלגרם');
+            } else if (isThemePack) {
+                out.entityType = 'ערכת נושא (Theme) לטלגרם';
+                out.tags.push('#ערכת_נושא');
+            } else if (isBoostLink) {
+                out.entityType = 'קישור חיזוק (Boost) לערוץ טלגרם';
+            } else if (miniAppName || urlObj.searchParams.has('startapp')) {
+                out.entityType = 'אפליקציית Mini-App / בוט בטלגרם';
+                out.tags.push('#TelegramMiniApp', '#בוט');
+            } else if (actionText.includes('start bot') || actionText.includes('open app') || (!isInvite && username.toLowerCase().endsWith('bot')) || rawExtra.toLowerCase().endsWith('bot') || urlObj.searchParams.has('start')) {
                 out.entityType = 'בוט טלגרם (Bot)';
                 out.tags.push('#TelegramBot', '#בוט');
-            } else if (/subscriber|מנויים/i.test(rawExtra) || actionText.includes('view channel') || actionText.includes('preview channel') || feedDoc?.querySelectorAll('.tgme_widget_message_text')?.length) {
-                out.entityType = postNum ? `פוסט בערוץ טלגרם (#${postNum})` : 'ערוץ טלגרם (Channel)';
+            } else if (postNum) {
+                out.entityType = `פוסט בערוץ/קבוצת טלגרם (#${postNum})`;
+                out.tags.push('#פוסט_טלגרם');
+            } else if (/subscriber|מנויים/i.test(rawExtra) || actionText.includes('view channel') || actionText.includes('preview channel') || hasFeedMessages) {
+                out.entityType = 'ערוץ טלגרם (Channel)';
                 out.tags.push('#ערוץ_טלגרם');
             } else if (/member|online|חברים|משתתפים/i.test(rawExtra) || isInvite || actionText.includes('join group')) {
                 out.entityType = isInvite ? 'קבוצת/ערוץ טלגרם (קישור הזמנה)' : 'קבוצת טלגרם (Group)';
                 out.tags.push('#קבוצת_טלגרם');
             } else {
-                out.entityType = 'חשבון / ערוץ טלגרם';
+                out.entityType = 'ערוץ / חשבון טלגרם';
             }
 
-            out.title = rawTitle || ogTitle;
+            out.title = effectiveTitle || (username ? `@${username}` : (pathParts[1] || 'Telegram'));
             out.extraInfo = rawExtra;
             out.description = !isBoilerplateDesc(rawDesc) ? rawDesc : (!isBoilerplateDesc(ogDesc) ? ogDesc : '');
 
-            // חילוץ פוסטים ותוכן מעמוד הערוץ הציבורי (/s/) או מרינדור Jina
+            // חילוץ תוכן הפוסט הספציפי (אם קיים) + פוסטים אחרונים מעמוד הערוץ (/s/) או מ-Jina
             const postsList = [];
+            if (embedPostText) {
+                postsList.push(`[תוכן פוסט #${postNum}]: ${embedPostText.substring(0, 450)}`);
+            }
             if (feedDoc) {
                 Array.from(feedDoc.querySelectorAll('.tgme_widget_message_text'))
                     .slice(-6)
@@ -2755,22 +2891,29 @@
                     .replace(/^URL Source:.*$/gm, '')
                     .replace(/^Markdown Content:.*$/gm, '')
                     .replace(/If you have Telegram, you can (?:contact|view and join).*$/gim, '')
+                    .replace(/You are invited to a group chat on Telegram.*$/gim, '')
+                    .replace(/Preview channel|View in Telegram|Send Message|Start Bot/gi, '')
                     .replace(/\s+/g, ' ')
                     .trim();
-                if (cleanedJina.length > 40) {
+                if (cleanedJina.length > 35) {
                     postsList.push(cleanedJina.substring(0, 900));
                 }
             }
             out.recentPostsText = postsList.join(' | ');
 
-            // צילום מסך חי של עמוד הטלגרם הראשי (או תמונת הפרופיל של הערוץ/בוט כגיבוי) עבור Vision AI
+            // בטלגרם נצלם מסך רק אם יש עמוד פיד ציבורי עם פוסטים או תמונת פרופיל, כדי שה-AI לא יתבלבל ממסך הפתיחה הגנרי "Open in Telegram"
             if (captureScreenshot) {
-                const targetForShot = (publicFeedUrl && postsList.length > 0) ? publicFeedUrl : mainCardUrl;
-                out.screenshotBase64 = await captureVisualScreenshotBase64(targetForShot, null, ogImage);
+                if (publicFeedUrl && hasFeedMessages) {
+                    out.screenshotBase64 = await captureVisualScreenshotBase64(publicFeedUrl, null, ogImage);
+                } else if (ogImage && !ogImage.includes('telegram.org/img/t_logo')) {
+                    out.screenshotBase64 = await imageUrlToCompressedBase64(ogImage);
+                }
             }
 
-            const statsPart = out.extraInfo ? ` (${out.extraInfo})` : '';
-            if (out.description) {
+            const statsPart = out.extraInfo ? ` (${out.extraInfo})` : (username && !out.title.includes(username) ? ` (@${username})` : '');
+            if (embedPostText) {
+                out.directSummary = `${out.entityType} מתוך "${out.title}"${statsPart}: ${embedPostText.substring(0, 200)}`;
+            } else if (out.description) {
                 out.directSummary = `${out.entityType} פעיל בשם "${out.title}"${statsPart} — ${out.description}`;
             } else if (out.recentPostsText) {
                 out.directSummary = `${out.entityType} פעיל בשם "${out.title}"${statsPart}: ${out.recentPostsText.substring(0, 180)}`;
@@ -3455,6 +3598,14 @@
                 return { valid: false, reason: 'Contains forbidden guessing or boilerplate phrase' };
             }
 
+            // אם מנוע הרשת כבר אימת שהקישור פעיל (active), פסול מיד כל טענת שווא של ה-AI שהקישור "לא קיים / נמחק / שבור"
+            if (netDiag?.verifiedStatus === 'active') {
+                const falseDeadClaim = /(?:הקישור|הערוץ|הבוט|הקבוצה|האתר|הדף)\s+(?:אינו|לא)\s+(?:קיים|פעיל|זמין|נמצא)|(?:נמחק|הוסר|פג תוקף|אינם קיימים|אינה קיימת)/.test(lowerSum);
+                if (falseDeadClaim) {
+                    return { valid: false, reason: 'AI falsely claimed an active verified link is dead' };
+                }
+            }
+
             if (/github\.com\//i.test(item.content) && (lowerSum.includes('פלטפורמה גלובלית') || lowerSum.includes('מערכת בקרת הגרסאות git') || lowerSum.includes('מערכת ניהול הגרסאות git'))) {
                 return { valid: false, reason: 'Generic GitHub boilerplate instead of specific repo/user description' };
             }
@@ -3620,17 +3771,18 @@
                     ].filter(Boolean).join('\n');
                 }
 
+                const isTelegramUrl = /(?:t\.me|telegram\.(?:me|dog))\//i.test(cleanContent);
                 const systemPrompt = `You are an Elite Visual Web Auditor & Technical Analyst.
-You are given data extracted from a website's main page (or Telegram channel/group/bot preview) AND, when available, a LIVE SCREENSHOT of the rendered page.
-Your job is to inspect the screenshot and the extracted page data, understand exactly what the website, tool, repository, or Telegram link does, and write a clear, accurate, informative 2-sentence description in HEBREW.
+You are given verified data extracted from a website or Telegram link AND, when available, a LIVE SCREENSHOT or avatar.
+Your job is to write a clear, accurate, informative 2-sentence description in HEBREW explaining what the website, tool, repository, or Telegram entity does.
 
 STRICT RULES:
-1. INSPECT THE SCREENSHOT & MAIN PAGE:
-  - Read all visible titles, banners, buttons, menus, Hebrew/English text, and UI elements in the screenshot and extracted data to understand what the site or Telegram entity actually does.
-  - If the screenshot visually shows that the site is dead/removed (e.g. a 404 page, "Channel cannot be displayed", "Invite link expired") or parked ("Domain for sale"), set "visualStatus" to "dead" or "parked". Otherwise set "visualStatus" to "active".
+1. TRUST VERIFIED ACTIVE STATUS:
+  - This link has ALREADY been verified as ACTIVE (HTTP 200).
+  - For Telegram links (t.me): NEVER claim a Telegram channel, group, bot, or invite link is dead, deleted, expired, or non-existent just because it is not indexed in Google Search or shows a "View in Telegram" screen! Always set "visualStatus" to "active" for Telegram links and describe the channel/group/bot using the extracted Display Title, Bio, Recent Posts, Handle, and User Provided Description.
 2. TELEGRAM LINKS (t.me):
-  - State clearly whether it is a Telegram Channel (ערוץ טלגרם), Group (קבוצת טלגרם), Bot (בוט טלגרם), or Invite Link, its display name, subscriber/member count (if shown), and what topic, service, or content it provides based on the screenshot, title, bio, and recent posts.
-  - NEVER write excuses like "לא ניתן לאמת", "הסריקה הפיזית נחסמה", or "ללא טקסט תיאור נוסף".
+  - State clearly whether it is a Telegram Channel (ערוץ טלגרם), Group (קבוצת טלגרם), Bot (בוט טלגרם), Post, Folder, or Sticker Pack, its display name, subscriber/member count (if shown), and what topic, service, or content it provides.
+  - NEVER write excuses like "לא ניתן לאמת", "הסריקה הפיזית נחסמה", "אינו קיים", or "ללא טקסט תיאור נוסף".
 3. ZERO HEDGING OR GUESSING WORDS:
   - NEVER write "ככל הנראה", "כנראה", "נראה כי", "בהתבסס על שם הדומיין", "אולי", "ייתכן", "עשוי להציע", or "לא התקבל מספיק תוכן".
 4. Keep brand names, software names, and technical terms in ENGLISH.
@@ -3810,11 +3962,11 @@ STRICT RULES:
 
                 const verification = validateAndVerifyAiOutput(parsedResult, netDiag, ci);
 
-                // אם צילום המסך הראה בבירור דף שגיאה 404 או דומיין בחניה שלא נתפס בקוד ה-HTTP
-                if (isWebsite && parsedResult?.visualStatus === 'dead' && !netDiag.pageTitle) {
+                // עבור אתרים רגילים בלבד (לעולם לא על קישורי טלגרם שכבר אומתו): בדיקת דף 404/חניה מצילום מסך
+                if (isWebsite && !isTelegramUrl && parsedResult?.visualStatus === 'dead' && !netDiag.pageTitle) {
                     netDiag.verifiedStatus = 'dead';
                     netDiag.httpCode = 404;
-                } else if (isWebsite && parsedResult?.visualStatus === 'parked') {
+                } else if (isWebsite && !isTelegramUrl && parsedResult?.visualStatus === 'parked') {
                     netDiag.verifiedStatus = 'parked';
                 }
 
