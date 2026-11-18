@@ -1398,7 +1398,103 @@
             }
         }
 
+    
+        /* Google – צבעי המותג */
+        body.pre-login-screen .google-login-text {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            direction: rtl;
+            white-space: nowrap;
+            line-height: 1;
+        }
+
+        body.pre-login-screen .google-login-label {
+            color: #ffffff;
+            font-weight: 800;
+        }
+
+        body.pre-login-screen .google-word {
+            display: inline-flex;
+            direction: ltr;
+            font-family: Arial, sans-serif;
+            font-size: 1.16em;
+            font-weight: 900;
+            letter-spacing: -0.6px;
+        }
+
+        body.pre-login-screen .google-blue { color: #4285F4; }
+        body.pre-login-screen .google-red { color: #EA4335; }
+        body.pre-login-screen .google-yellow { color: #FBBC05; }
+        body.pre-login-screen .google-green { color: #34A853; }
+
+        /* שתי הודעות הפרטיות – יחידה אחת רציפה */
+        body.pre-login-screen #welcomeScreen .welcome-info-group {
+            width: 100%;
+            max-width: 490px;
+
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+
+            margin: 0;
+            padding: 0;
+
+            background: rgba(148, 163, 184, 0.075);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            border-radius: 15px;
+
+            overflow: hidden;
+
+            box-shadow:
+                0 4px 14px rgba(0, 0, 0, 0.14),
+                inset 0 1px 0 rgba(255, 255, 255, 0.035);
+        }
+
+        body.pre-login-screen #welcomeScreen .welcome-info-group p {
+            width: 100%;
+
+            margin: 0 !important;
+            padding: 10px 13px;
+
+            background: transparent !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+
+            color: #dbeafe !important;
+
+            font-size: clamp(0.88rem, 2.8vw, 0.98rem) !important;
+            font-weight: 550;
+            line-height: 1.4 !important;
+
+            text-align: center;
+        }
+
+        /* מפריד עדין בלבד, ללא רווח בין הפסקאות */
+        body.pre-login-screen #welcomeScreen .welcome-info-group p + p {
+            border-top: 1px solid rgba(148, 163, 184, 0.23) !important;
+        }
+
+        /* שמירה על פרופורציות במסכים נמוכים */
+        @media screen and (max-width: 900px) and (max-height: 650px) {
+            body.pre-login-screen #welcomeScreen .welcome-info-group p {
+                padding: 7px 10px;
+                font-size: 0.84rem !important;
+            }
+        }
+
+        @media screen and (max-width: 900px) and (max-height: 460px) {
+            body.pre-login-screen #welcomeScreen .welcome-info-group p {
+                padding: 5px 8px;
+                font-size: 0.76rem !important;
+                line-height: 1.2 !important;
+            }
+        }
+
     </style>
+
 
 </head>
 <body class="dark-mode pre-login-screen">
@@ -1436,8 +1532,11 @@
     <div id="userSection" class="glass-panel">
         <div id="loggedOutView" style="display:flex; width:100%; justify-content:center;">
             <button id="googleLoginBtn" class="btn-login">
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20" alt="G">
-                התחברות עם Google
+                                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20" alt="G">
+                <span class="google-login-text">
+                    <span class="google-login-label">התחברות עם</span>
+                    <span class="google-word" dir="ltr" aria-label="Google"><span class="google-blue">G</span><span class="google-red">o</span><span class="google-yellow">o</span><span class="google-blue">g</span><span class="google-green">l</span><span class="google-red">e</span></span>
+                </span>
             </button>
         </div>
         <div id="loggedInView" style="display:none; flex-direction:column; width:100%; gap: 8px;">
@@ -1479,8 +1578,10 @@
             </div>
         </div>
         <h2 style="margin-top: 0; margin-bottom: 6px; font-size: 1.3rem;">ברוכים הבאים,<br><span style="color: var(--primary-color);">MH Link Manager Pro</span></h2>
-        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 2px; margin-top: 0;">כדי לשמור על פרטיותך, הקישורים נטענים מהענן בלבד.</p>
-        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0; margin-bottom: 5px;">בעת יציאה הכל נמחק מהמכשיר לחלוטין.</p>
+                <div class="welcome-info-group">
+            <p>כדי לשמור על פרטיותך, הקישורים נטענים מהענן בלבד.</p>
+            <p>בעת יציאה הכל נמחק מהמכשיר לחלוטין.</p>
+        </div>
     </div>
 
     <div id="protectedContent" class="auth-required locked">
