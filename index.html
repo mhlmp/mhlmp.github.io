@@ -459,6 +459,7 @@
             overflow: hidden; display: flex; flex-direction: column; width: 100%;
             pointer-events: auto; opacity: 0; transform: translateY(24px) scale(0.96);
             transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            touch-action: pan-y; user-select: none; cursor: grab;
         }
         .toast-item.visible { opacity: 1; transform: translateY(0) scale(1); }
         .toast-item.leaving { opacity: 0; transform: translateY(-16px) scale(0.92); transition: all 0.25s ease-in; }
@@ -1166,6 +1167,12 @@
                 });
             }
 
+            document.querySelectorAll('.dropdown-content').forEach(menuEl => {
+                enableSwipeToDismiss(menuEl, () => {
+                    closeAllMenus();
+                });
+            });
+
             pauseBtn?.addEventListener('click', () => {
                 if (!scanController.isRunning) return;
                 scanController.isPaused = !scanController.isPaused;
@@ -1296,11 +1303,19 @@
             let startX = 0, startY = 0, currentX = 0;
             let isPointerDown = false, isSwiping = false;
 
+            let suppressNextClick = false;
+            element.addEventListener('click', (e) => {
+                if (suppressNextClick) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    suppressNextClick = false;
+                }
+            }, true);
+
             const isInteractiveTarget = (target) => {
                 if (!target || typeof target.closest !== 'function') return false;
-                return Boolean(target.closest('input, textarea, select, button, a, label'));
+                return Boolean(target.closest('input, textarea, select'));
             };
-
             const onStart = (clientX, clientY, target) => {
                 if (isInteractiveTarget(target)) {
                     isPointerDown = false;
@@ -1346,7 +1361,8 @@
                     return;
                 }
                 isSwiping = false;
-
+                suppressNextClick = true;
+                setTimeout(() => { suppressNextClick = false; }, 250);
                 element.style.transition = 'transform 0.22s ease, opacity 0.22s ease';
                 if (Math.abs(currentX) > 65) {
                     const dir = currentX > 0 ? '120%' : '-120%';
@@ -1516,9 +1532,15 @@
                             state.showDuplicates = true;
                             document.getElementById('toggleDuplicatesBtn')?.classList.remove('dup-active');
                         }
-                        searchEl.value = filterValue;
+                        searchEl.value = (searchEl.value.trim() === filterValue) ? '' : filterValue;
                         saveUiSettings();
                         renderList();
+                        if (searchEl.value) {
+                            showToast(`🔎 מסנן לפי: ${filterValue}`, () => {
+                                searchEl.value = '';
+                                renderList();
+                            }, 3500, 'filter-chip-toast');
+                        }
                     }
                     return;
                 }
@@ -1714,6 +1736,7 @@
                 const itemRef = doc(db, 'users', state.user.uid, 'items', item.id.toString());
                 const cleanItem = JSON.parse(JSON.stringify(item)); // מסיר undefined
                 delete cleanItem.isScanning;
+                delete cleanItem._keepExpanded;
                 const writePromise = setDoc(itemRef, cleanItem, { merge: true });
                 if (!navigator.onLine || state.isOffline) {
                     // Firestore שומר בתור מקומי וישלח כשהרשת תחזור; אין להמתין
@@ -1949,7 +1972,8 @@
                 '🔴 לא פעיל', 'לא פעיל', '🔴 קישור לא תקין / לא פעיל', 'קישור לא תקין / לא פעיל',
                 '🔴 הוסר / לא קיים', 'הוסר / לא קיים', '🔴 הוסר / פג תוקף / לא קיים', 'הוסר / פג תוקף / לא קיים',
                 '⚪ לא אומת', 'לא אומת', '⚪ לא ניתן לאמת כרגע', 'לא ניתן לאמת כרגע',
-                '⚠️ דורש סריקה', 'דורש סריקה', '📄 ניתוח טקסט', 'ניתוח טקסט'
+                '⚠️ דורש סריקה', 'דורש סריקה', '⚠️ שגיאת תקשורת בסריקה קודמת — לחץ ✨ לסריקה מתוקנת',
+                '📄 ניתוח טקסט', 'ניתוח טקסט'
             ]);
 
             const isStrictStatusQuery = KNOWN_STATUS_QUERIES.has(query) || /^🔴\s*לא פעיל\s*\(\d+\)$/.test(query) || /^🔴\s*האתר לא פעיל/.test(query);
@@ -1970,7 +1994,7 @@
                 const safeTags = (item.aiTags || []).join(' ').toLowerCase();
                 return (item.content || '').toLowerCase().includes(query) ||
                     (item.description || '').toLowerCase().includes(query) ||
-                    (item.category || '').toLowerCase().includes(query) ||
+                    (item.category || 'כללי').toLowerCase().includes(query) ||
                     (item.note || '').toLowerCase().includes(query) ||
                     (item.aiSummary || '').toLowerCase().includes(query) ||
                     safeTags.includes(query);
@@ -2091,7 +2115,7 @@
             const statusCardClass = effectiveStatus === 'dead'
                 ? 'status-dead-card'
                 : (effectiveStatus === 'parked' ? 'status-parked-card' : '');
-            div.className = `card ${item.isPinned ? 'pinned' : ''} ${statusCardClass} ${state.selectedIds.has(item.id) ? 'selected' : ''}${(state.expandAllCards || item.isScanning) ? 'is-expanded' : ''}`;
+            div.className = `card ${item.isPinned ? 'pinned' : ''} ${statusCardClass} ${state.selectedIds.has(item.id) ? 'selected' : ''} ${(state.expandAllCards || item.isScanning || item._keepExpanded) ? 'is-expanded' : ''}`;
             div.setAttribute('data-id', item.id);
 
             const safeContent = escapeHtml(item.content);
@@ -2202,8 +2226,7 @@
                     <div class="card-header-content">
                         <div class="card-meta-row">
                             <span class="card-index-badge card-filter-chip" data-filter-query="#${visualIndex}" title="לחץ לסינון פריט #${visualIndex}">#${visualIndex}</span>
-                            <span class="tag-category card-filter-chip" data-filter-query="${escapeHtml(item.category || 'כללי')}" title="לחץ לסינון כל הפריטים בקבוצה: ${escapeHtml(item.category \vert{}\vert{} 'כללי')}">${escapeHtml(item.category || 'כללי')}</span>
-                            ${platformPill}${headerStatusPill}
+<span class="tag-category card-filter-chip" data-filter-query="${escapeHtml(item.category || 'כללי')}" title="לחץ לסינון כל הפריטים בקבוצה: ${escapeHtml(item.category || 'כללי')}">${escapeHtml(item.category || 'כללי')}</span>                            ${platformPill}${headerStatusPill}
                             <span class="duplicate-badge card-filter-chip" data-filter-query="#כפול" title="לחץ להצגת כפילויות" style="display:${isDup ? 'inline' : 'none'}">כפול</span>
                             ${item.isPinned ? '<span style="color:var(--accent-gold); font-size:11px;">📌</span>' : ''}
                         </div>
@@ -3858,6 +3881,7 @@ STRICT RULES:
             }
             toast.appendChild(content);
             host.appendChild(toast);
+            enableSwipeToDismiss(toast, () => toast.remove());
             requestAnimationFrame(() => toast.classList.add('visible'));
             if (duration > 0) window.setTimeout(() => removeToast(toast), duration);
             return toast;
@@ -4001,12 +4025,25 @@ STRICT RULES:
         async function restoreAllTrash(){for(const item of [...state.trash]) await restoreTrashItem(item);}
         async function emptyTrash(){if(!state.user||!confirm('לרוקן את סל המחזור לצמיתות?'))return;try{const batch=writeBatch(db);state.trash.forEach(x=>batch.delete(doc(db,'users',state.user.uid,'trash',String(x.id))));await batch.commit();showToast('סל המחזור רוקן');}catch(e){showToast('❌ לא ניתן לרוקן את הסל',null,3000,null,true);}}
         function downloadBlob(name, content, type='text/plain;charset=utf-8') { const blob=new Blob([content],{type}); const url=URL.createObjectURL(blob); const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500); }
-        function exportJson(){const exclude=document.getElementById('excludePrivateJsonCb')?.checked;const items=state.items.filter(x=>!(exclude && /שלי\s*-\s*פרטי/.test(x.category||'')));downloadBlob('mh-link-manager-export.json',JSON.stringify({schemaVersion:SCHEMA_VERSION,exportedAt:nowIso(),items},null,2),'application/json;charset=utf-8');showToast('📤 קובץ JSON יוצא בהצלחה');}
+        function getFormattedExportFilename(ext) {
+            const d = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            const datePart = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+            const timePart = `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+            return `MH_Link_Manager_Pro_${datePart}_${timePart}.${ext}`;
+        }
+        function exportJson(){
+            const exclude=document.getElementById('excludePrivateJsonCb')?.checked;
+            const items=state.items.filter(x=>!(exclude && /שלי\s*-\s*פרטי/.test(x.category||'')));
+            downloadBlob(getFormattedExportFilename('json'),JSON.stringify({schemaVersion:SCHEMA_VERSION,exportedAt:nowIso(),items},null,2),'application/json;charset=utf-8');
+            showToast('📤 קובץ JSON יוצא בהצלחה');
+        }
         function exportTxt(){
             const exclude=document.getElementById('excludePrivateCb')?.checked;
             const items=state.items.filter(x=>!(exclude && /שלי\s*-\s*פרטי/.test(x.category||'')));
             const txt=items.map(x=>[String(x.content||''),`תיאור: ${String(x.description||'')}`,`קטגוריה: ${String(x.category||'כללי')}`,`הערה: ${String(x.note||'')}`].join('\n')).join('\n\n');
-            downloadBlob('mh-link-manager-export.txt',txt);showToast('📤 קובץ TXT יוצא בהצלחה');
+            downloadBlob(getFormattedExportFilename('txt'),txt);
+            showToast('📤 קובץ TXT יוצא בהצלחה');
         }
         async function importJson(e){const file=e.target.files?.[0];if(!file)return;try{const data=JSON.parse(await file.text());const list=Array.isArray(data)?data:data.items;if(!Array.isArray(list))throw new Error('מבנה JSON לא מוכר');await importItems(list);showToast('✅ ייבוא JSON הושלם');}catch(err){showToast('❌ ייבוא נכשל: '+err.message,null,5000,null,true);}finally{e.target.value='';}}
         async function smartImport(e){
