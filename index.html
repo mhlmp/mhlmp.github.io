@@ -310,6 +310,10 @@
         .status-pill-mini.dead { background: rgba(239, 68, 68, 0.18); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
         .platform-pill-mini { font-size: 10px; padding: 2px 7px; border-radius: 8px; font-weight: 700; background: rgba(96, 165, 250, 0.12); color: var(--primary-color); border: 1px solid rgba(96, 165, 250, 0.25); }
 
+        .card-filter-chip { cursor: pointer; user-select: none; transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease; }
+        .card-filter-chip:hover { transform: translateY(-1px); filter: brightness(1.18); box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
+        .card-filter-chip:active { transform: scale(0.94); }
+
         .card-link { display: block; color: var(--primary-color); font-weight: 700; text-decoration: none; word-break: break-all; font-size: 15px; line-height: 1.45; margin: 0; direction: ltr; unicode-bidi: embed; text-align: right; opacity: 0.95; transition: opacity 0.2s, color 0.2s; }
         .card-link:hover { opacity: 1; text-decoration: underline; }
         .card-title-preview { font-size: 13px; color: var(--text-primary); font-weight: 600; opacity: 0.9; margin-top: 2px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
@@ -1143,7 +1147,7 @@
             });
 
             document.querySelectorAll('.modal-content, .edit-modal-box').forEach(box => {
-                                enableSwipeToDismiss(box, () => {
+                enableSwipeToDismiss(box, () => {
                     const wrap = box.closest('#trashModal, .edit-modal-wrap');
                     if (!wrap) return;
                     if (wrap.id === 'trashModal') {
@@ -1154,6 +1158,13 @@
                     }
                 });
             });
+
+            const aiMenuEl = document.getElementById('aiFloatingMenu');
+            if (aiMenuEl) {
+                enableSwipeToDismiss(aiMenuEl, () => {
+                    aiMenuEl.style.display = 'none';
+                });
+            }
 
             pauseBtn?.addEventListener('click', () => {
                 if (!scanController.isRunning) return;
@@ -1277,46 +1288,113 @@
             }).catch(() => {});
         }
 
-        // מנוע החלקה מהירה (Swipe to Dismiss) אוניברסלי לחלונות צפים ומודלים
+        // מנוע החלקה מהירה (Swipe to Dismiss) אוניברסלי לחלונות קופצים, התראות ומודלים - עובד במחשב (עכבר) ובפלאפון (מגע)
         function enableSwipeToDismiss(element, onDismiss) {
-            if (!element) return;
-            let startX = 0, currentX = 0, isDragging = false;
+            if (!element || element.dataset.swipeAttached === '1') return;
+            element.dataset.swipeAttached = '1';
 
-                       element.addEventListener('touchstart', (e) => {
-                if (e.target.closest('input, textarea, select, button, a, label')) { isDragging = false; return; }
-                startX = e.touches[0].clientX;
+            let startX = 0, startY = 0, currentX = 0;
+            let isPointerDown = false, isSwiping = false;
+
+            const isInteractiveTarget = (target) => {
+                if (!target || typeof target.closest !== 'function') return false;
+                return Boolean(target.closest('input, textarea, select, button, a, label'));
+            };
+
+            const onStart = (clientX, clientY, target) => {
+                if (isInteractiveTarget(target)) {
+                    isPointerDown = false;
+                    isSwiping = false;
+                    return;
+                }
+                startX = clientX;
+                startY = clientY;
                 currentX = 0;
-                isDragging = true;
-                element.style.transition = 'none';
-            }, { passive: true });
+                isPointerDown = true;
+                isSwiping = false;
+            };
 
-            element.addEventListener('touchmove', (e) => {
-                if (!isDragging) return;
-                currentX = e.touches[0].clientX - startX;
+            const onMove = (clientX, clientY, e = null) => {
+                if (!isPointerDown) return;
+                const dx = clientX - startX;
+                const dy = clientY - startY;
+
+                if (!isSwiping) {
+                    if (Math.abs(dx) < 8) return;
+                    if (Math.abs(dy) > Math.abs(dx)) {
+                        isPointerDown = false;
+                        return;
+                    }
+                    isSwiping = true;
+                    element.style.transition = 'none';
+                    element.style.userSelect = 'none';
+                }
+
+                if (e && e.cancelable) e.preventDefault();
+                currentX = dx;
                 element.style.transform = `translateX(${currentX}px)`;
-                element.style.opacity = Math.max(0.3, 1 - Math.abs(currentX) / 160);
-            }, { passive: true });
+                element.style.opacity = String(Math.max(0.25, 1 - Math.abs(currentX) / 180));
+            };
 
-            element.addEventListener('touchend', () => {
-                if (!isDragging) return;
-                isDragging = false;
+            const onEnd = () => {
+                if (!isPointerDown) return;
+                isPointerDown = false;
+                element.style.userSelect = '';
+
+                if (!isSwiping) {
+                    currentX = 0;
+                    return;
+                }
+                isSwiping = false;
+
                 element.style.transition = 'transform 0.22s ease, opacity 0.22s ease';
-                if (Math.abs(currentX) > 75) {
-                    element.style.transform = `translateX(${currentX > 0 ? '120%' : '-120%'})`;
+                if (Math.abs(currentX) > 65) {
+                    const dir = currentX > 0 ? '120%' : '-120%';
+                    element.style.transform = `translateX(${dir})`;
                     element.style.opacity = '0';
                     setTimeout(() => {
+                        element.style.transition = '';
                         element.style.transform = '';
                         element.style.opacity = '';
                         if (typeof onDismiss === 'function') onDismiss();
-                    }, 200);
+                    }, 210);
                 } else {
-                    element.style.transform = 'translateX(0)';
-                    element.style.opacity = '1';
+                    element.style.transform = '';
+                    element.style.opacity = '';
                 }
                 currentX = 0;
+            };
+
+            // תמיכה במגע (טלפון / טאבלט)
+            element.addEventListener('touchstart', (e) => {
+                if (e.touches.length !== 1) return;
+                onStart(e.touches[0].clientX, e.touches[0].clientY, e.target);
+            }, { passive: true });
+
+            element.addEventListener('touchmove', (e) => {
+                if (!isPointerDown || e.touches.length !== 1) return;
+                onMove(e.touches[0].clientX, e.touches[0].clientY, e);
+            }, { passive: false });
+
+            element.addEventListener('touchend', onEnd);
+            element.addEventListener('touchcancel', onEnd);
+
+            // תמיכה בעכבר (מחשב)
+            element.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
+                onStart(e.clientX, e.clientY, e.target);
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isPointerDown) return;
+                onMove(e.clientX, e.clientY, e);
+            });
+
+            window.addEventListener('mouseup', () => {
+                if (!isPointerDown) return;
+                onEnd();
             });
         }
-
         function setupEventListeners() {
             document.querySelectorAll('.drop-trigger').forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -1412,13 +1490,35 @@
                 const item = state.items.find(i => i.id === id);
                 if (!item) return;
 
-                const tagChip = e.target.closest('.ai-tag-chip');
-                if (tagChip) {
+                const filterChip = e.target.closest('.card-filter-chip, .ai-tag-chip');
+                if (filterChip) {
                     e.stopPropagation();
+                    if (state.isSelectionMode) return;
+                    const filterValue = (
+                        filterChip.getAttribute('data-filter-query') ||
+                        filterChip.getAttribute('data-tag') ||
+                        filterChip.textContent ||
+                        ''
+                    ).trim();
                     const searchEl = document.getElementById('searchInput');
-                    if (searchEl) {
-                        searchEl.value = tagChip.getAttribute('data-tag') || '';
-                        searchEl.dispatchEvent(new Event('input'));
+                    if (searchEl && filterValue) {
+                        const catFilterEl = document.getElementById('categoryFilter');
+                        if (catFilterEl && catFilterEl.value) catFilterEl.value = '';
+                        if (state.showOnlyDead) {
+                            state.showOnlyDead = false;
+                            document.getElementById('toggleDeadBtn')?.classList.remove('dead-active');
+                        }
+                        if (state.showOnlyParked) {
+                            state.showOnlyParked = false;
+                            document.getElementById('toggleParkedBtn')?.classList.remove('parked-active');
+                        }
+                        if (!state.showDuplicates) {
+                            state.showDuplicates = true;
+                            document.getElementById('toggleDuplicatesBtn')?.classList.remove('dup-active');
+                        }
+                        searchEl.value = filterValue;
+                        saveUiSettings();
+                        renderList();
                     }
                     return;
                 }
@@ -1792,15 +1892,81 @@
             });
 
             const isHashSearch  = /^#\s*\d+$/.test(query);
-            const isDupSearch   = query === '#כפול' || query === '#כפולים';
+            const isDupSearch   = query === '#כפול' || query === '#כפולים' || query === 'כפול';
             const isolateDuplicatesMode = !state.showDuplicates || isDupSearch;
 
-                        const matchesSearchText = (item, meta) => {
+            const getItemStatusTokens = (item) => {
+                const hasCorruptedErrorSummary = item.aiSummary && (
+                    item.aiSummary.toLowerCase().includes('failed to fetch') ||
+                    item.aiSummary.startsWith('שגיאה: ספק ה-AI נכשל') ||
+                    (item.siteStatus === 'active' && hasForbiddenSummaryPattern(item.aiSummary))
+                );
+                const effectiveStatus = hasCorruptedErrorSummary ? null : item.siteStatus;
+                const sumLower = (item.aiSummary || '').toLowerCase();
+                const isRemovedOrExpired = effectiveStatus === 'dead' && (
+                    item.httpCode === 404 ||
+                    item.httpCode === 410 ||
+                    /הוסר|פג תוקף|אינו קיים|נמחק|בוטל|אינם קיימים/.test(sumLower)
+                );
+                const isServerDown = effectiveStatus === 'dead' && item.httpCode && item.httpCode >= 500;
+
+                const tokens = [];
+                if (hasCorruptedErrorSummary) {
+                    tokens.push('⚠️ דורש סריקה', 'דורש סריקה', '⚠️ שגיאת תקשורת בסריקה קודמת — לחץ ✨ לסריקה מתוקנת');
+                } else if (effectiveStatus === 'active') {
+                    tokens.push('🟢 פעיל', 'פעיל', '🟢 פעיל ומאומת', 'פעיל ומאומת', 'active');
+                } else if (effectiveStatus === 'parked') {
+                    tokens.push('🟠 חניה', 'חניה', '🟠 דומיין בחניה / למכירה', 'דומיין בחניה / למכירה', 'parked');
+                } else if (effectiveStatus === 'dead') {
+                    tokens.push('🔴 לא פעיל', 'לא פעיל', '🔴 קישור לא תקין / לא פעיל', 'קישור לא תקין / לא פעיל', 'dead');
+                    if (isRemovedOrExpired) {
+                        tokens.push('🔴 הוסר / לא קיים', 'הוסר / לא קיים', '🔴 הוסר / פג תוקף / לא קיים', 'הוסר / פג תוקף / לא קיים');
+                    }
+                    if (isServerDown) {
+                        tokens.push(
+                            `🔴 לא פעיל (${item.httpCode})`,
+                            `לא פעיל (${item.httpCode})`,
+                            `🔴 האתר לא פעיל (שגיאת שרת ${item.httpCode})`,
+                            `האתר לא פעיל (שגיאת שרת ${item.httpCode})`
+                        );
+                    }
+                } else if (effectiveStatus === 'unknown') {
+                    tokens.push('⚪ לא אומת', 'לא אומת', '⚪ לא ניתן לאמת כרגע', 'לא ניתן לאמת כרגע', 'unknown');
+                } else if (effectiveStatus === 'text' || item.type === 'text') {
+                    tokens.push('📄 ניתוח טקסט', 'ניתוח טקסט', 'text');
+                }
+
+                const platformLabel = item.type === 'link' ? detectPlatformBadge(item.content) : '';
+                if (platformLabel) {
+                    tokens.push(platformLabel.toLowerCase(), platformLabel.replace(/^[^\wא-ת]+/, '').trim().toLowerCase());
+                }
+                return tokens.map(t => t.toLowerCase());
+            };
+
+            const KNOWN_STATUS_QUERIES = new Set([
+                '🟢 פעיל', 'פעיל', '🟢 פעיל ומאומת', 'פעיל ומאומת',
+                '🟠 חניה', 'חניה', '🟠 דומיין בחניה / למכירה', 'דומיין בחניה / למכירה',
+                '🔴 לא פעיל', 'לא פעיל', '🔴 קישור לא תקין / לא פעיל', 'קישור לא תקין / לא פעיל',
+                '🔴 הוסר / לא קיים', 'הוסר / לא קיים', '🔴 הוסר / פג תוקף / לא קיים', 'הוסר / פג תוקף / לא קיים',
+                '⚪ לא אומת', 'לא אומת', '⚪ לא ניתן לאמת כרגע', 'לא ניתן לאמת כרגע',
+                '⚠️ דורש סריקה', 'דורש סריקה', '📄 ניתוח טקסט', 'ניתוח טקסט'
+            ]);
+
+            const isStrictStatusQuery = KNOWN_STATUS_QUERIES.has(query) || /^🔴\s*לא פעיל\s*\(\d+\)$/.test(query) || /^🔴\s*האתר לא פעיל/.test(query);
+
+            const matchesSearchText = (item, meta) => {
                 if (isHashSearch) {
                     const n = parseInt(query.replace(/\D/g, ''), 10);
                     return meta.visualIndex === n;
                 }
                 if (isDupSearch || !query) return true;
+
+                const statusTokens = getItemStatusTokens(item);
+                if (isStrictStatusQuery) {
+                    return statusTokens.includes(query);
+                }
+                if (statusTokens.includes(query)) return true;
+
                 const safeTags = (item.aiTags || []).join(' ').toLowerCase();
                 return (item.content || '').toLowerCase().includes(query) ||
                     (item.description || '').toLowerCase().includes(query) ||
@@ -1925,10 +2091,10 @@
             const statusCardClass = effectiveStatus === 'dead'
                 ? 'status-dead-card'
                 : (effectiveStatus === 'parked' ? 'status-parked-card' : '');
-            div.className = `card ${item.isPinned ? 'pinned' : ''} ${statusCardClass} ${state.selectedIds.has(item.id) ? 'selected' : ''} ${state.expandAllCards ? 'is-expanded' : ''}`;
+            div.className = `card ${item.isPinned ? 'pinned' : ''} ${statusCardClass} ${state.selectedIds.has(item.id) ? 'selected' : ''}${(state.expandAllCards || item.isScanning) ? 'is-expanded' : ''}`;
             div.setAttribute('data-id', item.id);
 
-                        const safeContent = escapeHtml(item.content);
+            const safeContent = escapeHtml(item.content);
             const rawHref = String(item.content || '').trim().replace(/^[\/\\]+/, '');
             const safeHref = escapeHtml(/^https?:\/\//i.test(rawHref) ? rawHref : 'https://' + rawHref);
             const contentHtml = item.type === 'link'
@@ -1948,26 +2114,26 @@
             if (item.isScanning) {
                 headerStatusPill = `<span class="status-pill-mini"><span class="spinner-small" style="width:10px;height:10px;margin:0;"></span> מאבחן...</span>`;
             } else if (hasCorruptedErrorSummary) {
-                headerStatusPill = `<span class="status-pill-mini parked" title="לחץ על ✨ לסריקה חוזרת">⚠️ דורש סריקה</span>`;
+                headerStatusPill = `<span class="status-pill-mini parked card-filter-chip" data-filter-query="⚠️ דורש סריקה" title="לחץ לסינון כל הפריטים בסטטוס: דורש סריקה">⚠️ דורש סריקה</span>`;
             } else if (effectiveStatus === 'active') {
-                headerStatusPill = `<span class="status-pill-mini active">🟢 פעיל</span>`;
+                headerStatusPill = `<span class="status-pill-mini active card-filter-chip" data-filter-query="🟢 פעיל" title="לחץ לסינון כל הפריטים בסטטוס: פעיל">🟢 פעיל</span>`;
             } else if (effectiveStatus === 'parked') {
-                headerStatusPill = `<span class="status-pill-mini parked">🟠 חניה</span>`;
+                headerStatusPill = `<span class="status-pill-mini parked card-filter-chip" data-filter-query="🟠 חניה" title="לחץ לסינון כל הפריטים בסטטוס: חניה">🟠 חניה</span>`;
             } else if (effectiveStatus === 'dead') {
                 if (isRemovedOrExpired) {
-                    headerStatusPill = `<span class="status-pill-mini dead">🔴 הוסר / לא קיים</span>`;
+                    headerStatusPill = `<span class="status-pill-mini dead card-filter-chip" data-filter-query="🔴 הוסר / לא קיים" title="לחץ לסינון כל הפריטים בסטטוס: הוסר / לא קיים">🔴 הוסר / לא קיים</span>`;
                 } else if (isServerDown) {
-                    headerStatusPill = `<span class="status-pill-mini dead">🔴 לא פעיל (${item.httpCode})</span>`;
+                    headerStatusPill = `<span class="status-pill-mini dead card-filter-chip" data-filter-query="🔴 לא פעיל (${item.httpCode})" title="לחץ לסינון כל הפריטים בסטטוס: לא פעיל (${item.httpCode})">🔴 לא פעיל (${item.httpCode})</span>`;
                 } else {
-                    headerStatusPill = `<span class="status-pill-mini dead">🔴 לא פעיל</span>`;
+                    headerStatusPill = `<span class="status-pill-mini dead card-filter-chip" data-filter-query="🔴 לא פעיל" title="לחץ לסינון כל הפריטים בסטטוס: לא פעיל">🔴 לא פעיל</span>`;
                 }
             } else if (effectiveStatus === 'unknown') {
-                headerStatusPill = `<span class="status-pill-mini parked">⚪ לא אומת</span>`;
+                headerStatusPill = `<span class="status-pill-mini parked card-filter-chip" data-filter-query="⚪ לא אומת" title="לחץ לסינון כל הפריטים בסטטוס: לא אומת">⚪ לא אומת</span>`;
             }
 
             const platformLabel = item.type === 'link' ? detectPlatformBadge(item.content) : '';
-            const platformPill = platformLabel ? `<span class="platform-pill-mini">${platformLabel}</span>` : '';
-
+            const platformClean = platformLabel ? platformLabel.replace(/^[^\wא-ת]+/, '').trim() : '';
+            const platformPill = platformLabel ? `<span class="platform-pill-mini card-filter-chip" data-filter-query="${escapeHtml(platformClean)}" title="לחץ לסינון לפי ${escapeHtml(platformClean)}">${platformLabel}</span>` : '';
             let aiHtml = '';
             if (item.isScanning) {
                 aiHtml = `<div class="ai-box"><div class="spinner-small"></div> בודק שרת, שולף נתונים אמיתיים ומאמת פלט...</div>`;
@@ -2017,7 +2183,7 @@
                     <div class="ai-header">
                         <span style="display:flex;align-items:center;">
                             <span style="font-size:14px;margin-left:6px;cursor:help;user-select:none;" ${modelTooltip}>${modelEmoji}</span>
-                            <span class="${statusClass}">${statusText}</span>
+                            <span class="${statusClass} card-filter-chip" data-filter-query="${escapeHtml(statusText)}" title="לחץ לסינון לפי סטטוס זה">${statusText}</span>
                         </span>
                         <div style="display:flex;gap:4px;align-items:center;">
                             <button class="icon-btn ai-rescan-inline-btn" title="סרוק מחדש פריט זה כעת" style="width:22px;height:22px;font-size:11px;background:rgba(127,127,127,0.15);border-radius:4px;">🔄</button>
@@ -2035,11 +2201,10 @@
                 <div class="card-header-bar">
                     <div class="card-header-content">
                         <div class="card-meta-row">
-                            <span class="card-index-badge">#${visualIndex}</span>
-                            <span class="tag-category" title="${escapeHtml(item.category || 'כללי')}">${escapeHtml(item.category || 'כללי')}</span>
-                            ${platformPill}
-                            ${headerStatusPill}
-                            <span class="duplicate-badge" style="display:${isDup ? 'inline' : 'none'}">כפול</span>
+                            <span class="card-index-badge card-filter-chip" data-filter-query="#${visualIndex}" title="לחץ לסינון פריט #${visualIndex}">#${visualIndex}</span>
+                            <span class="tag-category card-filter-chip" data-filter-query="${escapeHtml(item.category || 'כללי')}" title="לחץ לסינון כל הפריטים בקבוצה: ${escapeHtml(item.category \vert{}\vert{} 'כללי')}">${escapeHtml(item.category || 'כללי')}</span>
+                            ${platformPill}${headerStatusPill}
+                            <span class="duplicate-badge card-filter-chip" data-filter-query="#כפול" title="לחץ להצגת כפילויות" style="display:${isDup ? 'inline' : 'none'}">כפול</span>
                             ${item.isPinned ? '<span style="color:var(--accent-gold); font-size:11px;">📌</span>' : ''}
                         </div>
                         ${contentHtml}
@@ -2116,7 +2281,7 @@
                 e.stopPropagation();
                 if (!isLongPress) {
                     const qs = JSON.parse(localStorage.getItem('aiQuickSettings') || '{}');
-                    scanSingleItem(item.id, qs.provider || null, qs.urlOnly || false);
+                    scanSingleItem(item.id, qs.provider || null, false);
                 }
             });
             
