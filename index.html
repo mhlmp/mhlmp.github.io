@@ -2243,6 +2243,7 @@
         };
 
         let isServerDataArrived = false;
+        let isInitialSnapshotRendered = false;
         let forceHideLockScreenTimer;
 
         function nowIso() { return new Date().toISOString(); }
@@ -2850,6 +2851,7 @@
                     state.isOffline = !navigator.onLine;
                     state.user = user;
                     isServerDataArrived = false;
+                    isInitialSnapshotRendered = false;
                     
                     try { if (navigator.onLine) await enableNetwork(db); } catch(e) {}
                     
@@ -2873,6 +2875,8 @@
                     
                     state.unsubItems = onSnapshot(itemsRef, { includeMetadataChanges: true }, (snapshot) => {
                         let structuralChanges = false;
+                        const modifiedIdsInPlace = [];
+
                         snapshot.docChanges().forEach((change) => {
                             const data = change.doc.data();
                             if (change.type === "added") {
@@ -2884,11 +2888,22 @@
                             if (change.type === "modified") {
                                 const idx = state.items.findIndex(i => i.id === data.id);
                                 if (idx > -1) {
-                                    const wasScanning = state.items[idx].isScanning;
+                                    const prev = state.items[idx];
+                                    const wasScanning = prev.isScanning;
+                                    const keepExpanded = prev._keepExpanded;
                                     state.items[idx] = data;
                                     if (wasScanning) state.items[idx].isScanning = true;
-                                    if (scanController.isRunning && !state.showOnlyDead && !state.showOnlyParked) {
-                                        updateCardInPlace(data.id);
+                                    if (keepExpanded) state.items[idx]._keepExpanded = true;
+
+                                    const layoutChanged =
+                                        (prev.category || 'כללי') !== (data.category || 'כללי') ||
+                                        Boolean(prev.isPinned) !== Boolean(data.isPinned) ||
+                                        (prev.content || '') !== (data.content || '') ||
+                                        (prev.date || '') !== (data.date || '') ||
+                                        ((state.showOnlyDead || state.showOnlyParked) && prev.siteStatus !== data.siteStatus);
+
+                                    if (!layoutChanged) {
+                                        modifiedIdsInPlace.push(data.id);
                                     } else {
                                         structuralChanges = true;
                                     }
@@ -2906,9 +2921,12 @@
 
                         updateStatusBadges(false);
 
-                        if (structuralChanges || (snapshot.metadata.fromCache && !scanController.isRunning)) {
+                        if (structuralChanges || !isInitialSnapshotRendered) {
+                            isInitialSnapshotRendered = true;
                             renderList();
                             updateCategoryDropdowns();
+                        } else if (modifiedIdsInPlace.length > 0) {
+                            modifiedIdsInPlace.forEach(id => updateCardInPlace(id));
                         }
                         updateSyncStatus(navigator.onLine ? 'online' : 'offline', navigator.onLine ? 'מחובר ✓' : 'מקומי');
                     }, (err) => {
@@ -2939,6 +2957,7 @@
                     });
                 } else {
                     state.user = null; state.items = []; state.trash = []; state.selectedIds.clear(); state.isSelectionMode = false;
+                    isInitialSnapshotRendered = false;
                     document.body.classList.remove('selection-mode-active');
                     if (forceHideLockScreenTimer) clearTimeout(forceHideLockScreenTimer);
                     handleLockScreen(false);
@@ -3122,17 +3141,46 @@
             const item = state.items.find(i => i.id === id);
             if (!existingCard || !item) return;
 
+            const prevRect = existingCard.getBoundingClientRect();
+            const isTargetVisible = prevRect.bottom > 0 && prevRect.top < window.innerHeight;
+            let anchorEl = null;
+            let anchorPrevTop = 0;
+
+            if (!isTargetVisible && prevRect.bottom <= 0) {
+                for (const cardEl of document.querySelectorAll('#listContainer .card')) {
+                    if (cardEl === existingCard) continue;
+                    const r = cardEl.getBoundingClientRect();
+                    if (r.bottom > 0 && r.top < window.innerHeight) {
+                        anchorEl = cardEl;
+                        anchorPrevTop = r.top;
+                        break;
+                    }
+                }
+            }
+
             const wasExpanded = existingCard.classList.contains('is-expanded');
             const wasActionsShown = existingCard.classList.contains('show-actions');
             const visualMetaMap = getVisualMetaMap();
             const newCard = createCard(item, visualMetaMap.get(id) || {});
 
-            if (wasExpanded || state.expandAllCards || item.isScanning) newCard.classList.add('is-expanded');
+            if (wasExpanded || state.expandAllCards || item.isScanning || item._keepExpanded) newCard.classList.add('is-expanded');
             if (wasActionsShown) newCard.classList.add('show-actions');
             newCard.style.animation = 'none';
 
             existingCard.replaceWith(newCard);
             updateStatusBadges(false);
+
+            if (isTargetVisible) {
+                const drift = newCard.getBoundingClientRect().top - prevRect.top;
+                if (Math.abs(drift) > 1) {
+                    window.scrollTo({ top: window.scrollY + drift, behavior: 'instant' });
+                }
+            } else if (anchorEl && anchorEl.isConnected) {
+                const drift = anchorEl.getBoundingClientRect().top - anchorPrevTop;
+                if (Math.abs(drift) > 1) {
+                    window.scrollTo({ top: window.scrollY + drift, behavior: 'instant' });
+                }
+            }
         }
 
         function renderList() {
@@ -3528,6 +3576,7 @@
             div.querySelector('.expand-btn')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 div.classList.toggle('is-expanded');
+                item._keepExpanded = div.classList.contains('is-expanded');
             });
 
             const btnAi = div.querySelector('.btn-ai-scan');
@@ -5674,7 +5723,6 @@ STRICT RULES:
         }
 
         // Keep cards cheap to render when the list grows substantially.
-        const perfStyle=document.createElement('style');perfStyle.textContent='.card{content-visibility:auto;contain-intrinsic-size:220px;}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;}}';document.head.appendChild(perfStyle);
-    </script>
+        const perfStyle=document.createElement('style');perfStyle.textContent='.card{content-visibility:auto;contain-intrinsic-size:auto 140px;}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;}}';document.head.appendChild(perfStyle);    </script>
 </body>
 </html>
