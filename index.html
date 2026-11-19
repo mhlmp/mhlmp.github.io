@@ -1942,11 +1942,15 @@
                         <label for="importJsonInput">📥 ייבוא קובץ JSON</label>
                         <input type="file" id="importJsonInput" accept=".json">
                         <div class="dropdown-divider"></div>
-                        <button id="exportJsonBtn">📤 ייצוא לקובץ JSON</button>
-                        <div id="excludePrivateJsonWrapper" style="display:none; padding: 8px 18px; text-align: right; background: rgba(127,127,127,0.05);">
-                            <label style="display:flex; align-items:center; justify-content:flex-end; gap:8px; cursor:pointer; font-size:13px; padding:0; color:var(--text-primary);">
-                                החרג 'שלי - פרטי'
-                                <input type="checkbox" id="excludePrivateJsonCb" style="cursor:pointer; transform:scale(1.2); accent-color:var(--primary-color);">
+                        <button id="exportJsonBtn">📤 ייצוא גיבוי JSON מלא</button>
+                        <div id="excludePrivateJsonWrapper" class="dropdown-private-toggle">
+                            <label for="excludePrivateJsonCb">
+                                <span class="toggle-text-wrap">
+                                    <span class="toggle-title">🛡️ ללא קטגוריית פרטי</span>
+                                    <span id="excludePrivateJsonHint" class="toggle-hint">מייצא את כל הקטגוריות (גיבוי מלא)</span>
+                                </span>
+                                <input type="checkbox" id="excludePrivateJsonCb">
+                                <span class="toggle-switch" aria-hidden="true"></span>
                             </label>
                         </div>
                     </div>
@@ -2761,8 +2765,53 @@
             document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
             document.getElementById('exportTxtBtn')?.addEventListener('click', exportTxt);
             document.getElementById('excludePrivateCb')?.addEventListener('change', updateTxtExportUi);
+            document.getElementById('excludePrivateJsonCb')?.addEventListener('change', updateJsonExportUi);
             document.querySelector('.drop-trigger[data-target="txtMenu"]')?.addEventListener('click', updateTxtExportUi);
+            document.querySelector('.drop-trigger[data-target="jsonMenu"]')?.addEventListener('click', updateJsonExportUi);
             updateTxtExportUi();
+            updateJsonExportUi();
+
+            // סגירה בלחיצה על הרקע הכהה של כל מודלי העריכה וההגדרות (בלי להיסגר בטעות בזמן סימון טקסט)
+            document.querySelectorAll('.edit-modal-wrap').forEach(modal => {
+                let startedOnBackdrop = false;
+                const markBackdrop = (e) => { startedOnBackdrop = (e.target === modal); };
+                modal.addEventListener('mousedown', markBackdrop);
+                modal.addEventListener('touchstart', markBackdrop, { passive: true });
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal && startedOnBackdrop) {
+                        modal.style.display = 'none';
+                    }
+                    startedOnBackdrop = false;
+                });
+            });
+
+            // סגירה מדורגת במקש Escape: מודלים -> תפריטים -> מצב בחירה מרובה
+            window.addEventListener('keydown', (e) => {
+                if (e.key !== 'Escape') return;
+                const openEditModals = [...document.querySelectorAll('.edit-modal-wrap')]
+                    .filter(m => getComputedStyle(m).display !== 'none');
+                if (openEditModals.length > 0) {
+                    openEditModals.forEach(m => { m.style.display = 'none'; });
+                    return;
+                }
+                const trashModal = document.getElementById('trashModal');
+                if (trashModal?.classList.contains('open')) {
+                    closeTrashModal();
+                    return;
+                }
+                const aiFloat = document.getElementById('aiFloatingMenu');
+                const hasOpenMenu = Boolean(
+                    document.querySelector('.dropdown-content.show') ||
+                    (aiFloat && getComputedStyle(aiFloat).display !== 'none')
+                );
+                if (hasOpenMenu) {
+                    closeAllMenus();
+                    return;
+                }
+                if (state.isSelectionMode) {
+                    exitSelectionMode();
+                }
+            });
             
             document.getElementById('listContainer')?.addEventListener('click', (e) => {
                 const card = e.target.closest('.card');
@@ -5400,8 +5449,12 @@ STRICT RULES:
                 };
 
                 toast._clearToastTimer = clearTimer;
-                toast.addEventListener('mouseenter', pauseTimer);
-                toast.addEventListener('mouseleave', startTimer);
+                toast.addEventListener('pointerenter', (e) => {
+                    if (e.pointerType === 'mouse') pauseTimer();
+                });
+                toast.addEventListener('pointerleave', (e) => {
+                    if (e.pointerType === 'mouse') startTimer();
+                });
             }
 
             host.appendChild(toast);
@@ -5502,18 +5555,43 @@ STRICT RULES:
             document.getElementById('editModal').style.display = 'flex';
         }
         async function handleEditSubmit(e) {
-            e.preventDefault(); const id = Number(document.getElementById('editItemId').value);
-            const item = state.items.find(x=>x.id===id); if (!item) return;
-            const content = document.getElementById('editItemContent').value.trim(); if (!content) return;
-                        const contentChanged = (item.content || '').trim() !== content;
-            Object.assign(item, {content, description:document.getElementById('editItemDescription').value.trim(), category:document.getElementById('editItemCategory').value.trim() || 'כללי', note:document.getElementById('editItemNote').value.trim(), type:URL_REGEX.test(content)?'link':'text', updatedAt:nowIso()});
+            e.preventDefault();
+            const id = Number(document.getElementById('editItemId').value);
+            const item = state.items.find(x => x.id === id);
+            if (!item) return;
+            const content = document.getElementById('editItemContent').value.trim();
+            if (!content) return;
+
+            const prevCategory = (item.category || 'כללי').trim();
+            const newCategory = document.getElementById('editItemCategory').value.trim() || 'כללי';
+            const contentChanged = (item.content || '').trim() !== content;
+            const categoryChanged = prevCategory !== newCategory;
+
+            Object.assign(item, {
+                content,
+                description: document.getElementById('editItemDescription').value.trim(),
+                category: newCategory,
+                note: document.getElementById('editItemNote').value.trim(),
+                type: URL_REGEX.test(content) ? 'link' : 'text',
+                updatedAt: nowIso()
+            });
+
             if (contentChanged) {
                 // הניתוח הישן שייך לקישור הקודם
                 delete item.aiSummary; delete item.aiTags; delete item.aiModel; delete item.siteStatus; delete item.httpCode;
-                setDoc(doc(db,'users',state.user.uid,'items',String(item.id)), aiClearPatch(), {merge:true}).catch(err=>console.error(err));
+                setDoc(doc(db, 'users', state.user.uid, 'items', String(item.id)), aiClearPatch(), { merge: true }).catch(err => console.error(err));
             }
+
             await saveItemToCloud(item);
-            document.getElementById('editModal').style.display='none'; updateCategoryDropdowns(); renderList(); showToast('✅ הפריט עודכן');
+            document.getElementById('editModal').style.display = 'none';
+
+            if (categoryChanged || contentChanged) {
+                updateCategoryDropdowns();
+                renderList();
+            } else {
+                updateCardInPlace(id);
+            }
+            showToast('✅ הפריט עודכן');
         }
         window.openEditAiModal = function(item) {
             document.getElementById('editAiItemId').value = item.id;
@@ -5617,11 +5695,58 @@ STRICT RULES:
             const timePart = `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
             return `MH_Link_Manager_Pro_${datePart}_${timePart}${suffix}.${ext}`;
         }
+        function updateJsonExportUi() {
+            const cb = document.getElementById('excludePrivateJsonCb');
+            const wrapper = document.getElementById('excludePrivateJsonWrapper');
+            const btn = document.getElementById('exportJsonBtn');
+            const hint = document.getElementById('excludePrivateJsonHint');
+            const exclude = cb ? cb.checked : false;
+            const privateCount = state.items.filter(x => isPrivateCategory(x.category)).length;
+
+            if (wrapper) wrapper.classList.toggle('is-active', exclude);
+            if (btn) {
+                btn.textContent = exclude
+                    ? '📤 ייצוא JSON (ללא פרטי)'
+                    : '📤 ייצוא גיבוי JSON מלא';
+            }
+            if (hint) {
+                if (exclude) {
+                    hint.textContent = privateCount > 0
+                        ? `יוחרגו ${privateCount} פריטים פרטיים`
+                        : 'מחריג כל קטגוריית פרטי';
+                } else {
+                    hint.textContent = privateCount > 0
+                        ? `כולל ${privateCount} פריטים פרטיים (גיבוי מלא)`
+                        : 'מייצא את כל הקטגוריות (גיבוי מלא)';
+                }
+            }
+        }
         function exportJson(){
-            const exclude=document.getElementById('excludePrivateJsonCb')?.checked;
-            const items=state.items.filter(x=>!(exclude && isPrivateCategory(x.category)));
-            downloadBlob(getFormattedExportFilename('json'),JSON.stringify({schemaVersion:SCHEMA_VERSION,exportedAt:nowIso(),items},null,2),'application/json;charset=utf-8');
-            showToast('📤 קובץ JSON יוצא בהצלחה');
+            const exclude = !!document.getElementById('excludePrivateJsonCb')?.checked;
+            const items = exclude
+                ? state.items.filter(x => !isPrivateCategory(x.category))
+                : state.items;
+            closeAllMenus();
+            if (!items.length) {
+                showToast('⚠️ אין פריטים זמינים לייצוא', null, 3200, null, true);
+                return;
+            }
+            const suffix = exclude ? '_NoPrivate' : '';
+            downloadBlob(
+                getFormattedExportFilename('json', suffix),
+                JSON.stringify({ schemaVersion: SCHEMA_VERSION, exportedAt: nowIso(), items }, null, 2),
+                'application/json;charset=utf-8'
+            );
+            if (exclude) {
+                const excludedCount = state.items.length - items.length;
+                showToast(
+                    excludedCount > 0
+                        ? `📤 יוצאו ${items.length} פריטים ל-JSON (${excludedCount} פרטיים הוחרגו)`
+                        : `📤 יוצאו ${items.length} פריטים ל-JSON (ללא פרטי)`
+                );
+            } else {
+                showToast(`📤 גיבוי JSON מלא יוצא בהצלחה (${items.length} פריטים)`);
+            }
         }
         function exportTxt(){
             const cb = document.getElementById('excludePrivateCb');
