@@ -269,6 +269,82 @@
         .dropdown-content button:hover, .dropdown-content label:hover { background-color: rgba(127,127,127,0.12); color: var(--primary-color); }
         input[type="file"] { display: none; }
         .dropdown-divider { border-top: 1px solid var(--glass-border); margin: 6px 0; }
+        .dropdown-private-toggle {
+            margin: 4px 10px 6px;
+            border-radius: 10px;
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            background: rgba(245, 158, 11, 0.08);
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
+        .dropdown-private-toggle.is-active {
+            border-color: rgba(0, 166, 81, 0.38);
+            background: rgba(0, 166, 81, 0.1);
+        }
+        .dropdown-content .dropdown-private-toggle label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 10px;
+            border-radius: 10px;
+            color: var(--text-primary);
+            user-select: none;
+        }
+        .dropdown-content .dropdown-private-toggle label:hover {
+            background-color: rgba(127, 127, 127, 0.08);
+            color: var(--text-primary);
+        }
+        .dropdown-private-toggle .toggle-text-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            text-align: right;
+        }
+        .dropdown-private-toggle .toggle-title {
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+        .dropdown-private-toggle .toggle-hint {
+            font-size: 11px;
+            color: var(--text-secondary);
+            line-height: 1.25;
+        }
+        .dropdown-private-toggle input[type="checkbox"] {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+            pointer-events: none;
+        }
+        .dropdown-private-toggle .toggle-switch {
+            position: relative;
+            flex-shrink: 0;
+            width: 36px;
+            height: 20px;
+            border-radius: 999px;
+            background: rgba(127, 127, 127, 0.38);
+            direction: ltr;
+            transition: background-color 0.2s ease;
+        }
+        .dropdown-private-toggle .toggle-switch::after {
+            content: "";
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .dropdown-private-toggle input[type="checkbox"]:checked + .toggle-switch {
+            background: var(--accent-green);
+        }
+        .dropdown-private-toggle input[type="checkbox"]:checked + .toggle-switch::after {
+            transform: translateX(16px);
+        }
 
         details { margin-bottom: 12px; }
         summary { padding: 12px; cursor: pointer; font-weight: 700; color: var(--primary-color); background: rgba(127,127,127,0.05); list-style: none; display: flex; justify-content: center; border-radius: var(--radius); transition: background 0.2s; }
@@ -1850,11 +1926,15 @@
                 <div class="dropdown">
                     <button class="action-btn btn-txt drop-trigger" data-target="txtMenu">📄 טקסט ▼</button>
                     <div id="txtMenu" class="dropdown-content">
-                        <button id="exportTxtBtn">📤 ייצוא רשימה ל-TXT</button>
-                        <div id="excludePrivateWrapper" style="display:none; padding: 8px 18px; text-align: right; background: rgba(127,127,127,0.05);">
-                            <label style="display:flex; align-items:center; justify-content:flex-end; gap:8px; cursor:pointer; font-size:13px; padding:0; color:var(--text-primary);">
-                                החרג 'שלי - פרטי'
-                                <input type="checkbox" id="excludePrivateCb" style="cursor:pointer; transform:scale(1.2); accent-color:var(--primary-color);">
+                        <button id="exportTxtBtn">📤 ייצוא ל-TXT (ללא פרטי)</button>
+                        <div id="excludePrivateWrapper" class="dropdown-private-toggle is-active">
+                            <label for="excludePrivateCb">
+                                <span class="toggle-text-wrap">
+                                    <span class="toggle-title">🛡️ ללא קטגוריית פרטי</span>
+                                    <span id="excludePrivateHint" class="toggle-hint">מחריג את כל הפריטים הפרטיים</span>
+                                </span>
+                                <input type="checkbox" id="excludePrivateCb" checked>
+                                <span class="toggle-switch" aria-hidden="true"></span>
                             </label>
                         </div>
                         <div class="dropdown-divider"></div>
@@ -2651,6 +2731,9 @@
             document.getElementById('editAiForm')?.addEventListener('submit', handleEditAiSubmit);
             document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
             document.getElementById('exportTxtBtn')?.addEventListener('click', exportTxt);
+            document.getElementById('excludePrivateCb')?.addEventListener('change', updateTxtExportUi);
+            document.querySelector('.drop-trigger[data-target="txtMenu"]')?.addEventListener('click', updateTxtExportUi);
+            updateTxtExportUi();
             
             document.getElementById('listContainer')?.addEventListener('click', (e) => {
                 const card = e.target.closest('.card');
@@ -5359,25 +5442,79 @@ STRICT RULES:
         async function restoreAllTrash(){for(const item of [...state.trash]) await restoreTrashItem(item);}
         async function emptyTrash(){if(!state.user||!confirm('לרוקן את סל המחזור לצמיתות?'))return;try{const batch=writeBatch(db);state.trash.forEach(x=>batch.delete(doc(db,'users',state.user.uid,'trash',String(x.id))));await batch.commit();showToast('סל המחזור רוקן');}catch(e){showToast('❌ לא ניתן לרוקן את הסל',null,3000,null,true);}}
         function downloadBlob(name, content, type='text/plain;charset=utf-8') { const blob=new Blob([content],{type}); const url=URL.createObjectURL(blob); const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500); }
-        function getFormattedExportFilename(ext) {
+       function isPrivateCategory(category) {
+            const cat = String(category || '').trim();
+            if (!cat) return false;
+            return /(?:^|[^\u0590-\u05FFa-zA-Z0-9])(?:שלי\s*[-–—]?\s*)?פרטי(?:ים)?(?=$|[^\u0590-\u05FFa-zA-Z0-9])|\bprivate\b/i.test(cat);
+        }
+        function updateTxtExportUi() {
+            const cb = document.getElementById('excludePrivateCb');
+            const wrapper = document.getElementById('excludePrivateWrapper');
+            const btn = document.getElementById('exportTxtBtn');
+            const hint = document.getElementById('excludePrivateHint');
+            const exclude = cb ? cb.checked : true;
+            const privateCount = state.items.filter(x => isPrivateCategory(x.category)).length;
+
+            if (wrapper) wrapper.classList.toggle('is-active', exclude);
+            if (btn) {
+                btn.textContent = exclude
+                    ? '📤 ייצוא ל-TXT (ללא פרטי)'
+                    : '📤 ייצוא הכל ל-TXT (כולל פרטי)';
+            }
+            if (hint) {
+                if (exclude) {
+                    hint.textContent = privateCount > 0
+                        ? `יוחרגו ${privateCount} פריטים פרטיים`
+                        : 'מחריג כל קטגוריית פרטי';
+                } else {
+                    hint.textContent = privateCount > 0
+                        ? `⚠️ כולל ${privateCount} פריטים פרטיים`
+                        : '⚠️ מייצא את כל הקטגוריות כולל פרטי';
+                }
+            }
+        }
+        function getFormattedExportFilename(ext, suffix = '') {
             const d = new Date();
             const pad = (n) => String(n).padStart(2, '0');
             const datePart = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
             const timePart = `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
-            return `MH_Link_Manager_Pro_${datePart}_${timePart}.${ext}`;
+            return `MH_Link_Manager_Pro_${datePart}_${timePart}${suffix}.${ext}`;
         }
         function exportJson(){
             const exclude=document.getElementById('excludePrivateJsonCb')?.checked;
-            const items=state.items.filter(x=>!(exclude && /שלי\s*-\s*פרטי/.test(x.category||'')));
+            const items=state.items.filter(x=>!(exclude && isPrivateCategory(x.category)));
             downloadBlob(getFormattedExportFilename('json'),JSON.stringify({schemaVersion:SCHEMA_VERSION,exportedAt:nowIso(),items},null,2),'application/json;charset=utf-8');
             showToast('📤 קובץ JSON יוצא בהצלחה');
         }
         function exportTxt(){
-            const exclude=document.getElementById('excludePrivateCb')?.checked;
-            const items=state.items.filter(x=>!(exclude && /שלי\s*-\s*פרטי/.test(x.category||'')));
-            const txt=items.map(x=>[String(x.content||''),`תיאור: ${String(x.description||'')}`,`קטגוריה: ${String(x.category||'כללי')}`,`הערה: ${String(x.note||'')}`].join('\n')).join('\n\n');
-            downloadBlob(getFormattedExportFilename('txt'),txt);
-            showToast('📤 קובץ TXT יוצא בהצלחה');
+            const cb = document.getElementById('excludePrivateCb');
+            const exclude = cb ? cb.checked : true;
+            const items = exclude
+                ? state.items.filter(x => !isPrivateCategory(x.category))
+                : state.items;
+            closeAllMenus();
+            if (!items.length) {
+                showToast('⚠️ אין פריטים זמינים לייצוא', null, 3200, null, true);
+                return;
+            }
+            const txt = items.map(x => [
+                String(x.content || ''),
+                `תיאור: ${String(x.description || '')}`,
+                `קטגוריה: ${String(x.category || 'כללי')}`,
+                `הערה: ${String(x.note || '')}`
+            ].join('\n')).join('\n\n');
+            const suffix = exclude ? '_NoPrivate' : '';
+            downloadBlob(getFormattedExportFilename('txt', suffix), txt);
+            if (exclude) {
+                const excludedCount = state.items.length - items.length;
+                showToast(
+                    excludedCount > 0
+                        ? `📤 יוצאו ${items.length} פריטים ל-TXT (${excludedCount} פרטיים הוחרגו)`
+                        : `📤 יוצאו ${items.length} פריטים ל-TXT (ללא פרטי)`
+                );
+            } else {
+                showToast(`📤 יוצאו כל ${items.length} הפריטים ל-TXT (כולל פרטי)`);
+            }
         }
         async function importJson(e){const file=e.target.files?.[0];if(!file)return;try{const data=JSON.parse(await file.text());const list=Array.isArray(data)?data:data.items;if(!Array.isArray(list))throw new Error('מבנה JSON לא מוכר');await importItems(list);showToast('✅ ייבוא JSON הושלם');}catch(err){showToast('❌ ייבוא נכשל: '+err.message,null,5000,null,true);}finally{e.target.value='';}}
         async function smartImport(e){
