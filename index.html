@@ -2406,6 +2406,67 @@
             return hasForbiddenSummaryPattern(clean);
         }
 
+        function normalizeContentKey(raw) {
+            const s = String(raw || '')
+                .replace(/[\u200B-\u200F\u202A-\u202E\uFEFF]/g, '')
+                .trim();
+            if (!s) return '';
+            if (URL_REGEX.test(s)) {
+                try {
+                    const withProto = /^https?:\/\//i.test(s) ? s : 'https://' + s;
+                    const u = new URL(withProto);
+                    const host = u.hostname.toLowerCase().replace(/^www\./, '');
+                    const path = u.pathname.replace(/\/+$/, '');
+                    return `${host}${path}${u.search || ''}${u.hash || ''}`.toLowerCase();
+                } catch (_) {}
+            }
+            return s.replace(/\s+/g, ' ').toLowerCase();
+        }
+
+        // מניעת כיבוי מסך (Wake Lock) והגנה מסגירה מקרית בזמן סריקות AI או פעולות המון
+        const keepAwakeController = {
+            activeTasks: 0,
+            wakeLock: null,
+            async acquire() {
+                try {
+                    if ('wakeLock' in navigator && !this.wakeLock && !document.hidden) {
+                        this.wakeLock = await navigator.wakeLock.request('screen');
+                        this.wakeLock.addEventListener('release', () => { this.wakeLock = null; });
+                    }
+                } catch (_) {}
+            },
+            async release() {
+                try {
+                    if (this.wakeLock) {
+                        const lock = this.wakeLock;
+                        this.wakeLock = null;
+                        await lock.release();
+                    }
+                } catch (_) {}
+            },
+            enter() {
+                this.activeTasks++;
+                this.acquire();
+            },
+            leave() {
+                this.activeTasks = Math.max(0, this.activeTasks - 1);
+                if (this.activeTasks === 0) this.release();
+            }
+        };
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && keepAwakeController.activeTasks > 0) {
+                keepAwakeController.acquire();
+            }
+        });
+
+        window.addEventListener('beforeunload', (e) => {
+            if (keepAwakeController.activeTasks > 0 || scanController.isRunning) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+
         let app, auth, db;
         let deferredPrompt;
         
@@ -2509,7 +2570,7 @@
             const seen = new Set();
             let dupCount = 0;
             state.items.forEach(item => {
-                const k = (item.content || '').toLowerCase().trim();
+                const k = normalizeContentKey(item.content);
                 if (!k) return;
                 if (seen.has(k)) dupCount++;
                 else seen.add(k);
@@ -3696,9 +3757,8 @@
             if (btn) btn.classList.add('spinning');
             if (!silent) showToast("🔄 מסנכרן ומאתחל מסד נתונים...", null, 0, 'reset-toast', false);
             
-            try {
-                if (state.unsubItems) state.unsubItems();
-                if (state.unsubTrash) state.unsubTrash();
+           try {
+                stopAllCloudListeners();
                 await terminate(db);
                 await clearIndexedDbPersistence(db);
                 window.location.reload();
@@ -3714,7 +3774,7 @@
             const seenContents = new Map();
 
             chronologicalList.forEach((item, idx) => {
-                const key = (item.content || '').toLowerCase().trim();
+                const key = normalizeContentKey(item.content);
                 const isDup = seenContents.has(key);
                 if (!isDup) seenContents.set(key, item.id);
                 visualMetaMap.set(item.id, { visualIndex: idx + 1, isDup });
@@ -4198,7 +4258,8 @@
             content = content.replace(/^[\/\\]+/, '');
             if (!content) return;
 
-            const existingItem = state.items.find(i => (i.content||'').toLowerCase() === content.toLowerCase());
+            const normNew = normalizeContentKey(content);
+            const existingItem = state.items.find(i => normalizeContentKey(i.content) === normNew);
             if (existingItem) {
                 const addAnyway = confirm(`⚠️ הפריט כבר קיים תחת "${existingItem.category}".\n\nהאם להוסיף כפילות?`);
                 if (!addAnyway) { e.target.reset(); return; }
@@ -6694,6 +6755,7 @@ STRICT RULES:
             };
 
             beginBulkUiHold();
+            keepAwakeController.enter();
             try {
                 reportProgress(true);
                 let maxWritesPerBatch = 450;
@@ -6782,7 +6844,9 @@ STRICT RULES:
                 return done;
             } finally {
                 if (progressToastId) removeToast(progressToastId);
+                keepAwakeController.leave();
                 endBulkUiHold();
+            }
             }
         }
         async function restoreAllTrash(){
@@ -7279,13 +7343,17 @@ STRICT RULES:
                     }
                 }
 
-                const existingByContent = new Map(state.items.map(x => [String(x.content || '').toLowerCase().trim(), x]));
+                const existingByContent = new Map();
+                state.items.forEach(x => {
+                    const k = normalizeContentKey(x.content);
+                    if (k && !existingByContent.has(k)) existingByContent.set(k, x);
+                });
                 const seenInFile = new Set();
                 const fresh = [];
                 const toEnrich = [];
 
                 for (const x of list) {
-                    const k = String(x.content || '').toLowerCase().trim();
+                    const k = normalizeContentKey(x.content);
                     if (!k || seenInFile.has(k)) continue;
                     seenInFile.add(k);
 
@@ -7399,23 +7467,61 @@ STRICT RULES:
                 }
             });
         }
+        function mergeIncomingRecord(existing, incoming) {
+            const pick = (a, b) => (a !== undefined && a !== null && String(a).trim() !== '' ? a : b);
+            const mergedTags = Array.isArray(incoming.aiTags) && incoming.aiTags.length
+                ? incoming.aiTags
+                : (Array.isArray(existing?.aiTags) ? existing.aiTags : []);
+            const incomingCat = String(incoming.category || '').trim();
+            const existingCat = String(existing?.category || '').trim();
+            const finalCategory = (incomingCat && incomingCat !== 'כללי')
+                ? incomingCat
+                : (existingCat || incomingCat || 'כללי');
+
+            return {
+                ...existing,
+                ...incoming,
+                content: existing?.content || incoming.content,
+                description: pick(incoming.description, existing?.description || ''),
+                category: finalCategory,
+                note: pick(incoming.note, existing?.note || ''),
+                aiSummary: pick(incoming.aiSummary, existing?.aiSummary || ''),
+                aiTags: mergedTags,
+                siteStatus: pick(incoming.siteStatus, existing?.siteStatus || ''),
+                httpCode: (incoming.httpCode !== null && incoming.httpCode !== undefined && incoming.httpCode !== '')
+                    ? incoming.httpCode
+                    : (existing?.httpCode ?? null),
+                aiModel: pick(incoming.aiModel, existing?.aiModel || ''),
+                isPinned: Boolean(existing?.isPinned || incoming.isPinned)
+            };
+        }
         async function importTrashItems(trashList){
             if (!state.user || !Array.isArray(trashList) || !trashList.length) return 0;
-            const existingTrashById = new Map(state.trash.map(x => [String(x.id), x]));
-            const usedIds = new Set();
+            const existingTrashByKey = new Map();
+            state.trash.forEach(x => {
+                const k = normalizeContentKey(x.content);
+                if (k && !existingTrashByKey.has(k)) existingTrashByKey.set(k, x);
+            });
+            const usedIds = new Set(state.trash.map(x => String(x.id)));
+            const seenInFile = new Set();
             const prepared = [];
             let seq = 0;
             for (const raw of trashList) {
                 if (!raw || typeof raw !== 'object') continue;
                 const content = String(raw.content ?? raw.url ?? '').trim();
-                if (!content) continue;
-                let id = (raw.id !== null && raw.id !== undefined && raw.id !== '' && Number.isFinite(Number(raw.id)))
-                    ? Number(raw.id)
-                    : Date.now() + seq++;
-                while (usedIds.has(String(id))) { id = Date.now() + seq++; }
-                usedIds.add(String(id));
-                const existing = existingTrashById.get(String(id)) || null;
-                prepared.push(normalizeRecordForCloud(raw, id, existing, true));
+                const norm = normalizeContentKey(content);
+                if (!norm || seenInFile.has(norm)) continue;
+                seenInFile.add(norm);
+                const existing = existingTrashByKey.get(norm) || null;
+                let id = existing
+                    ? existing.id
+                    : ((raw.id !== null && raw.id !== undefined && raw.id !== '' && Number.isFinite(Number(raw.id))) ? Number(raw.id) : Date.now() + seq++);
+                if (!existing) {
+                    while (usedIds.has(String(id))) { id = Date.now() + seq++; }
+                    usedIds.add(String(id));
+                }
+                const merged = existing ? mergeIncomingRecord(existing, { ...raw, content }) : { ...raw, content };
+                prepared.push(normalizeRecordForCloud(merged, id, existing, true));
             }
             return await writeRecordsInSafeBatches('trash', prepared, false);
         }
@@ -7425,60 +7531,48 @@ STRICT RULES:
                 throw new Error('החשבון עדיין לא אושר על ידי מנהל המערכת');
             }
 
-            const existingById = new Map(state.items.map(x => [String(x.id), x]));
-            const validRows = [];
+            // סינון ומיזוג כפילויות פנימיות בתוך הקובץ המיובא (כולל http/https, www וסלאש סופי)
+            const dedupedFileMap = new Map();
             for (const raw of list) {
                 if (!raw || typeof raw !== 'object') continue;
                 const content = String(raw.content ?? raw.url ?? '').trim();
-                if (!content) continue;
-                validRows.push({ raw, content, norm: content.toLowerCase() });
+                const norm = normalizeContentKey(content);
+                if (!norm) continue;
+                if (dedupedFileMap.has(norm)) {
+                    dedupedFileMap.set(norm, mergeIncomingRecord(dedupedFileMap.get(norm), { ...raw, content }));
+                } else {
+                    dedupedFileMap.set(norm, { ...raw, content });
+                }
             }
 
-            // מעבר 1: שיוך פריטים שיש להם התאמת ID מדויקת בענן (מונע כפילות ושומר על מזהים קיימים)
-            const claimedExistingIds = new Set();
-            const assignedByIndex = new Map();
-            validRows.forEach((row, idx) => {
-                const rawId = row.raw.id;
-                if (rawId !== null && rawId !== undefined && rawId !== '' && Number.isFinite(Number(rawId))) {
-                    const key = String(Number(rawId));
-                    const ex = existingById.get(key);
-                    if (ex && !claimedExistingIds.has(key) && String(ex.content || '').trim().toLowerCase() === row.norm) {
-                        claimedExistingIds.add(key);
-                        assignedByIndex.set(idx, ex);
-                    }
-                }
-            });
-
-            // בניית תור פריטים קיימים לפי תוכן (למיזוג פריטים שנשארו בחשבון עם ID שונה)
-            const unclaimedByContent = new Map();
+            const existingById = new Map(state.items.map(x => [String(x.id), x]));
+            const existingByKey = new Map();
             state.items.forEach(x => {
-                const key = String(x.id);
-                if (claimedExistingIds.has(key)) return;
-                const norm = String(x.content || '').trim().toLowerCase();
-                if (!norm) return;
-                if (!unclaimedByContent.has(norm)) unclaimedByContent.set(norm, []);
-                unclaimedByContent.get(norm).push(x);
+                const k = normalizeContentKey(x.content);
+                if (k && !existingByKey.has(k)) existingByKey.set(k, x);
             });
 
-            // מעבר 2: בניית הרשומות הסופיות בלי ליצור כפילויות מיותרות מעל פריטים קיימים
             const usedIds = new Set(existingById.keys());
             const prepared = [];
             let seq = 0;
 
-            validRows.forEach((row, idx) => {
-                let matchedExisting = assignedByIndex.get(idx) || null;
-                if (!matchedExisting) {
-                    const bucket = unclaimedByContent.get(row.norm);
-                    if (bucket && bucket.length > 0) {
-                        matchedExisting = bucket.shift();
+            for (const [norm, raw] of dedupedFileMap.entries()) {
+                let matchedExisting = null;
+                const rawId = raw.id;
+                if (rawId !== null && rawId !== undefined && rawId !== '' && Number.isFinite(Number(rawId))) {
+                    const exById = existingById.get(String(Number(rawId)));
+                    if (exById && normalizeContentKey(exById.content) === norm) {
+                        matchedExisting = exById;
                     }
+                }
+                if (!matchedExisting) {
+                    matchedExisting = existingByKey.get(norm) || null;
                 }
 
                 let id;
                 if (matchedExisting) {
                     id = matchedExisting.id;
                 } else {
-                    const rawId = row.raw.id;
                     id = (rawId !== null && rawId !== undefined && rawId !== '' && Number.isFinite(Number(rawId)))
                         ? Number(rawId)
                         : Date.now() + seq++;
@@ -7486,8 +7580,9 @@ STRICT RULES:
                     usedIds.add(String(id));
                 }
 
-                prepared.push(normalizeRecordForCloud(row.raw, id, matchedExisting, false));
-            });
+                const merged = matchedExisting ? mergeIncomingRecord(matchedExisting, raw) : raw;
+                prepared.push(normalizeRecordForCloud(merged, id, matchedExisting, false));
+            }
 
             return await writeRecordsInSafeBatches('items', prepared, true);
         }
@@ -7629,6 +7724,7 @@ STRICT RULES:
             scanController.current=0; scanController.total=unique.length; scanController.stats={active:0,parked:0,dead:0};
             const dock=document.getElementById('scanDock');dock?.classList.add('active');dock?.classList.remove('minimized');scanController.isMinimized=false;
             updateScanDockUI();
+            keepAwakeController.enter();
             try {
                 for (const item of unique) {
                     if (scanController.isAborted) break;
@@ -7644,6 +7740,7 @@ STRICT RULES:
                     scanController.current++;updateScanDockUI();
                 }
             } finally {
+                keepAwakeController.leave();
                 scanController.isRunning=false;scanController.isPaused=false;
                 scanController.activeAbortControllers.forEach(c=>{try{c.abort();}catch(_){}});scanController.activeAbortControllers.clear();
                 updateScanDockUI();
@@ -7657,6 +7754,7 @@ STRICT RULES:
         const perfStyle=document.createElement('style');perfStyle.textContent='.card{content-visibility:auto;contain-intrinsic-size:auto 140px;}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;}}';document.head.appendChild(perfStyle);    </script>
 </body>
 </html>
+
 
 
 
