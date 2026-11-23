@@ -3481,6 +3481,7 @@
                     const previousUid = state.user?.uid || null;
                     if (previousUid && previousUid !== user.uid) {
                         stopAllCloudListeners();
+                        window._mhApprovedBatchCap = null;
                         state.items = []; state.trash = []; state.allowedUsers = [];
                         state.selectedIds.clear(); state.isSelectionMode = false;
                     }
@@ -3731,6 +3732,10 @@
 
          async function cloudLogout() {
             if (!navigator.onLine && !confirm('אין חיבור לרשת. שינויים שלא סונכרנו יימחקו ביציאה. להמשיך?')) return;
+            keepAwakeController.activeTasks = 0;
+            keepAwakeController.release();
+            scanController.isRunning = false;
+            window._mhApprovedBatchCap = null;
             stopAllCloudListeners();
             try {
                 if (navigator.onLine && db) {
@@ -3757,7 +3762,11 @@
             if (btn) btn.classList.add('spinning');
             if (!silent) showToast("🔄 מסנכרן ומאתחל מסד נתונים...", null, 0, 'reset-toast', false);
             
-           try {
+            try {
+                keepAwakeController.activeTasks = 0;
+                keepAwakeController.release();
+                scanController.isRunning = false;
+                window._mhApprovedBatchCap = null;
                 stopAllCloudListeners();
                 await terminate(db);
                 await clearIndexedDbPersistence(db);
@@ -6847,7 +6856,6 @@ STRICT RULES:
                 keepAwakeController.leave();
                 endBulkUiHold();
             }
-            }
         }
         async function restoreAllTrash(){
             if (!state.user || !state.trash.length) return;
@@ -7754,6 +7762,7 @@ STRICT RULES:
         const perfStyle=document.createElement('style');perfStyle.textContent='.card{content-visibility:auto;contain-intrinsic-size:auto 140px;}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;}}';document.head.appendChild(perfStyle);    </script>
 </body>
 </html>
+
 
 
 
