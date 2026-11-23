@@ -2234,7 +2234,15 @@
             'להצטרף באופן מרוכז או אוטומטי',
             'מוגן מפני קריאת תוכן חיצונית',
             'ללא טקסט תיאור נוסף בעמוד הטלגרם',
-            'ללא טקסט ציבורי גלוי בעמוד הראשי'
+            'ללא טקסט ציבורי גלוי בעמוד הראשי',
+            'just a moment',
+            'attention required',
+            'checking your browser',
+            'verify you are human',
+            'מוגן מפני סריקת פרוקסי',
+            'לא ניתן לגשת לתוכן',
+            'אינו מאפשר סריקה',
+            'הגישה לאתר חסומה'
         ];
 
         function hasForbiddenSummaryPattern(text) {
@@ -3866,7 +3874,7 @@
             ];
             for (const u of candidates) {
                 try {
-                    const res = await fetchWithScanSignal(u, {}, 6500);
+                    const res = await fetchWithScanSignal(u, {}, 11500);
                     if (!res.ok) continue;
                     const blob = await res.blob();
                     if (!blob || !blob.type.startsWith('image/') || blob.size < 800) continue;
@@ -3912,7 +3920,7 @@
                 let shotUrl = existingMicrolinkData?.screenshot?.url || '';
                 if (!shotUrl) {
                     try {
-                        const mlRes = await fetchWithScanSignal(`https://api.microlink.io/?url=${encodeURIComponent(targetUrl)}&screenshot=true&meta=false`, {}, 7500);
+                        const mlRes = await fetchWithScanSignal(`https://api.microlink.io/?url=${encodeURIComponent(targetUrl)}&screenshot=true&meta=false&waitForTimeout=2000`, {}, 10500);
                         if (mlRes.ok) {
                             const mlJson = await mlRes.json();
                             shotUrl = mlJson?.data?.screenshot?.url || mlJson?.data?.image?.url || '';
@@ -3921,7 +3929,8 @@
                 }
                 const candidateUrls = [
                     shotUrl,
-                    `https://image.thum.io/get/width/1100/crop/800/noanimate/${targetUrl}`,
+                    `https://image.thum.io/get/width/1100/crop/800/wait/3/noanimate/${targetUrl}`,
+                    `https://s0.wp.com/mshots/v1/${encodeURIComponent(targetUrl)}?w=1100`,
                     existingMicrolinkData?.image?.url || '',
                     fallbackImageUrl || ''
                 ].filter(Boolean);
@@ -4582,13 +4591,52 @@
                 }
             }
 
-            if (!rawHtml || rawHtml.length < 30) {
-                try {
-                    const cpRes = await fetchWithScanSignal(`https://corsproxy.io/?${encodeURIComponent(cleanUrl)}`, {}, 6000);
-                    if (cpRes.ok) {
-                        rawHtml = await cpRes.text();
-                    }
-                } catch (_) {}
+            const isBotProtectionText = (titleStr, bodyStr) => {
+                const t = String(titleStr || '').toLowerCase();
+                const combined = `${t} ${String(bodyStr || '').toLowerCase()}`;
+                const titleBlocked =
+                    t.includes('just a moment') ||
+                    t.includes('attention required') ||
+                    t.includes('access denied') ||
+                    t.includes('403 forbidden') ||
+                    t.includes('ddos-guard') ||
+                    t.includes('security check') ||
+                    t.includes('are you a robot') ||
+                    t === 'cloudflare';
+                const bodyBlocked =
+                    combined.includes('just a moment...') ||
+                    combined.includes('checking your browser') ||
+                    combined.includes('verify you are human') ||
+                    combined.includes('performing security verification') ||
+                    combined.includes('enable javascript and cookies to continue') ||
+                    combined.includes('attention required! | cloudflare') ||
+                    combined.includes('cf-browser-verification') ||
+                    combined.includes('checking if the site connection is secure') ||
+                    combined.includes('ddos-guard') ||
+                    (combined.includes('cloudflare') && combined.includes('ray id') && String(bodyStr || '').length < 3500) ||
+                    (combined.includes('403 forbidden') && String(bodyStr || '').length < 1800) ||
+                    (combined.includes('access denied') && String(bodyStr || '').length < 1800);
+                return titleBlocked || bodyBlocked;
+            };
+
+            if (!rawHtml || rawHtml.length < 30 || isBotProtectionText('', rawHtml)) {
+                const extraProxies = [
+                    `https://corsproxy.io/?${encodeURIComponent(cleanUrl)}`,
+                    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(cleanUrl)}`
+                ];
+                for (const proxyUrl of extraProxies) {
+                    try {
+                        const cpRes = await fetchWithScanSignal(proxyUrl, {}, 6500);
+                        if (cpRes.ok) {
+                            const txt = await cpRes.text();
+                            if (txt && txt.length >= 30 && !isBotProtectionText('', txt)) {
+                                rawHtml = txt;
+                                break;
+                            }
+                            if (!rawHtml && txt) rawHtml = txt;
+                        }
+                    } catch (_) {}
+                }
             }
 
             result.httpCode = httpCode;
@@ -4609,7 +4657,7 @@
                 microlinkData?.description ||
                 ''
             ).trim();
-            const ogSiteName = (
+            let ogSiteName = (
                 doc2.querySelector('meta[property="og:site_name"]')?.content ||
                 doc2.querySelector('meta[name="application-name"]')?.content ||
                 microlinkData?.publisher ||
@@ -4636,19 +4684,19 @@
             });
 
             // חילוץ רכיבים ויזואליים מהעמוד (כותרות, תפריט ניווט, כפתורים וטקסט חלופי של תמונות)
-            const headingsText = Array.from(doc2.querySelectorAll('h1, h2, h3'))
+            let headingsText = Array.from(doc2.querySelectorAll('h1, h2, h3'))
                 .map(h => (h.textContent || '').replace(/\s+/g, ' ').trim())
                 .filter(t => t.length > 2 && t.length < 180)
                 .slice(0, 10)
                 .join(' | ');
 
-            const navAndButtonsText = Array.from(doc2.querySelectorAll('nav a, header a, button, [role="button"], .btn'))
+            let navAndButtonsText = Array.from(doc2.querySelectorAll('nav a, header a, button, [role="button"], .btn'))
                 .map(el => (el.textContent || el.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim())
                 .filter(t => t.length > 1 && t.length < 60)
                 .slice(0, 15)
                 .join(', ');
 
-            const imgAltText = Array.from(doc2.querySelectorAll('img[alt], [aria-label]'))
+            let imgAltText = Array.from(doc2.querySelectorAll('img[alt], [aria-label]'))
                 .map(el => (el.getAttribute('alt') || el.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim())
                 .filter(t => t.length > 2 && t.length < 120)
                 .slice(0, 10)
@@ -4693,26 +4741,34 @@
                 return result;
             }
 
-            // ו. שליפת תוכן מרונדר מ-Jina Reader עבור העמוד + בדיקת העמוד הראשי של הדומיין אם מדובר בתת-עמוד
+            // ו. זיהוי חסימת Cloudflare / 403 / אנטי-בוט ושליפת תוכן מרונדר מ-Jina Reader
             let jinaText = '';
             let jinaTitle = '';
             let mainHomepageText = '';
-            const isCloudflareChallenge =
-                lowerAll.includes('just a moment...') ||
-                lowerAll.includes('checking your browser') ||
-                lowerAll.includes('verify you are human') ||
-                lowerAll.includes('attention required! | cloudflare');
+            const isCloudflareChallenge = isBotProtectionText(pageTitle, bodyText) || httpCode === 403;
+
+            if (isCloudflareChallenge) {
+                result.isBotProtected = true;
+                if (isBotProtectionText(pageTitle, '')) pageTitle = '';
+                if (isBotProtectionText('', metaDesc)) metaDesc = '';
+                if (isBotProtectionText('', ogSiteName)) ogSiteName = '';
+                structuredHints = [];
+                headingsText = '';
+                navAndButtonsText = '';
+                imgAltText = '';
+                bodyText = '';
+            }
 
             if (bodyText.length < 350 || isCloudflareChallenge || !pageTitle) {
                 try {
                     const jinaRes = await fetchWithScanSignal(`https://r.jina.ai/${cleanUrl}`, {
                         headers: { 'Accept': 'text/plain', 'X-Return-Format': 'markdown' }
-                    }, 8000);
+                    }, 9500);
                     const jText = await jinaRes.text();
 
                     if (jText) {
                         const jTitleMatch = jText.match(/^Title:\s*(.+)$/m);
-                        if (jTitleMatch && jTitleMatch[1].trim()) {
+                        if (jTitleMatch && jTitleMatch[1].trim() && !isBotProtectionText(jTitleMatch[1], '')) {
                             jinaTitle = jTitleMatch[1].trim();
                         }
 
@@ -4735,7 +4791,7 @@
                         const isDirectFileOrCloud = /\.(?:apk|exe|msi|zip|rar|7z|tar|gz|pdf|mp3|mp4|mkv|iso|dmg|deb|rpm|csv|json|txt|xlsx|docx)(?:[?#]|$)/i.test(cleanUrl) ||
                             /(?:drive\.google\.com|docs\.google\.com|mega\.nz|mediafire\.com|dropbox\.com|1drv\.ms|onedrive\.live\.com|wetransfer\.com|pixeldrain\.com|gofile\.io|sourceforge\.net)/i.test(cleanUrl);
                         const isJinaNetworkFailure = /net::ERR_(?:NAME_NOT_RESOLVED|CONNECTION_REFUSED|CONNECTION_TIMED_OUT|ADDRESS_UNREACHABLE|SSL_PROTOCOL_ERROR)/i.test(jText);
-                        if (isJinaNetworkFailure && bodyText.length < 60 && !isDirectFileOrCloud) {
+                        if (isJinaNetworkFailure && bodyText.length < 60 && !isDirectFileOrCloud && !result.isBotProtected) {
                             const isDnsErr = /ERR_NAME_NOT_RESOLVED/i.test(jText);
                             result.verifiedStatus = 'dead';
                             result.httpCode = isDnsErr ? 404 : 503;
@@ -4757,9 +4813,12 @@
                             .replace(/\s+/g, ' ')
                             .trim();
 
-                        if (/^Warning: Target URL returned error (\d{3})/m.test(jText) && cleanedJina.length < 180 && bodyText.length < 100) {
-                            const errCode = parseInt(jText.match(/^Warning: Target URL returned error (\d{3})/m)[1], 10);
-                            if ([404, 410, 451, 500, 502, 503, 504, 521, 522, 524].includes(errCode)) {
+                        const jinaErrMatch = jText.match(/^Warning: Target URL returned error (\d{3})/m);
+                        if (jinaErrMatch && cleanedJina.length < 180 && bodyText.length < 100) {
+                            const errCode = parseInt(jinaErrMatch[1], 10);
+                            if (errCode === 403 || errCode === 429) {
+                                result.isBotProtected = true;
+                            } else if ([404, 410, 451, 500, 502, 503, 504, 521, 522, 524].includes(errCode)) {
                                 result.verifiedStatus = 'dead';
                                 result.httpCode = errCode;
                                 result.isDefinitive = true;
@@ -4773,14 +4832,17 @@
                             }
                         }
 
-                        if (jinaRes.ok && cleanedJina.length > 35 && !cleanedJina.toLowerCase().includes('just a moment...')) {
+                        if (jinaRes.ok && cleanedJina.length > 35 && !isBotProtectionText(jinaTitle, cleanedJina)) {
                             jinaText = cleanedJina.substring(0, 3500);
+                            result.isBotProtected = false;
+                        } else if (isBotProtectionText(jTitleMatch?.[1] || '', cleanedJina)) {
+                            result.isBotProtected = true;
                         }
                     }
                 } catch (_) {}
             }
 
-            if (!pageTitle && jinaTitle && !jinaTitle.toLowerCase().includes('just a moment')) {
+            if (!pageTitle && jinaTitle && !isBotProtectionText(jinaTitle, '')) {
                 pageTitle = jinaTitle;
             }
 
@@ -4789,7 +4851,7 @@
                 try {
                     const homeRes = await fetchWithScanSignal(`https://r.jina.ai/${rootOriginUrl}`, {
                         headers: { 'Accept': 'text/plain', 'X-Return-Format': 'markdown' }
-                    }, 6000);
+                    }, 6500);
                     if (homeRes.ok) {
                         const hTxt = await homeRes.text();
                         const hClean = hTxt
@@ -4797,7 +4859,7 @@
                             .replace(/^Markdown Content:.*$/gm, '')
                             .replace(/\s+/g, ' ')
                             .trim();
-                        if (hClean.length > 30) {
+                        if (hClean.length > 30 && !isBotProtectionText('', hClean)) {
                             mainHomepageText = hClean.substring(0, 1800);
                         }
                     }
@@ -4805,7 +4867,7 @@
             }
 
             // ז. זיהוי דומיין בחניה / למכירה (Parked Domain)
-            const combLower = `${lowerAll} ${jinaText.toLowerCase()}`;
+            const combLower = `${pageTitle} ${metaDesc} ${bodyText} ${jinaText}`.toLowerCase();
             const parkedSignals = [
                 'sedoparking', 'domain is for sale', 'buy this domain', 'this domain may be for sale',
                 'hugedomains', 'afternic', 'parked free, courtesy of godaddy',
@@ -4867,7 +4929,7 @@
                 return result;
             }
 
-            if (httpCode === 503 && !rawHtml && !jinaText) {
+            if (httpCode === 503 && !rawHtml && !jinaText && !result.isBotProtected) {
                 result.verifiedStatus = 'dead';
                 result.httpCode = 503;
                 result.isDefinitive = true;
@@ -4878,23 +4940,7 @@
                 return result;
             }
 
-            const reachedSomething =
-                Boolean(rawHtml && rawHtml.length >= 30) ||
-                Boolean(microlinkData) ||
-                Boolean(jinaText) ||
-                Boolean(httpCode && httpCode >= 200 && httpCode < 400);
-            if (!reachedSomething) {
-                result.verifiedStatus = 'active';
-                result.httpCode = 200;
-                result.isDefinitive = false;
-                result.skipAiGuessing = false;
-                result.reason = '';
-                result.fallbackSummary = `הקישור ${domain} זמין ברשת (מוגן מפני סריקת פרוקסי ישירה).`;
-                result.tags = [`#${domain.split('.')[0]}`];
-                return result;
-            }
-
-            // ט. צילום מסך חי של האתר/העמוד הראשי והרכבת כל המידע לניתוח ה-Vision AI
+            // ט. צילום מסך חי תמיד לפני הכרעה (גם אם האתר חסם פרוקסי ישיר!)
             if (captureScreenshot) {
                 const shotTarget = (isSubPage && !pageTitle && rootOriginUrl) ? rootOriginUrl : cleanUrl;
                 result.screenshotBase64 = await captureVisualScreenshotBase64(shotTarget, microlinkData, ogImage);
@@ -4903,9 +4949,14 @@
             const effectiveBody = jinaText || bodyText;
             const structuredStr = structuredHints.length > 0 ? structuredHints.slice(0, 4).join(' — ') : '';
 
+            const hasCleanContent = Boolean(pageTitle || metaDesc || effectiveBody.length > 25 || mainHomepageText.length > 25);
+            if (!hasCleanContent) {
+                result.isBotProtected = true;
+            }
+
             result.verifiedStatus = 'active';
             result.httpCode = (httpCode && httpCode >= 200 && httpCode < 400) ? httpCode : 200;
-            result.isDefinitive = true;
+            result.isDefinitive = hasCleanContent;
             result.pageTitle = pageTitle;
             result.metaDesc = metaDesc;
 
@@ -5109,7 +5160,20 @@
                     item.description
                 );
 
-                const fallbackChain = buildSmartFallbackChain(overrideProvider);
+                const isTelegramUrl = /(?:t\.me|telegram\.(?:me|dog))\//i.test(cleanContent);
+                const needsLiveSearch = isWebsite && !isTelegramUrl && (
+                    Boolean(netDiag.isBotProtected) ||
+                    !netDiag.scrapedText ||
+                    netDiag.scrapedText.length < 350 ||
+                    !netDiag.pageTitle ||
+                    forceUrlOnly
+                );
+
+                // אם האתר חסם סריקה ישירה ואין צילום מסך (במצב אוטומטי), נעדיף Gemini ראשון כי יש לו חיפוש Google חי
+                const preferredAutoProvider = (!overrideProvider && needsLiveSearch && !netDiag.screenshotBase64)
+                    ? 'gemini'
+                    : overrideProvider;
+                const fallbackChain = buildSmartFallbackChain(preferredAutoProvider);
 
                 if (fallbackChain.length === 0) {
                     const ci = state.items.find(i => i.id === id);
@@ -5127,37 +5191,65 @@
                     return;
                 }
 
-                // שלב 2: בניית הפרומפט המשולב (טקסט מהעמוד הראשי + צילום מסך חי ל-Vision AI)
+                // שלב 2: בניית הפרומפט המשולב (טקסט + צילום מסך חי + הנחיית חיפוש לאתרים מוגני Cloudflare)
                 let contentToAnalyze = cleanContent;
                 if (isWebsite) {
                     contentToAnalyze = [
                         `Target URL: ${cleanContent}`,
                         `Main Domain: ${domain}`,
                         `HTTP Status: ${netDiag.httpCode || 200}`,
-                        netDiag.screenshotBase64 ? `Visual Screenshot Attached: YES (Inspect the attached screenshot of the page carefully!)` : `Visual Screenshot Attached: NO`,
+                        netDiag.isBotProtected ? `Bot Protection Detected: YES (Cloudflare / hCaptcha / Anti-Bot blocked direct HTML scraping). Use Google Search for "${domain}" (and related brand/mirror domains) plus any real UI visible in the screenshot to identify what this website actually provides.` : '',
+                        netDiag.screenshotBase64 ? `Visual Screenshot Attached: YES (Inspect the attached screenshot carefully. If the screenshot only shows a Cloudflare/CAPTCHA/security check screen, IGNORE the challenge screen and rely on Google Search instead!)` : `Visual Screenshot Attached: NO`,
                         item.description ? `User Provided Description: ${item.description}` : '',
-                        netDiag.fallbackSummary ? `Initial Platform Summary: ${netDiag.fallbackSummary}` : '',
-                        hasExtractedData ? `Verified Extracted Main Page & Target Data:\n${netDiag.scrapedText}` : `Note: Inspect the attached screenshot and domain knowledge to describe what this site does.`
+                        (netDiag.fallbackSummary && !netDiag.isBotProtected) ? `Initial Platform Summary: ${netDiag.fallbackSummary}` : '',
+                        hasExtractedData ? `Verified Extracted Main Page & Target Data:\n${netDiag.scrapedText}` : `Search Directive: Direct page scraping returned no usable HTML. Search the web for "${domain}" to accurately identify the platform, service, or streaming/tool category.`
                     ].filter(Boolean).join('\n');
                 }
 
-                const isTelegramUrl = /(?:t\.me|telegram\.(?:me|dog))\//i.test(cleanContent);
                 const systemPrompt = `You are an Elite Visual Web Auditor & Technical Analyst.
-You are given verified data extracted from a website or Telegram link AND, when available, a LIVE SCREENSHOT or avatar.
+You are given verified data extracted from a website or Telegram link, a LIVE SCREENSHOT when available, and Google Search grounding when needed.
 Your job is to write a clear, accurate, informative 2-sentence description in HEBREW explaining what the website, tool, repository, or Telegram entity does.
 
 STRICT RULES:
-1. TRUST VERIFIED ACTIVE STATUS:
+1. TRUST VERIFIED ACTIVE STATUS & IGNORE ANTI-BOT SCREENS:
   - This link has ALREADY been verified as ACTIVE (HTTP 200).
-  - For Telegram links (t.me): NEVER claim a Telegram channel, group, bot, or invite link is dead, deleted, expired, or non-existent just because it is not indexed in Google Search or shows a "View in Telegram" screen! Always set "visualStatus" to "active" for Telegram links and describe the channel/group/bot using the extracted Display Title, Bio, Recent Posts, Handle, and User Provided Description.
+  - If direct HTML scraping was blocked or the screenshot shows a Cloudflare / CAPTCHA / "Just a moment" / "Verify you are human" / 403 block screen, IGNORE that challenge screen completely! NEVER describe Cloudflare and NEVER set "visualStatus" to "dead" because of bot protection. Use Google Search on the exact domain (and known mirror domains of the same service) to describe what the actual site offers.
+  - For Telegram links (t.me): NEVER claim a Telegram channel, group, bot, or invite link is dead, deleted, expired, or non-existent just because it is not indexed in Google Search or shows a "View in Telegram" screen. Always set "visualStatus" to "active" for Telegram links.
 2. TELEGRAM LINKS (t.me):
   - State clearly whether it is a Telegram Channel (ערוץ טלגרם), Group (קבוצת טלגרם), Bot (בוט טלגרם), Post, Folder, or Sticker Pack, its display name, subscriber/member count (if shown), and what topic, service, or content it provides.
   - NEVER write excuses like "לא ניתן לאמת", "הסריקה הפיזית נחסמה", "אינו קיים", or "ללא טקסט תיאור נוסף".
 3. ZERO HEDGING OR GUESSING WORDS:
   - NEVER write "ככל הנראה", "כנראה", "נראה כי", "בהתבסס על שם הדומיין", "אולי", "ייתכן", "עשוי להציע", or "לא התקבל מספיק תוכן".
 4. Keep brand names, software names, and technical terms in ENGLISH.
-5. Return ONLY valid JSON:
+5. Return ONLY valid JSON (no markdown fences):
 {"visualStatus": "active", "summary": "תיאור עובדתי, מדויק, עשיר וברור בעברית (2 משפטים) המסביר מה האתר או ערוץ/בוט הטלגרם עושה", "tags": ["#תגית1", "#תגית2", "#תגית3"]}`;
+
+                const parseAiResponsePayload = (rawText, allowPlainTextFallback = false) => {
+                    if (!rawText || typeof rawText !== 'string') return null;
+                    const stripped = rawText
+                        .replace(/```(?:json)?\s*/gi, '')
+                        .replace(/```/g, '')
+                        .trim();
+                    const jm = stripped.match(/\{[\s\S]*\}/);
+                    if (jm) {
+                        try {
+                            return JSON.parse(jm[0]);
+                        } catch (_) {
+                            try {
+                                return JSON.parse(jm[0].replace(/[\r\n]+/g, ' '));
+                            } catch (__) {}
+                        }
+                    }
+                    if (allowPlainTextFallback && stripped.length >= 25 && !stripped.startsWith('{')) {
+                        const cleanText = stripped.replace(/\s+/g, ' ').trim();
+                        return {
+                            visualStatus: 'active',
+                            summary: cleanText.slice(0, 420),
+                            tags: [`#${domain.split('.')[0]}`]
+                        };
+                    }
+                    return null;
+                };
 
                 let parsedResult = null;
                 let usedModelName = '';
@@ -5185,7 +5277,6 @@ STRICT RULES:
                                     });
                                 }
 
-                                const needsLiveSearch = isWebsite && (!netDiag.scrapedText || netDiag.scrapedText.length < 220 || forceUrlOnly);
                                 let rd = null;
                                 let usedSearchGrounding = false;
 
@@ -5202,7 +5293,7 @@ STRICT RULES:
                                                     generationConfig: { temperature: 0.0 }
                                                 })
                                             },
-                                            24000
+                                            26000
                                         );
                                         const searchData = await searchRes.json();
                                         if (!searchData.error && searchData.candidates?.[0]?.content?.parts) {
@@ -5230,9 +5321,12 @@ STRICT RULES:
 
                                 if (rd.error) throw new Error(rd.error.message);
                                 const rawText = (rd.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('\n');
-                                const jm = rawText.match(/\{[\s\S]*\}/);
-                                if (!jm) throw new Error('Invalid JSON');
-                                parsedResult = JSON.parse(jm[0]);
+                                const candidate = parseAiResponsePayload(rawText, usedSearchGrounding);
+                                if (!candidate) throw new Error('Invalid JSON');
+                                const check = validateAndVerifyAiOutput(candidate, netDiag, item);
+                                if (!check.valid) continue;
+
+                                parsedResult = candidate;
                                 usedModelName = `🔹 Gemini (${model}${usedSearchGrounding ? ' 🌐' : ''}${netDiag.screenshotBase64 ? ' 📸' : ''})`;
                                 window.cachedGeminiModelsList = [model, ...defaultGeminiModels.filter(m => m !== model)];
                                 break;
@@ -5269,9 +5363,12 @@ STRICT RULES:
                                 const rd = await res.json();
                                 if (rd.error) throw new Error(rd.error.message);
                                 const rawText = rd.choices?.[0]?.message?.content || '';
-                                const jm = rawText.match(/\{[\s\S]*\}/);
-                                if (!jm) throw new Error('Invalid JSON');
-                                parsedResult = JSON.parse(jm[0]);
+                                const candidate = parseAiResponsePayload(rawText, false);
+                                if (!candidate) throw new Error('Invalid JSON');
+                                const check = validateAndVerifyAiOutput(candidate, netDiag, item);
+                                if (!check.valid) continue;
+
+                                parsedResult = candidate;
                                 usedModelName = `⚡ Groq (${model.split('/').pop()}${isVisionModel ? ' 📸' : ''})`;
                                 break;
                             } catch (err) {
@@ -5313,9 +5410,12 @@ STRICT RULES:
                                 const rd = await res.json();
                                 if (rd.error) throw new Error(rd.error.message);
                                 const rawText = rd.choices?.[0]?.message?.content || '';
-                                const jm = rawText.match(/\{[\s\S]*\}/);
-                                if (!jm) throw new Error('Invalid JSON');
-                                parsedResult = JSON.parse(jm[0]);
+                                const candidate = parseAiResponsePayload(rawText, false);
+                                if (!candidate) throw new Error('Invalid JSON');
+                                const check = validateAndVerifyAiOutput(candidate, netDiag, item);
+                                if (!check.valid) continue;
+
+                                parsedResult = candidate;
                                 usedModelName = `🌐 OpenRouter (${model.split('/').pop()}${isVisionCapable ? ' 📸' : ''})`;
                                 window.cachedOrModelsList = [model, ...defaultOrModels.filter(m => m !== model)];
                                 break;
@@ -5332,11 +5432,11 @@ STRICT RULES:
 
                 const verification = validateAndVerifyAiOutput(parsedResult, netDiag, ci);
 
-                // עבור אתרים רגילים בלבד (לעולם לא על קישורי טלגרם שכבר אומתו): בדיקת דף 404/חניה מצילום מסך
-                if (isWebsite && !isTelegramUrl && parsedResult?.visualStatus === 'dead' && !netDiag.pageTitle) {
+                // עבור אתרים רגילים בלבד (ולא על טלגרם או אתר מוגן Cloudflare): בדיקת דף 404/חניה מצילום מסך
+                if (isWebsite && !isTelegramUrl && !netDiag.isBotProtected && parsedResult?.visualStatus === 'dead' && !netDiag.pageTitle) {
                     netDiag.verifiedStatus = 'dead';
                     netDiag.httpCode = 404;
-                } else if (isWebsite && !isTelegramUrl && parsedResult?.visualStatus === 'parked') {
+                } else if (isWebsite && !isTelegramUrl && !netDiag.isBotProtected && parsedResult?.visualStatus === 'parked') {
                     netDiag.verifiedStatus = 'parked';
                 }
 
@@ -6365,4 +6465,5 @@ STRICT RULES:
         const perfStyle=document.createElement('style');perfStyle.textContent='.card{content-visibility:auto;contain-intrinsic-size:auto 140px;}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;}}';document.head.appendChild(perfStyle);    </script>
 </body>
 </html>
+
 
