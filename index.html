@@ -209,9 +209,7 @@
             box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
         }
         .status-count-badge.zero-items {
-            background: rgba(127, 127, 127, 0.25);
-            color: var(--text-secondary);
-            box-shadow: none;
+            display: none !important;
         }
         .status-count-badge.pop {
             animation: badgePop 0.42s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -2519,10 +2517,11 @@
 
             const applyBadge = (el, count) => {
                 if (!el) return;
-                const prev = parseInt(el.textContent || '0', 10);
-                el.textContent = count;
-                el.classList.toggle('zero-items', count === 0);
-                if (animate || count !== prev) {
+                const prev = parseInt(el.textContent || '0', 10) || 0;
+                const hasItems = count > 0;
+                el.textContent = hasItems ? String(count) : '';
+                el.classList.toggle('zero-items', !hasItems);
+                if (hasItems && (animate || count !== prev)) {
                     el.classList.remove('pop');
                     void el.offsetWidth;
                     el.classList.add('pop');
@@ -6548,7 +6547,27 @@ STRICT RULES:
         async function restoreTrashItem(item){if(!state.user)return;try{const clean={...item};delete clean.deletedAt;await setDoc(doc(db,'users',state.user.uid,'items',String(item.id)),clean);await deleteDoc(doc(db,'users',state.user.uid,'trash',String(item.id)));showToast('♻️ הפריט שוחזר');}catch(e){showToast('❌ השחזור נכשל',null,3000,null,true);}}
         async function permanentlyDeleteTrashItem(item){if(!state.user||!confirm('למחוק את הפריט לצמיתות?'))return;try{await deleteDoc(doc(db,'users',state.user.uid,'trash',String(item.id)));showToast('הפריט נמחק לצמיתות');}catch(e){showToast('❌ המחיקה נכשלה',null,3000,null,true);}}
         async function restoreAllTrash(){for(const item of [...state.trash]) await restoreTrashItem(item);}
-        async function emptyTrash(){if(!state.user||!confirm('לרוקן את סל המחזור לצמיתות?'))return;try{const batch=writeBatch(db);state.trash.forEach(x=>batch.delete(doc(db,'users',state.user.uid,'trash',String(x.id))));await batch.commit();showToast('סל המחזור רוקן');}catch(e){showToast('❌ לא ניתן לרוקן את הסל',null,3000,null,true);}}
+        function getSafeBatchLimit(writesPerItem = 1) {
+            const isAdminNow = typeof isAdminEmail === 'function'
+                ? isAdminEmail(state.user?.email)
+                : ADMIN_EMAILS.some(e => String(e).toLowerCase() === String(state.user?.email || '').toLowerCase());
+            if (isAdminNow) return Math.max(1, Math.floor(400 / writesPerItem));
+            // Firestore מגביל עד 20 קריאות get/exists לכל writeBatch — שומר תמיד מתחת למגבלה (<= 16)
+            return Math.max(1, Math.floor(8 / writesPerItem));
+        }
+        async function emptyTrash(){
+            if(!state.user||!confirm('לרוקן את סל המחזור לצמיתות?'))return;
+            try{
+                const list=[...state.trash];
+                const chunkSize=getSafeBatchLimit(1);
+                for(let i=0;i<list.length;i+=chunkSize){
+                    const batch=writeBatch(db);
+                    list.slice(i,i+chunkSize).forEach(x=>batch.delete(doc(db,'users',state.user.uid,'trash',String(x.id))));
+                    await commitBatch(batch);
+                }
+                showToast('סל המחזור רוקן');
+            }catch(e){showToast('❌ לא ניתן לרוקן את הסל: '+e.message,null,4000,null,true);}
+        }
         function downloadBlob(name, content, type='text/plain;charset=utf-8') { const blob=new Blob([content],{type}); const url=URL.createObjectURL(blob); const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500); }
        function isPrivateCategory(category) {
             const cat = String(category || '').trim();
@@ -7064,81 +7083,141 @@ STRICT RULES:
                 e.target.value = '';
             }
         }
+        function normalizeRecordForCloud(raw, id, existingDoc = null, isTrash = false) {
+            const clampStr = (val, maxLen) => String(val ?? '').slice(0, maxLen);
+            const content = clampStr(raw.content ?? raw.url ?? '', 14900).trim();
+            const cleanTags = Array.isArray(raw.aiTags)
+                ? [...new Set(raw.aiTags.map(t => clampStr(t, 80).trim()).filter(Boolean))].slice(0, 50)
+                : [];
+            const rawHttp = (raw.httpCode !== null && raw.httpCode !== undefined && raw.httpCode !== '' && Number.isFinite(Number(raw.httpCode)))
+                ? Number(raw.httpCode)
+                : null;
+            const validStatus = ['active', 'parked', 'dead', 'unknown', 'text'].includes(raw.siteStatus)
+                ? raw.siteStatus
+                : '';
+
+            const preservedId = existingDoc && existingDoc.id !== undefined ? existingDoc.id : id;
+            const baseDate = clampStr(raw.date || raw.createdAt || existingDoc?.date || nowIso(), 64);
+            const preservedCreatedAt = existingDoc?.createdAt
+                ? existingDoc.createdAt
+                : clampStr(raw.createdAt || raw.date || nowIso(), 64);
+
+            const item = {
+                id: preservedId,
+                content,
+                description: clampStr(raw.description || '', 4900),
+                category: clampStr(raw.category || 'כללי', 290) || 'כללי',
+                note: clampStr(raw.note || '', 9900),
+                type: raw.type === 'text' ? 'text' : (URL_REGEX.test(content) ? 'link' : 'text'),
+                date: baseDate,
+                createdAt: preservedCreatedAt,
+                updatedAt: clampStr(raw.updatedAt || nowIso(), 64),
+                isPinned: Boolean(raw.isPinned)
+            };
+
+            const aiSummaryClean = clampStr(raw.aiSummary || '', 14900).trim();
+            if (aiSummaryClean) item.aiSummary = aiSummaryClean;
+            if (cleanTags.length) item.aiTags = cleanTags;
+            if (validStatus) item.siteStatus = validStatus;
+            if (rawHttp !== null) item.httpCode = rawHttp;
+
+            const aiModelClean = clampStr(raw.aiModel || '', 490).trim();
+            if (aiModelClean) item.aiModel = aiModelClean;
+
+            if (isTrash) {
+                item.deletedAt = clampStr(raw.deletedAt || nowIso(), 64);
+            }
+
+            return item;
+        }
+        async function writeRecordsInSafeBatches(collectionName, prepared, showProgress = false) {
+            if (!prepared.length) return 0;
+            const chunkSize = getSafeBatchLimit(1);
+            const chunks = [];
+            for (let i = 0; i < prepared.length; i += chunkSize) {
+                chunks.push(prepared.slice(i, i + chunkSize));
+            }
+
+            let written = 0;
+            const concurrency = chunkSize <= 10 ? 4 : 1;
+
+            try {
+                for (let i = 0; i < chunks.length; i += concurrency) {
+                    const group = chunks.slice(i, i + concurrency);
+                    await Promise.all(group.map(async (chunk) => {
+                        const batch = writeBatch(db);
+                        chunk.forEach(item => {
+                            batch.set(
+                                doc(db, 'users', state.user.uid, collectionName, String(item.id)),
+                                item,
+                                { merge: true }
+                            );
+                        });
+                        await commitBatch(batch);
+                        written += chunk.length;
+                    }));
+
+                    if (showProgress && prepared.length > chunkSize) {
+                        showToast(`⏳ מייבא נתונים לענן... ${Math.min(written, prepared.length)} / ${prepared.length}`, null, 0, 'import-progress-toast');
+                    }
+                }
+            } finally {
+                if (showProgress) removeToast('import-progress-toast');
+            }
+            return written;
+        }
         async function importTrashItems(trashList){
             if (!state.user || !Array.isArray(trashList) || !trashList.length) return 0;
+            const existingTrashById = new Map(state.trash.map(x => [String(x.id), x]));
             const prepared = [];
             let seq = 0;
             for (const raw of trashList) {
-                const content = String(raw?.content ?? raw?.url ?? '').trim();
+                if (!raw || typeof raw !== 'object') continue;
+                const content = String(raw.content ?? raw.url ?? '').trim();
                 if (!content) continue;
                 const id = (raw.id !== null && raw.id !== undefined && raw.id !== '' && Number.isFinite(Number(raw.id)))
                     ? Number(raw.id)
                     : Date.now() + seq++;
-                const clean = sanitizeItemForExport(raw);
-                const item = {
-                    ...clean,
-                    id,
-                    content,
-                    deletedAt: raw.deletedAt || nowIso()
-                };
-                if (!item.aiSummary) delete item.aiSummary;
-                if (!item.aiTags || !item.aiTags.length) delete item.aiTags;
-                if (!['active', 'parked', 'dead', 'unknown', 'text'].includes(item.siteStatus)) delete item.siteStatus;
-                if (item.httpCode === null || item.httpCode === undefined) delete item.httpCode;
-                if (!item.aiModel) delete item.aiModel;
-                prepared.push(item);
+                const existing = existingTrashById.get(String(id)) || null;
+                prepared.push(normalizeRecordForCloud(raw, id, existing, true));
             }
-            for (let i = 0; i < prepared.length; i += 450) {
-                const batch = writeBatch(db);
-                prepared.slice(i, i + 450).forEach(item => {
-                    batch.set(doc(db, 'users', state.user.uid, 'trash', String(item.id)), item, { merge: true });
-                });
-                await commitBatch(batch);
-            }
-            return prepared.length;
+            return await writeRecordsInSafeBatches('trash', prepared, false);
         }
         async function importItems(list){
-            if(!state.user)throw new Error('יש להתחבר לפני ייבוא');
-            const existingById=new Map(state.items.map(x=>[String(x.id),x.content]));
-            const prepared=[];let seq=0;const used=new Set(existingById.keys());
-            const reservedKeys=new Set(['id','content','url','description','category','note','type','date','createdAt','updatedAt','isPinned','aiSummary','aiTags','siteStatus','httpCode','aiModel','isScanning','_keepExpanded','deletedAt']);
-            for(const raw of list){
-                if(!raw || typeof raw !== 'object') continue;
-                const content=String(raw.content??raw.url??'').trim();if(!content)continue;
-                let id=(raw.id!==null && raw.id!==undefined && raw.id!=='' && Number.isFinite(Number(raw.id)))?Number(raw.id):Date.now()+seq;
-                if(used.has(String(id)) && existingById.get(String(id))!==content){do{id=Date.now()+seq++;}while(used.has(String(id)));}
+            if(!state.user) throw new Error('יש להתחבר לפני ייבוא');
+            const isAdminNow = typeof isAdminEmail === 'function'
+                ? isAdminEmail(state.user.email)
+                : ADMIN_EMAILS.some(e => String(e).toLowerCase() === String(state.user.email || '').toLowerCase());
+            if (!isAdminNow && state.accessState !== 'approved') {
+                throw new Error('החשבון עדיין לא אושר על ידי מנהל המערכת');
+            }
+
+            const existingById = new Map(state.items.map(x => [String(x.id), x]));
+            const prepared = [];
+            let seq = 0;
+            const used = new Set(existingById.keys());
+
+            for (const raw of list) {
+                if (!raw || typeof raw !== 'object') continue;
+                const content = String(raw.content ?? raw.url ?? '').trim();
+                if (!content) continue;
+
+                let id = (raw.id !== null && raw.id !== undefined && raw.id !== '' && Number.isFinite(Number(raw.id)))
+                    ? Number(raw.id)
+                    : Date.now() + seq;
+                const existing = existingById.get(String(id)) || null;
+
+                if (used.has(String(id)) && (!existing || String(existing.content || '').trim() !== content)) {
+                    do { id = Date.now() + seq++; } while (used.has(String(id)));
+                }
                 used.add(String(id));
-                const extras={};
-                Object.keys(raw).forEach(k=>{
-                    if(!reservedKeys.has(k) && raw[k]!==undefined) extras[k]=raw[k];
-                });
-                const cleanTags=Array.isArray(raw.aiTags)?raw.aiTags.map(String).filter(Boolean):[];
-                const item={
-                    ...extras,
-                    id,
-                    content,
-                    description:String(raw.description||''),
-                    category:String(raw.category||'כללי'),
-                    note:String(raw.note||''),
-                    type:raw.type==='text'?'text':(URL_REGEX.test(content)?'link':'text'),
-                    date:raw.date||raw.createdAt||nowIso(),
-                    createdAt:raw.createdAt||raw.date||nowIso(),
-                    updatedAt:raw.updatedAt||nowIso(),
-                    isPinned:!!raw.isPinned,
-                    ...(raw.aiSummary?{aiSummary:String(raw.aiSummary)}:{}),
-                    ...(cleanTags.length?{aiTags:cleanTags}:{}),
-                    ...(['active','parked','dead','unknown','text'].includes(raw.siteStatus)?{siteStatus:raw.siteStatus}:{}),
-                    ...((raw.httpCode!==null && raw.httpCode!==undefined && raw.httpCode!=='' && Number.isFinite(Number(raw.httpCode)))?{httpCode:Number(raw.httpCode)}:{}),
-                    ...(raw.aiModel?{aiModel:String(raw.aiModel)}:{})
-                };
-                prepared.push(item);seq++;
+
+                const matchedExisting = existing && String(existing.id) === String(id) ? existing : null;
+                prepared.push(normalizeRecordForCloud(raw, id, matchedExisting, false));
+                seq++;
             }
-            for(let i=0;i<prepared.length;i+=450){
-                const batch=writeBatch(db);
-                prepared.slice(i,i+450).forEach(item=>batch.set(doc(db,'users',state.user.uid,'items',String(item.id)),item,{merge:true}));
-                await commitBatch(batch);
-            }
-            return prepared.length;
+
+            return await writeRecordsInSafeBatches('items', prepared, true);
         }
         function openAiFloatingMenu(id,event){const menu=document.getElementById('aiFloatingMenu');if(!menu)return;menu.dataset.itemId=String(id);const check=document.getElementById('aiUrlOnlyCheckbox');if(check){const q=JSON.parse(localStorage.getItem('aiQuickSettings')||'{}');check.checked=!!q.urlOnly;}menu.style.display='block';const pt=event?.touches?.[0]||event;const x=pt?.clientX ?? 24,y=pt?.clientY ?? 120;menu.style.left=Math.max(8,Math.min(x,window.innerWidth-250))+'px';menu.style.top=Math.max(8,Math.min(y,window.innerHeight-260))+'px';}
         function enterSelectionMode(id){state.isSelectionMode=true;document.body.classList.add('selection-mode-active');if(id!=null)state.selectedIds.add(id);updateBulkActionBar();renderList();}
@@ -7150,14 +7229,15 @@ STRICT RULES:
             if(!state.user || !confirm(`להעביר ${state.selectedIds.size} פריטים לסל המחזור?`))return;
             const uid=state.user.uid;
             const ids=[...state.selectedIds];
+            const chunkSize=getSafeBatchLimit(2);
             let moved=0;
             try{
-                for(let i=0;i<ids.length;i+=200){
+                for(let i=0;i<ids.length;i+=chunkSize){
                     const batch=writeBatch(db);
-                    ids.slice(i,i+200).forEach(id=>{
+                    ids.slice(i,i+chunkSize).forEach(id=>{
                         const item=state.items.find(x=>x.id===id); if(!item)return;
-                        const clean={...item}; delete clean.isScanning;
-                        batch.set(doc(db,'users',uid,'trash',String(id)), JSON.parse(JSON.stringify({...clean, deletedAt:nowIso()})));
+                        const clean=normalizeRecordForCloud(item, item.id, item, true);
+                        batch.set(doc(db,'users',uid,'trash',String(id)), clean);
                         batch.delete(doc(db,'users',uid,'items',String(id)));
                         moved++;
                     });
@@ -7170,10 +7250,11 @@ STRICT RULES:
         async function bulkClearAi(){
             if(!state.user)return;
             const ids=[...state.selectedIds];
+            const chunkSize=getSafeBatchLimit(1);
             try{
-                for(let i=0;i<ids.length;i+=400){
+                for(let i=0;i<ids.length;i+=chunkSize){
                     const batch=writeBatch(db);
-                    ids.slice(i,i+400).forEach(id=>{
+                    ids.slice(i,i+chunkSize).forEach(id=>{
                         const item=state.items.find(x=>x.id===id); if(!item)return;
                         delete item.aiSummary;delete item.aiTags;delete item.aiModel;delete item.siteStatus;delete item.httpCode;
                         batch.set(doc(db,'users',state.user.uid,'items',String(id)), {...aiClearPatch(), updatedAt:nowIso()}, {merge:true});
@@ -7258,6 +7339,7 @@ STRICT RULES:
         const perfStyle=document.createElement('style');perfStyle.textContent='.card{content-visibility:auto;contain-intrinsic-size:auto 140px;}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;}}';document.head.appendChild(perfStyle);    </script>
 </body>
 </html>
+
 
 
 
