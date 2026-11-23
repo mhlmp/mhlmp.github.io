@@ -2411,16 +2411,22 @@
                 .replace(/[\u200B-\u200F\u202A-\u202E\uFEFF]/g, '')
                 .trim();
             if (!s) return '';
-            if (URL_REGEX.test(s)) {
+
+            // מנרמל כ-URL רק קישור יחיד ללא רווחים/שורות ואינו כתובת מייל
+            const isEmailLike = !/^https?:\/\//i.test(s) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+            const isPureUrl = !/\s/.test(s) && !isEmailLike && URL_REGEX.test(s);
+
+            if (isPureUrl) {
                 try {
                     const withProto = /^https?:\/\//i.test(s) ? s : 'https://' + s;
                     const u = new URL(withProto);
-                    const host = u.hostname.toLowerCase().replace(/^www\./, '');
-                    const path = u.pathname.replace(/\/+$/, '');
-                    return `${host}${path}${u.search || ''}${u.hash || ''}`.toLowerCase();
+                    const auth = u.username ? `${u.username}${u.password ? ':' + u.password : ''}@` : '';
+                    const host = u.host.toLowerCase().replace(/^www\./, ''); // שומר על מספר פורט (:8080 וכו')
+                    const path = u.pathname.replace(/\/+$/, '');             // שומר על אותיות גדולות/קטנות בנתיב
+                    return `${auth}${host}${path}${u.search || ''}${u.hash || ''}`;
                 } catch (_) {}
             }
-            return s.replace(/\s+/g, ' ').toLowerCase();
+            return s.replace(/\s+/g, ' ');
         }
 
         // מניעת כיבוי מסך (Wake Lock) והגנה מסגירה מקרית בזמן סריקות AI או פעולות המון
@@ -3783,10 +3789,23 @@
             const seenContents = new Map();
 
             chronologicalList.forEach((item, idx) => {
+                const visualIndex = idx + 1;
                 const key = normalizeContentKey(item.content);
-                const isDup = seenContents.has(key);
-                if (!isDup) seenContents.set(key, item.id);
-                visualMetaMap.set(item.id, { visualIndex: idx + 1, isDup });
+                if (!key) {
+                    visualMetaMap.set(item.id, { visualIndex, isDup: false, dupOfIndex: null, dupOfContent: '' });
+                    return;
+                }
+                const firstMatch = seenContents.get(key);
+                const isDup = Boolean(firstMatch);
+                if (!isDup) {
+                    seenContents.set(key, { id: item.id, visualIndex, content: item.content || '' });
+                }
+                visualMetaMap.set(item.id, {
+                    visualIndex,
+                    isDup,
+                    dupOfIndex: isDup ? firstMatch.visualIndex : null,
+                    dupOfContent: isDup ? firstMatch.content : ''
+                });
             });
             return visualMetaMap;
         }
@@ -3863,8 +3882,10 @@
             });
 
             const isHashSearch  = /^#\s*\d+$/.test(query);
+            const dupPairMatch  = query.match(/^#כפול-(\d+)$/);
+            const dupPairTarget = dupPairMatch ? parseInt(dupPairMatch[1], 10) : null;
             const isDupSearch   = query === '#כפול' || query === '#כפולים' || query === 'כפול';
-            const isolateDuplicatesMode = !state.showDuplicates || isDupSearch;
+            const isolateDuplicatesMode = !dupPairTarget && (!state.showDuplicates || isDupSearch);
 
             const getItemStatusTokens = (item) => {
                 const hasCorruptedErrorSummary = item.aiSummary && (
@@ -3927,6 +3948,9 @@
             const isStrictStatusQuery = KNOWN_STATUS_QUERIES.has(query) || /^🔴\s*לא פעיל\s*\(\d+\)$/.test(query) || /^🔴\s*האתר לא פעיל/.test(query);
 
             const matchesSearchText = (item, meta) => {
+                if (dupPairTarget !== null) {
+                    return meta.visualIndex === dupPairTarget || meta.dupOfIndex === dupPairTarget;
+                }
                 if (isHashSearch) {
                     const n = parseInt(query.replace(/\D/g, ''), 10);
                     return meta.visualIndex === n;
@@ -4048,7 +4072,7 @@
         }
 
         function createCard(item, meta) {
-            const { visualIndex = 0, isDup = false } = meta;
+            const { visualIndex = 0, isDup = false, dupOfIndex = null, dupOfContent = '' } = meta;
 
            // זיהוי אם נותר סיכום שגיאה ישן או ניחוש לא מאומת כדי שלא יוצג כ"פעיל ומאומת"
             const hasCorruptedErrorSummary = item.aiSummary && (
@@ -4176,7 +4200,7 @@
                         <div class="card-meta-row">
                             <span class="card-index-badge card-filter-chip" data-filter-query="#${visualIndex}" title="לחץ לסינון פריט #${visualIndex}">#${visualIndex}</span>
 <span class="tag-category card-filter-chip" data-filter-query="${escapeHtml(item.category || 'כללי')}" title="לחץ לסינון כל הפריטים בקבוצה: ${escapeHtml(item.category || 'כללי')}">${escapeHtml(item.category || 'כללי')}</span>                            ${platformPill}${headerStatusPill}
-                            <span class="duplicate-badge card-filter-chip" data-filter-query="#כפול" title="לחץ להצגת כפילויות" style="display:${isDup ? 'inline' : 'none'}">כפול</span>
+                            <span class="duplicate-badge card-filter-chip" data-filter-query="${dupOfIndex ? `#כפול-${dupOfIndex}` : '#כפול'}" title="${dupOfIndex ? `כפול של פריט #${dupOfIndex}: ${escapeHtml(dupOfContent)} (לחץ להשוואת הזוג)` : 'לחץ להצגת כפילויות'}" style="display:${isDup ? 'inline' : 'none'}">${dupOfIndex ? `כפול של #${dupOfIndex}` : 'כפול'}</span>
                             ${item.isPinned ? '<span style="color:var(--accent-gold); font-size:11px;">📌</span>' : ''}
                         </div>
                         ${contentHtml}
@@ -7762,6 +7786,7 @@ STRICT RULES:
         const perfStyle=document.createElement('style');perfStyle.textContent='.card{content-visibility:auto;contain-intrinsic-size:auto 140px;}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;}}';document.head.appendChild(perfStyle);    </script>
 </body>
 </html>
+
 
 
 
