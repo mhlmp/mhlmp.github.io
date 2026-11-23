@@ -714,8 +714,90 @@
         .edit-modal-btns button { flex: 1; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; }
         .btn-save { background: var(--accent-green); color: white; border: none; }
         .btn-cancel { background: rgba(127,127,127,0.2); color: var(--text-primary); border: 1px solid var(--glass-border); }
-                .key-test-status { font-size: 12px; padding: 8px 10px; border-radius: 8px; background: rgba(127,127,127,0.08); display: none; line-height: 1.5; }
+.key-test-status { font-size: 12px; padding: 8px 10px; border-radius: 8px; background: rgba(127,127,127,0.08); display: none; line-height: 1.5; }
 
+        .manual-shot-dropzone {
+            border: 2px dashed rgba(96, 165, 250, 0.48);
+            border-radius: 12px;
+            background: rgba(96, 165, 250, 0.06);
+            padding: 18px 14px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.15s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 135px;
+        }
+        .manual-shot-dropzone:hover, .manual-shot-dropzone.drag-over {
+            border-color: var(--primary-color);
+            background: rgba(96, 165, 250, 0.14);
+        }
+        .manual-shot-preview {
+            width: 100%;
+            max-height: 240px;
+            object-fit: contain;
+            border-radius: 10px;
+            border: 1px solid var(--glass-border);
+            background: rgba(0, 0, 0, 0.25);
+            display: none;
+        }
+        .manual-shot-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .scan-log-entry {
+            background: rgba(127, 127, 127, 0.07);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            padding: 10px 12px;
+            margin-bottom: 10px;
+            font-size: 12.5px;
+        }
+        .scan-log-entry-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding-bottom: 6px;
+            margin-bottom: 6px;
+            border-bottom: 1px solid rgba(127, 127, 127, 0.15);
+            font-weight: 700;
+        }
+        .scan-log-url {
+            direction: ltr;
+            text-align: left;
+            word-break: break-all;
+            color: var(--primary-color);
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .scan-log-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-family: monospace;
+            font-size: 11.5px;
+            line-height: 1.45;
+        }
+        .scan-log-step {
+            padding: 3px 6px;
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.12);
+            word-break: break-word;
+        }
+        .scan-log-step.lvl-ok { border-right: 3px solid var(--accent-green); }
+        .scan-log-step.lvl-warn { border-right: 3px solid var(--accent-gold); }
+        .scan-log-step.lvl-error { border-right: 3px solid var(--accent-red); }
+        .scan-log-step.lvl-info { border-right: 3px solid var(--primary-color); }
         /* =====================================================
            מסך פתיחה לפני התחברות – התאמה חכמה למסך המכשיר
            ===================================================== */
@@ -1985,6 +2067,8 @@
                         <div class="dropdown-divider"></div>
                         <button id="rescanDeadBtn">🔄 בדוק מחדש קישורים לא זמינים (🔴)</button>
                         <button id="rescanParkedBtn">🔄 בדוק מחדש דומיינים בחניה (🟠)</button>
+                        <div class="dropdown-divider"></div>
+                        <button id="openScanLogBtn">📋 לוג אבחון סריקה (פירוט שלבים)</button>
                     </div>
                 </div>
                 <button id="trashBtn" class="action-btn btn-toggle" title="סל מחזור">🗑️</button>
@@ -2163,6 +2247,51 @@
     <div id="toast-container"></div>
     <button id="scrollTopBtn" title="גלול למעלה">☝️</button>
 
+    <div id="manualShotModal" class="edit-modal-wrap">
+        <div class="edit-modal-box" style="max-width:480px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h3 style="margin:0;">📸 סריקת AI מתמונת מסך ידנית</h3>
+                <button type="button" onclick="document.getElementById('manualShotModal').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:1.3rem;color:var(--text-primary);">✖</button>
+            </div>
+            <div class="edit-modal-form">
+                <div id="manualShotTargetUrl" style="font-size:12px; color:var(--primary-color); direction:ltr; text-align:left; word-break:break-all; background:rgba(127,127,127,0.08); padding:7px 10px; border-radius:8px; font-family:monospace;"></div>
+                <div id="manualShotDropZone" class="manual-shot-dropzone" tabindex="0">
+                    <div id="manualShotPlaceholder">
+                        <div style="font-size:1.8rem; margin-bottom:4px;">🖼️</div>
+                        <div style="font-weight:700; font-size:0.92rem;">לחץ לבחירת תמונה, גרור לכאן, או הדבק (Ctrl+V)</div>
+                        <div style="font-size:0.78rem; color:var(--text-secondary); margin-top:4px;">עוקף כל חסימת Cloudflare / VPN — התמונה נשלחת לניתוח בלבד ואינה נשמרת בענן</div>
+                    </div>
+                    <img id="manualShotPreviewImg" class="manual-shot-preview" alt="תצוגה מקדימה">
+                </div>
+                <input type="file" id="manualShotFileInput" accept="image/*">
+                <div id="manualShotMeta" class="manual-shot-meta" style="display:none;">
+                    <span id="manualShotSizeLabel"></span>
+                    <button type="button" id="manualShotClearImgBtn" class="btn-action-sm" style="color:#fca5a5;">🗑️ החלף תמונה</button>
+                </div>
+                <span class="edit-modal-label">רמז קצר נוסף (אופציונלי):</span>
+                <input type="text" id="manualShotHintInput" class="edit-modal-input" placeholder="לדוגמה: אתר צפייה ישירה / תוסף / דורש VPN...">
+                <div class="edit-modal-btns">
+                    <button type="button" id="manualShotSubmitBtn" class="btn-save" disabled style="opacity:0.55;">🤖 נתח תמונה והפק תיאור</button>
+                    <button type="button" class="btn-cancel" onclick="document.getElementById('manualShotModal').style.display='none'">ביטול</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="scanLogModal" class="edit-modal-wrap">
+        <div class="edit-modal-box" style="max-width:660px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+                <h3 style="margin:0;">📋 לוג אבחון סריקה</h3>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <button type="button" id="copyScanLogBtn" class="btn-action-sm">📋 העתק לוג</button>
+                    <button type="button" id="clearScanLogBtn" class="btn-action-sm" style="color:#fca5a5;">🧹 נקה</button>
+                    <button type="button" onclick="document.getElementById('scanLogModal').style.display='none'" class="modal-close-pill" title="סגור">✖</button>
+                </div>
+            </div>
+            <div id="scanLogList" style="max-height:62vh; overflow-y:auto; padding-left:2px;"></div>
+        </div>
+    </div>
+
     <div id="aiFloatingMenu">
         <div style="padding: 8px 15px; font-size: 11px; opacity: 0.7; font-weight: bold; border-bottom: 1px solid var(--glass-border);">בחר פעולת סריקה לפריט:</div>
         <div style="padding: 10px 15px; border-bottom: 1px solid rgba(127,127,127,0.1); display: flex; align-items: center; gap: 10px;">
@@ -2176,6 +2305,8 @@
         <button class="ai-provider-btn" data-provider="gemini">🔹 Google Gemini</button>
         <button class="ai-provider-btn" data-provider="groq">⚡ Groq (Llama 3.3)</button>
         <button class="ai-provider-btn" data-provider="openrouter">🌐 OpenRouter</button>
+        <div class="dropdown-divider"></div>
+        <button id="aiManualShotMenuBtn" type="button" style="color:#60a5fa; font-weight:700;">📸 סרוק עם תמונת מסך ידנית</button>
     </div>
     
     <script type="module">
@@ -2874,6 +3005,7 @@
                 if (e.target.closest('.trash-btn')) { e.stopPropagation(); moveToTrash(id); return; }
                 if (e.target.closest('.ai-edit-btn')) { e.stopPropagation(); window.openEditAiModal(item); return; }
                 if (e.target.closest('.ai-rescan-inline-btn')) { e.stopPropagation(); window.scanSingleItem(id, null, false); return; }
+                if (e.target.closest('.btn-manual-shot, .ai-manual-shot-inline-btn')) { e.stopPropagation(); window.openManualShotModal(item); return; }
                 
                 const linkEl = e.target.closest('.card-link');
                 if (linkEl && !e.target.closest('.card-actions')) {
@@ -3587,6 +3719,7 @@
                             <span class="${statusClass} card-filter-chip" data-filter-query="${escapeHtml(statusText)}" title="לחץ לסינון לפי סטטוס זה">${statusText}</span>
                         </span>
                         <div style="display:flex;gap:4px;align-items:center;">
+                            <button class="icon-btn ai-manual-shot-inline-btn" title="סרוק עם תמונת מסך ידנית" style="width:22px;height:22px;font-size:11px;background:rgba(96,165,250,0.18);border-radius:4px;">📸</button>
                             <button class="icon-btn ai-rescan-inline-btn" title="סרוק מחדש פריט זה כעת" style="width:22px;height:22px;font-size:11px;background:rgba(127,127,127,0.15);border-radius:4px;">🔄</button>
                             <button class="icon-btn ai-edit-btn" title="ערוך סטטוס ותוצאות AI" style="width:22px;height:22px;font-size:12px;background:rgba(127,127,127,0.15);border-radius:4px;">✏️</button>
                         </div>
@@ -3623,6 +3756,7 @@
                     <div class="card-actions-inner">
                         <div class="card-actions-content card-actions">
                             <button class="icon-btn btn-ai-scan" title="סרוק / נתח עם AI (לחיצה ארוכה לאפשרויות)">✨</button>
+                            <button class="icon-btn btn-manual-shot" title="סרוק עם תמונת מסך ידנית (הדבקה / העלאה)">📸</button>
                             <button class="icon-btn btn-share" title="שתף">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
                             </button>
@@ -3864,6 +3998,263 @@
         };
 
        // =========================================================================
+        // 0A. מנוע לוג אבחון סריקה (Console + חלון צפייה בתוך האתר)
+        // =========================================================================
+        window.MH_SCAN_LOGS = window.MH_SCAN_LOGS || [];
+
+        function createScanLogger(item, modeLabel = 'AI') {
+            const startedAt = performance.now();
+            const entry = {
+                itemId: item?.id ?? null,
+                url: String(item?.content || '').trim(),
+                mode: modeLabel,
+                startedAtIso: nowIso(),
+                durationMs: 0,
+                finalStatus: 'running',
+                finalModel: '',
+                steps: []
+            };
+            window.MH_SCAN_LOGS.unshift(entry);
+            if (window.MH_SCAN_LOGS.length > 60) window.MH_SCAN_LOGS.length = 60;
+
+            const iconMap = { ok: '✅', warn: '⚠️', error: '❌', info: '🔹' };
+            console.log(`%c[MH-Scan #${entry.itemId}] ▶ התחלת סריקה (${modeLabel}): ${entry.url}`, 'color:#60a5fa;font-weight:bold;');
+
+            const step = (stage, detail, level = 'info') => {
+                const elapsedMs = Math.round(performance.now() - startedAt);
+                entry.steps.push({ elapsedMs, stage, detail: String(detail ?? ''), level });
+                const prefix = `[MH-Scan #${entry.itemId}] +${elapsedMs}ms ${iconMap[level] || '🔹'} [${stage}]`;
+                if (level === 'error') console.error(prefix, detail);
+                else if (level === 'warn') console.warn(prefix, detail);
+                else console.log(prefix, detail);
+                if (document.getElementById('scanLogModal')?.style.display === 'flex') {
+                    renderScanLogModal();
+                }
+            };
+
+            const finish = (finalStatus, finalModel = '', summaryPreview = '') => {
+                entry.durationMs = Math.round(performance.now() - startedAt);
+                entry.finalStatus = finalStatus || 'done';
+                entry.finalModel = finalModel || '';
+                const preview = summaryPreview ? ` | תוצאה: "${String(summaryPreview).slice(0, 90)}"` : '';
+                console.log(
+                    `%c[MH-Scan #${entry.itemId}] 🏁 הסתיים תוך ${entry.durationMs}ms | סטטוס: ${entry.finalStatus} | מנוע: ${entry.finalModel}${preview}`,
+                    'color:#22c55e;font-weight:bold;'
+                );
+                if (document.getElementById('scanLogModal')?.style.display === 'flex') {
+                    renderScanLogModal();
+                }
+            };
+
+            return { step, finish, entry };
+        }
+
+        function formatScanLogsAsText() {
+            if (!window.MH_SCAN_LOGS.length) return 'אין עדיין רשומות סריקה.';
+            return window.MH_SCAN_LOGS.map(log => {
+                const head = `=== [${log.startedAtIso}] #${log.itemId} (${log.mode}) | ${log.url} | status=${log.finalStatus} | model=${log.finalModel} | ${log.durationMs}ms ===`;
+                const lines = log.steps.map(s => `  +${s.elapsedMs}ms [${s.level.toUpperCase()}] [${s.stage}] ${s.detail}`);
+                return [head, ...lines].join('\n');
+            }).join('\n\n');
+        }
+
+        function renderScanLogModal() {
+            const host = document.getElementById('scanLogList');
+            if (!host) return;
+            if (!window.MH_SCAN_LOGS.length) {
+                host.innerHTML = '<div style="text-align:center; padding:24px; color:var(--text-secondary);">אין עדיין לוגים של סריקה בהפעלה זו. סרוק קישור כלשהו (✨ או 🔄) כדי לראות אבחון מלא של כל שלב.</div>';
+                return;
+            }
+            host.innerHTML = window.MH_SCAN_LOGS.map(log => {
+                const stepsHtml = log.steps.map(s =>
+                    `<div class="scan-log-step lvl-${escapeHtml(s.level)}"><b>+${s.elapsedMs}ms</b> [${escapeHtml(s.stage)}] ${escapeHtml(s.detail)}</div>`
+                ).join('');
+                return `
+                    <div class="scan-log-entry">
+                        <div class="scan-log-entry-head">
+                            <span>#${escapeHtml(log.itemId)} • ${escapeHtml(log.mode)} • ${escapeHtml(log.finalStatus)}${log.finalModel ? ` (${escapeHtml(log.finalModel)})` : ''}</span>
+                            <span style="font-size:11px; color:var(--text-secondary);">${log.durationMs ? `${log.durationMs}ms` : 'בתהליך...'}</span>
+                        </div>
+                        <div class="scan-log-url" style="margin-bottom:6px;">${escapeHtml(log.url)}</div>
+                        <div class="scan-log-steps">${stepsHtml}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        window.openScanLogModal = function () {
+            closeAllMenus();
+            renderScanLogModal();
+            const modal = document.getElementById('scanLogModal');
+            if (modal) modal.style.display = 'flex';
+        };
+
+        // =========================================================================
+        // 0B. מנוע העלאה והדבקת תמונת מסך ידנית (Manual Screenshot to Vision AI)
+        // =========================================================================
+        const manualShotState = { itemId: null, base64: null, sizeKb: 0 };
+
+        async function compressImageBlobToBase64(blob, maxW = 1280, maxH = 1000, quality = 0.82) {
+            if (!blob || !blob.type || !blob.type.startsWith('image/')) return null;
+            return await new Promise((resolve) => {
+                const img = new Image();
+                const objUrl = URL.createObjectURL(blob);
+                img.onload = () => {
+                    try {
+                        let w = img.naturalWidth || 1024;
+                        let h = img.naturalHeight || 768;
+                        const scale = Math.min(1, maxW / w, maxH / h);
+                        w = Math.max(1, Math.round(w * scale));
+                        h = Math.max(1, Math.round(h * scale));
+                        const canvas = document.createElement('canvas');
+                        canvas.width = w;
+                        canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        ctx.fillStyle = '#0f172a';
+                        ctx.fillRect(0, 0, w, h);
+                        ctx.drawImage(img, 0, 0, w, h);
+                        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                        URL.revokeObjectURL(objUrl);
+                        resolve(dataUrl.split(',')[1] || null);
+                    } catch (_) {
+                        URL.revokeObjectURL(objUrl);
+                        resolve(null);
+                    }
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(objUrl);
+                    resolve(null);
+                };
+                img.src = objUrl;
+            });
+        }
+
+        function resetManualShotPreview() {
+            manualShotState.base64 = null;
+            manualShotState.sizeKb = 0;
+            const img = document.getElementById('manualShotPreviewImg');
+            const ph = document.getElementById('manualShotPlaceholder');
+            const meta = document.getElementById('manualShotMeta');
+            const btn = document.getElementById('manualShotSubmitBtn');
+            const input = document.getElementById('manualShotFileInput');
+            if (img) { img.src = ''; img.style.display = 'none'; }
+            if (ph) ph.style.display = 'block';
+            if (meta) meta.style.display = 'none';
+            if (input) input.value = '';
+            if (btn) { btn.disabled = true; btn.style.opacity = '0.55'; }
+        }
+
+        async function loadManualShotBlob(blob) {
+            if (!blob || !blob.type?.startsWith('image/')) {
+                showToast('⚠️ יש לבחור או להדביק קובץ תמונה תקין.', null, 3000, null, true);
+                return;
+            }
+            const b64 = await compressImageBlobToBase64(blob);
+            if (!b64) {
+                showToast('❌ לא ניתן היה לעבד את התמונה.', null, 3500, null, true);
+                return;
+            }
+            manualShotState.base64 = b64;
+            manualShotState.sizeKb = Math.round((b64.length * 3) / 4 / 1024);
+
+            const img = document.getElementById('manualShotPreviewImg');
+            const ph = document.getElementById('manualShotPlaceholder');
+            const meta = document.getElementById('manualShotMeta');
+            const sizeLbl = document.getElementById('manualShotSizeLabel');
+            const btn = document.getElementById('manualShotSubmitBtn');
+
+            if (img) {
+                img.src = `data:image/jpeg;base64,${b64}`;
+                img.style.display = 'block';
+            }
+            if (ph) ph.style.display = 'none';
+            if (meta) meta.style.display = 'flex';
+            if (sizeLbl) sizeLbl.textContent = `✅ תמונה מוכנה לניתוח (${manualShotState.sizeKb} KB)`;
+            if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+        }
+
+        window.openManualShotModal = function (itemOrId) {
+            const item = typeof itemOrId === 'object' ? itemOrId : state.items.find(i => i.id === Number(itemOrId));
+            if (!item) return;
+            closeAllMenus();
+            manualShotState.itemId = item.id;
+            resetManualShotPreview();
+            const urlBox = document.getElementById('manualShotTargetUrl');
+            const hintInput = document.getElementById('manualShotHintInput');
+            if (urlBox) urlBox.textContent = item.content || '';
+            if (hintInput) hintInput.value = '';
+            const modal = document.getElementById('manualShotModal');
+            if (modal) modal.style.display = 'flex';
+        };
+
+        function initScanLogAndManualShotUi() {
+            document.getElementById('openScanLogBtn')?.addEventListener('click', () => window.openScanLogModal());
+            document.getElementById('copyScanLogBtn')?.addEventListener('click', () => copyText(formatScanLogsAsText()));
+            document.getElementById('clearScanLogBtn')?.addEventListener('click', () => {
+                window.MH_SCAN_LOGS = [];
+                renderScanLogModal();
+                showToast('🧹 לוג האבחון נוקה');
+            });
+
+            document.getElementById('aiManualShotMenuBtn')?.addEventListener('click', () => {
+                const id = Number(document.getElementById('aiFloatingMenu')?.dataset.itemId);
+                if (id) window.openManualShotModal(id);
+            });
+
+            const dropZone = document.getElementById('manualShotDropZone');
+            const fileInput = document.getElementById('manualShotFileInput');
+
+            dropZone?.addEventListener('click', () => fileInput?.click());
+            dropZone?.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+            dropZone?.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+            dropZone?.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('drag-over');
+                const f = e.dataTransfer?.files?.[0];
+                if (f) loadManualShotBlob(f);
+            });
+
+            fileInput?.addEventListener('change', (e) => {
+                const f = e.target.files?.[0];
+                if (f) loadManualShotBlob(f);
+            });
+
+            document.getElementById('manualShotClearImgBtn')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                resetManualShotPreview();
+                fileInput?.click();
+            });
+
+            window.addEventListener('paste', (e) => {
+                const modal = document.getElementById('manualShotModal');
+                if (!modal || getComputedStyle(modal).display === 'none') return;
+                const items = Array.from(e.clipboardData?.items || []);
+                const imgItem = items.find(it => it.type && it.type.startsWith('image/'));
+                if (!imgItem) return;
+                e.preventDefault();
+                const blob = imgItem.getAsFile();
+                if (blob) loadManualShotBlob(blob);
+            });
+
+            document.getElementById('manualShotSubmitBtn')?.addEventListener('click', async () => {
+                if (!manualShotState.itemId || !manualShotState.base64) return;
+                const targetId = manualShotState.itemId;
+                const b64 = manualShotState.base64;
+                const hint = (document.getElementById('manualShotHintInput')?.value || '').trim();
+                const modal = document.getElementById('manualShotModal');
+                if (modal) modal.style.display = 'none';
+                resetManualShotPreview();
+                await window.scanSingleItem(targetId, null, false, {
+                    manualScreenshotBase64: b64,
+                    manualHint: hint
+                });
+            });
+        }
+
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initScanLogAndManualShotUi, { once: true });
+        else initScanLogAndManualShotUi();
+
+        // =========================================================================
         // 0. מנוע צילום מסך חי (Live Page Screenshot to Base64 for Vision AI)
         // =========================================================================
         async function imageUrlToCompressedBase64(imgUrl) {
@@ -4442,9 +4833,10 @@
             }
         }
 
-        async function diagnoseLinkStatus(cleanUrl, captureScreenshot = true) {
+        async function diagnoseLinkStatus(cleanUrl, captureScreenshot = true, logStep = null) {
             const domainMatch = cleanUrl.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?#]+)/im);
             const domain = domainMatch ? domainMatch[1].toLowerCase() : '';
+            logStep?.('Network', `מתחיל אבחון דומיין: ${domain || cleanUrl} (צילום אוטומטי: ${captureScreenshot ? 'פעיל' : 'כבוי'})`, 'info');
 
             const result = {
                 verifiedStatus: 'unknown',
@@ -4747,8 +5139,15 @@
             let mainHomepageText = '';
             const isCloudflareChallenge = isBotProtectionText(pageTitle, bodyText) || httpCode === 403;
 
+            logStep?.(
+                'HTTP Probes',
+                `HTTP=${httpCode ?? 'N/A'} | HTML=${rawHtml.length} chars | Microlink=${microlinkData ? 'OK' : (microlinkFailedCode || 'FAIL')} | Title="${pageTitle.slice(0, 50)}"`,
+                (httpCode && httpCode < 400 && rawHtml.length > 50) ? 'ok' : 'warn'
+            );
+
             if (isCloudflareChallenge) {
                 result.isBotProtected = true;
+                logStep?.('Bot Shield', `זוהתה חסימת Cloudflare/403/Anti-Bot — מנקה טקסט חסימה ומעביר ל-Jina / צילום / Google Search`, 'warn');
                 if (isBotProtectionText(pageTitle, '')) pageTitle = '';
                 if (isBotProtectionText('', metaDesc)) metaDesc = '';
                 if (isBotProtectionText('', ogSiteName)) ogSiteName = '';
@@ -4940,10 +5339,22 @@
                 return result;
             }
 
+            logStep?.(
+                'Jina Reader',
+                jinaText ? `הוחזר תוכן נקי (${jinaText.length} תווים)${jinaTitle ? ` | Title="${jinaTitle.slice(0, 45)}"` : ''}` : 'לא הוחזר תוכן שמיש (נחסם או לא נדרש)',
+                jinaText ? 'ok' : 'info'
+            );
+
             // ט. צילום מסך חי תמיד לפני הכרעה (גם אם האתר חסם פרוקסי ישיר!)
             if (captureScreenshot) {
                 const shotTarget = (isSubPage && !pageTitle && rootOriginUrl) ? rootOriginUrl : cleanUrl;
                 result.screenshotBase64 = await captureVisualScreenshotBase64(shotTarget, microlinkData, ogImage);
+                if (result.screenshotBase64) {
+                    const shotKb = Math.round((result.screenshotBase64.length * 3) / 4 / 1024);
+                    logStep?.('Screenshot', `צילום מסך אוטומטי הצליח (${shotKb} KB)`, 'ok');
+                } else {
+                    logStep?.('Screenshot', 'לא התקבל צילום מסך אוטומטי (Microlink/thum.io/mShots נכשלו או נחסמו)', 'warn');
+                }
             }
 
             const effectiveBody = jinaText || bodyText;
@@ -4952,6 +5363,7 @@
             const hasCleanContent = Boolean(pageTitle || metaDesc || effectiveBody.length > 25 || mainHomepageText.length > 25);
             if (!hasCleanContent) {
                 result.isBotProtected = true;
+                logStep?.('Content Check', 'אין תוכן HTML נקי — האתר מסומן כמוגן אנטי-בוט ויועבר ל-Vision + Google Search', 'warn');
             }
 
             result.verifiedStatus = 'active';
@@ -5050,8 +5462,8 @@
             return chain;
         }
 
-        // סריקת פריט בודד עם צילום מסך חי (Vision AI), סריקת עמוד ראשי ובקרת איכות
-        window.scanSingleItem = async function (id, overrideProvider = null, forceUrlOnly = false) {
+        // סריקת פריט בודד עם לוג אבחון מלא, צילום מסך אוטומטי/ידני (Vision AI) ובקרת איכות
+        window.scanSingleItem = async function (id, overrideProvider = null, forceUrlOnly = false, options = null) {
             if (!navigator.onLine) {
                 showToast('❌ לא ניתן לבצע סריקה ללא חיבור לאינטרנט.', null, 3500, null, true);
                 const ci = state.items.find(i => i.id === id);
@@ -5062,15 +5474,30 @@
             const item = state.items.find(i => i.id === id);
             if (!item) return;
 
+            const isManualScreenshot = Boolean(options?.manualScreenshotBase64);
+            const manualHint = String(options?.manualHint || '').trim();
+            const modeLabel = isManualScreenshot
+                ? '📸 תמונת מסך ידנית'
+                : (overrideProvider === 'fast-status' ? '⚡ בדיקה מהירה' : (overrideProvider || '🤖 סריקה מלאה'));
+            const scanLog = createScanLogger(item, modeLabel);
+
             const isSingleManualScan = !scanController.isRunning;
             if (isSingleManualScan) {
                 scanController.isAborted = false;
                 item._keepExpanded = true;
-                showToast('🔍 סורק ומנתח את הפריט לעומק...', null, 2500, 'single-scan-toast');
+                showToast(
+                    isManualScreenshot ? '📸 מנתח את תמונת המסך עם Vision AI...' : '🔍 סורק ומנתח את הפריט לעומק...',
+                    null,
+                    2800,
+                    'single-scan-toast'
+                );
             }
 
             item.isScanning = true;
             updateCardInPlace(id);
+
+            let scanSuccessToast = '✅ סריקת הפריט הושלמה בהצלחה';
+            let scanToastIsError = false;
 
             try {
                 let cleanContent = (item.content || '').trim().replace(/^[\/\\]+/, '').replace(/\s+/g, '');
@@ -5080,9 +5507,9 @@
                     cleanContent = 'https://' + cleanContent;
                 }
 
-                const shouldCaptureScreenshot = overrideProvider !== 'fast-status' && !forceUrlOnly;
+                const shouldCaptureScreenshot = !isManualScreenshot && overrideProvider !== 'fast-status' && !forceUrlOnly;
 
-                // שלב 1: אבחון רשת עמוק + סריקת העמוד הראשי + צילום מסך חי של האתר/הטלגרם
+                // שלב 1: אבחון רשת עמוק או שימוש ישיר בתמונת המסך הידנית
                 let netDiag = {
                     verifiedStatus: isWebsite ? 'active' : 'text',
                     httpCode: 200,
@@ -5092,16 +5519,26 @@
                     metaDesc: '',
                     fallbackSummary: '',
                     screenshotBase64: null,
+                    isManualScreenshot: false,
                     reason: '',
                     tags: []
                 };
 
-                if (isWebsite && !forceUrlOnly) {
-                    netDiag = await diagnoseLinkStatus(cleanContent, shouldCaptureScreenshot);
+                if (isManualScreenshot) {
+                    const shotKb = Math.round((options.manualScreenshotBase64.length * 3) / 4 / 1024);
+                    netDiag.verifiedStatus = isWebsite ? 'active' : 'text';
+                    netDiag.httpCode = 200;
+                    netDiag.isDefinitive = true;
+                    netDiag.isManualScreenshot = true;
+                    netDiag.screenshotBase64 = options.manualScreenshotBase64;
+                    scanLog.step('Manual Shot', `התקבלה תמונת מסך ידנית (${shotKb} KB)${manualHint ? ` | רמז: "${manualHint}"` : ''} — מדלג על חסימות פרוקסי`, 'ok');
+                } else if (isWebsite && !forceUrlOnly) {
+                    netDiag = await diagnoseLinkStatus(cleanContent, shouldCaptureScreenshot, scanLog.step);
                 } else if (isWebsite && forceUrlOnly) {
                     const dnsDomainMatch = cleanContent.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?#]+)/im);
                     const dnsDomain = dnsDomainMatch ? dnsDomainMatch[1].toLowerCase() : '';
                     const nx = dnsDomain ? await isNxDomain(dnsDomain) : false;
+                    scanLog.step('DNS Only', `בדיקת DNS עבור ${dnsDomain}: ${nx ? 'NXDOMAIN (לא קיים)' : 'תקין'}`, nx ? 'error' : 'ok');
                     if (nx) {
                         netDiag.verifiedStatus = 'dead';
                         netDiag.httpCode = 404;
@@ -5116,18 +5553,26 @@
                         netDiag.isDefinitive = true;
                         netDiag.skipAiGuessing = false;
                     }
+                } else {
+                    scanLog.step('Type', 'זוהה כטקסט/פקודה — מועבר ישירות לניתוח AI', 'info');
                 }
 
-                if (scanController.isAborted) return;
+                if (scanController.isAborted) {
+                    scanLog.step('Abort', 'הסריקה בוטלה על ידי המשתמש', 'warn');
+                    scanLog.finish('aborted');
+                    return;
+                }
 
-                // עצירה מיידית רק כאשר: בדיקה מהירה, או שהקישור אומת בוודאות כמת/בחניה
+                // עצירה מיידית רק כאשר: בדיקה מהירה, או שהקישור אומת בוודאות כמת/בחניה (לא במצב תמונה ידנית)
                 if (
-                    overrideProvider === 'fast-status' ||
-                    (isWebsite && (
-                        netDiag.verifiedStatus === 'dead' ||
-                        netDiag.verifiedStatus === 'parked' ||
-                        netDiag.skipAiGuessing
-                    ))
+                    !isManualScreenshot && (
+                        overrideProvider === 'fast-status' ||
+                        (isWebsite && (
+                            netDiag.verifiedStatus === 'dead' ||
+                            netDiag.verifiedStatus === 'parked' ||
+                            netDiag.skipAiGuessing
+                        ))
+                    )
                 ) {
                     const ci = state.items.find(i => i.id === id);
                     if (ci) {
@@ -5146,6 +5591,8 @@
                             ci.aiModel = '⚡ אימות שרת ורשת';
                         }
                         ci.updatedAt = nowIso();
+                        scanLog.step('Fast Exit', `הוחלט סטטוס סופי=${newStatus} (HTTP ${ci.httpCode ?? 'N/A'}) ללא צורך ב-AI`, newStatus === 'active' ? 'ok' : 'warn');
+                        scanLog.finish(newStatus, ci.aiModel, ci.aiSummary);
                     }
                     return;
                 }
@@ -5161,7 +5608,7 @@
                 );
 
                 const isTelegramUrl = /(?:t\.me|telegram\.(?:me|dog))\//i.test(cleanContent);
-                const needsLiveSearch = isWebsite && !isTelegramUrl && (
+                const needsLiveSearch = isWebsite && !isTelegramUrl && !isManualScreenshot && (
                     Boolean(netDiag.isBotProtected) ||
                     !netDiag.scrapedText ||
                     netDiag.scrapedText.length < 350 ||
@@ -5169,13 +5616,26 @@
                     forceUrlOnly
                 );
 
-                // אם האתר חסם סריקה ישירה ואין צילום מסך (במצב אוטומטי), נעדיף Gemini ראשון כי יש לו חיפוש Google חי
-                const preferredAutoProvider = (!overrideProvider && needsLiveSearch && !netDiag.screenshotBase64)
+                // בתמונת מסך ידנית או אתר חסום ללא תוכן — מעדיפים Gemini ראשון (Vision איכותי + Google Search)
+                const preferredAutoProvider = (!overrideProvider && (isManualScreenshot || (needsLiveSearch && !netDiag.screenshotBase64)))
                     ? 'gemini'
                     : overrideProvider;
                 const fallbackChain = buildSmartFallbackChain(preferredAutoProvider);
 
+                scanLog.step(
+                    'AI Route',
+                    `ספקים זמינים: ${fallbackChain.length} [${[...new Set(fallbackChain.map(x => x.provider))].join(', ') || 'אין'}] | LiveSearch=${needsLiveSearch} | Screenshot=${netDiag.screenshotBase64 ? (isManualScreenshot ? 'MANUAL' : 'AUTO') : 'NO'}`,
+                    fallbackChain.length > 0 ? 'info' : 'error'
+                );
+
                 if (fallbackChain.length === 0) {
+                    if (isManualScreenshot) {
+                        scanSuccessToast = '⚠️ נדרש לפחות מפתח API אחד (Gemini / Groq / OpenRouter) בהגדרות AI לניתוח תמונת מסך.';
+                        scanToastIsError = true;
+                        scanLog.step('AI Error', 'אין מפתחות API מוגדרים לניתוח תמונה ידנית', 'error');
+                        scanLog.finish('no_keys');
+                        return;
+                    }
                     const ci = state.items.find(i => i.id === id);
                     if (ci) {
                         ci.siteStatus = isWebsite ? netDiag.verifiedStatus : 'text';
@@ -5184,16 +5644,27 @@
                         if (netDiag.tags?.length) ci.aiTags = netDiag.tags;
                         ci.aiModel = '⚡ אבחון רשת מאומת';
                         ci.updatedAt = nowIso();
+                        scanLog.finish(ci.siteStatus, ci.aiModel, ci.aiSummary);
                     }
                     if (isSingleManualScan) {
-                        showToast('⚠️ לא הוגדר מפתח API בהגדרות AI — בוצעה בדיקת רשת בלבד.', null, 4500, null, true);
+                        scanSuccessToast = '⚠️ לא הוגדר מפתח API בהגדרות AI — בוצעה בדיקת רשת בלבד.';
+                        scanToastIsError = true;
                     }
                     return;
                 }
 
-                // שלב 2: בניית הפרומפט המשולב (טקסט + צילום מסך חי + הנחיית חיפוש לאתרים מוגני Cloudflare)
+                // שלב 2: בניית הפרומפט המשולב (טקסט + צילום מסך חי/ידני + הנחיית חיפוש)
                 let contentToAnalyze = cleanContent;
-                if (isWebsite) {
+                if (isManualScreenshot) {
+                    contentToAnalyze = [
+                        `Target URL / Content: ${cleanContent}`,
+                        isWebsite ? `Main Domain: ${domain}` : '',
+                        `MANUAL USER SCREENSHOT ATTACHED: YES — The user personally opened this site/resource and captured the attached screenshot directly from their browser.`,
+                        `Analyze the browser tab title, brand logo, URL bar, navigation menus, headings, media cards, categories, badges, and visible interface elements in the screenshot.`,
+                        manualHint ? `Additional User Hint: ${manualHint}` : '',
+                        item.description ? `Existing Item Description: ${item.description}` : ''
+                    ].filter(Boolean).join('\n');
+                } else if (isWebsite) {
                     contentToAnalyze = [
                         `Target URL: ${cleanContent}`,
                         `Main Domain: ${domain}`,
@@ -5207,13 +5678,14 @@
                 }
 
                 const systemPrompt = `You are an Elite Visual Web Auditor & Technical Analyst.
-You are given verified data extracted from a website or Telegram link, a LIVE SCREENSHOT when available, and Google Search grounding when needed.
+You are given verified data extracted from a website or Telegram link, a LIVE or USER-SUPPLIED SCREENSHOT when available, and Google Search grounding when needed.
 Your job is to write a clear, accurate, informative 2-sentence description in HEBREW explaining what the website, tool, repository, or Telegram entity does.
 
 STRICT RULES:
 1. TRUST VERIFIED ACTIVE STATUS & IGNORE ANTI-BOT SCREENS:
   - This link has ALREADY been verified as ACTIVE (HTTP 200).
-  - If direct HTML scraping was blocked or the screenshot shows a Cloudflare / CAPTCHA / "Just a moment" / "Verify you are human" / 403 block screen, IGNORE that challenge screen completely! NEVER describe Cloudflare and NEVER set "visualStatus" to "dead" because of bot protection. Use Google Search on the exact domain (and known mirror domains of the same service) to describe what the actual site offers.
+  - If a manual user screenshot is attached, rely primarily on what is visibly shown in the screenshot (site logo, tab title, headings, categories, content cards, features) and keep "visualStatus" as "active".
+  - If direct HTML scraping was blocked or an automatic screenshot shows a Cloudflare / CAPTCHA / "Just a moment" / "Verify you are human" / 403 block screen, IGNORE that challenge screen completely! NEVER describe Cloudflare and NEVER set "visualStatus" to "dead" because of bot protection. Use Google Search on the exact domain (and known mirror domains of the same service) to describe what the actual site offers.
   - For Telegram links (t.me): NEVER claim a Telegram channel, group, bot, or invite link is dead, deleted, expired, or non-existent just because it is not indexed in Google Search or shows a "View in Telegram" screen. Always set "visualStatus" to "active" for Telegram links.
 2. TELEGRAM LINKS (t.me):
   - State clearly whether it is a Telegram Channel (ערוץ טלגרם), Group (קבוצת טלגרם), Bot (בוט טלגרם), Post, Folder, or Sticker Pack, its display name, subscriber/member count (if shown), and what topic, service, or content it provides.
@@ -5253,10 +5725,11 @@ STRICT RULES:
 
                 let parsedResult = null;
                 let usedModelName = '';
+                const shotTagLabel = isManualScreenshot ? ' 📸 ידני' : (netDiag.screenshotBase64 ? ' 📸' : '');
 
                 for (let i = 0; i < fallbackChain.length; i++) {
                     if (parsedResult || scanController.isAborted) break;
-                    const { provider: currentProvider, key: activeKey } = fallbackChain[i];
+                    const { provider: currentProvider, key: activeKey, keyIndex } = fallbackChain[i];
 
                     if (currentProvider === 'gemini') {
                         const defaultGeminiModels = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-flash-lite-latest'];
@@ -5281,6 +5754,7 @@ STRICT RULES:
                                 let usedSearchGrounding = false;
 
                                 if (needsLiveSearch) {
+                                    scanLog.step('Gemini', `מנסה ${model} (מפתח #${keyIndex}) + Google Search 🌐`, 'info');
                                     try {
                                         const searchRes = await fetchWithScanSignal(
                                             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
@@ -5299,11 +5773,16 @@ STRICT RULES:
                                         if (!searchData.error && searchData.candidates?.[0]?.content?.parts) {
                                             rd = searchData;
                                             usedSearchGrounding = true;
+                                        } else if (searchData.error) {
+                                            scanLog.step('Gemini Search', `חיפוש חי נכשל (${model}): ${searchData.error.message}`, 'warn');
                                         }
-                                    } catch (_) {}
+                                    } catch (sErr) {
+                                        scanLog.step('Gemini Search', `חריגת חיפוש חי (${model}): ${sErr.message}`, 'warn');
+                                    }
                                 }
 
                                 if (!rd) {
+                                    scanLog.step('Gemini', `מנסה ${model} (מפתח #${keyIndex})${shotTagLabel}`, 'info');
                                     const res = await fetchWithScanSignal(
                                         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
                                         {
@@ -5324,25 +5803,33 @@ STRICT RULES:
                                 const candidate = parseAiResponsePayload(rawText, usedSearchGrounding);
                                 if (!candidate) throw new Error('Invalid JSON');
                                 const check = validateAndVerifyAiOutput(candidate, netDiag, item);
-                                if (!check.valid) continue;
+                                if (!check.valid) {
+                                    scanLog.step('Quality Gate', `Gemini (${model}) נפסל: ${check.reason} | "${String(candidate.summary || '').slice(0, 70)}"`, 'warn');
+                                    continue;
+                                }
 
                                 parsedResult = candidate;
-                                usedModelName = `🔹 Gemini (${model}${usedSearchGrounding ? ' 🌐' : ''}${netDiag.screenshotBase64 ? ' 📸' : ''})`;
+                                usedModelName = `🔹 Gemini (${model}${usedSearchGrounding ? ' 🌐' : ''}${shotTagLabel})`;
                                 window.cachedGeminiModelsList = [model, ...defaultGeminiModels.filter(m => m !== model)];
+                                scanLog.step('Gemini', `הצליח עם ${model}${usedSearchGrounding ? ' + Google Search' : ''}${shotTagLabel}`, 'ok');
                                 break;
                             } catch (err) {
+                                scanLog.step('Gemini', `נכשל (${model}, מפתח #${keyIndex}): ${err.message}`, 'warn');
                                 if (isRecoverableError(err.message)) continue;
                             }
                         }
                     } else if (currentProvider === 'groq') {
-                        const defaultGroqModels = netDiag.screenshotBase64
-                            ? ['meta-llama/llama-4-scout-17b-16e-instruct', 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant']
-                            : ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+                        const defaultGroqModels = isManualScreenshot
+                            ? ['meta-llama/llama-4-scout-17b-16e-instruct']
+                            : (netDiag.screenshotBase64
+                                ? ['meta-llama/llama-4-scout-17b-16e-instruct', 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant']
+                                : ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']);
 
                         for (const model of defaultGroqModels) {
                             if (scanController.isAborted) break;
                             try {
                                 const isVisionModel = model.includes('llama-4-scout') && Boolean(netDiag.screenshotBase64);
+                                scanLog.step('Groq', `מנסה ${model.split('/').pop()} (מפתח #${keyIndex})${isVisionModel ? shotTagLabel : ''}`, 'info');
                                 const userContent = isVisionModel
                                     ? [
                                         { type: 'text', text: `${systemPrompt}\n\nData to Analyze:\n${contentToAnalyze}` },
@@ -5366,27 +5853,40 @@ STRICT RULES:
                                 const candidate = parseAiResponsePayload(rawText, false);
                                 if (!candidate) throw new Error('Invalid JSON');
                                 const check = validateAndVerifyAiOutput(candidate, netDiag, item);
-                                if (!check.valid) continue;
+                                if (!check.valid) {
+                                    scanLog.step('Quality Gate', `Groq (${model.split('/').pop()}) נפסל: ${check.reason} | "${String(candidate.summary || '').slice(0, 70)}"`, 'warn');
+                                    continue;
+                                }
 
                                 parsedResult = candidate;
-                                usedModelName = `⚡ Groq (${model.split('/').pop()}${isVisionModel ? ' 📸' : ''})`;
+                                usedModelName = `⚡ Groq (${model.split('/').pop()}${isVisionModel ? shotTagLabel : ''})`;
+                                scanLog.step('Groq', `הצליח עם ${model.split('/').pop()}${isVisionModel ? shotTagLabel : ''}`, 'ok');
                                 break;
                             } catch (err) {
+                                scanLog.step('Groq', `נכשל (${model.split('/').pop()}, מפתח #${keyIndex}): ${err.message}`, 'warn');
                                 if (isRecoverableError(err.message)) continue;
                             }
                         }
                     } else if (currentProvider === 'openrouter') {
+                        const visionOrModels = [
+                            'google/gemini-2.0-flash-exp:free',
+                            'meta-llama/llama-4-scout:free',
+                            'qwen/qwen2.5-vl-72b-instruct:free'
+                        ];
                         const defaultOrModels = [
                             'google/gemini-2.0-flash-exp:free',
                             'meta-llama/llama-3.3-70b-instruct:free',
                             'qwen/qwen-2.5-72b-instruct:free'
                         ];
-                        let models = window.cachedOrModelsList ? [...window.cachedOrModelsList] : defaultOrModels;
+                        let models = isManualScreenshot
+                            ? visionOrModels
+                            : (window.cachedOrModelsList ? [...window.cachedOrModelsList] : defaultOrModels);
 
                         for (const model of models) {
                             if (scanController.isAborted) break;
                             try {
-                                const isVisionCapable = model.includes('gemini') && Boolean(netDiag.screenshotBase64);
+                                const isVisionCapable = /(?:gemini|llama-4-scout|vl)/i.test(model) && Boolean(netDiag.screenshotBase64);
+                                scanLog.step('OpenRouter', `מנסה ${model.split('/').pop()} (מפתח #${keyIndex})${isVisionCapable ? shotTagLabel : ''}`, 'info');
                                 const userContent = isVisionCapable
                                     ? [
                                         { type: 'text', text: `${systemPrompt}\n\nData to Analyze:\n${contentToAnalyze}` },
@@ -5413,13 +5913,20 @@ STRICT RULES:
                                 const candidate = parseAiResponsePayload(rawText, false);
                                 if (!candidate) throw new Error('Invalid JSON');
                                 const check = validateAndVerifyAiOutput(candidate, netDiag, item);
-                                if (!check.valid) continue;
+                                if (!check.valid) {
+                                    scanLog.step('Quality Gate', `OpenRouter (${model.split('/').pop()}) נפסל: ${check.reason} | "${String(candidate.summary || '').slice(0, 70)}"`, 'warn');
+                                    continue;
+                                }
 
                                 parsedResult = candidate;
-                                usedModelName = `🌐 OpenRouter (${model.split('/').pop()}${isVisionCapable ? ' 📸' : ''})`;
-                                window.cachedOrModelsList = [model, ...defaultOrModels.filter(m => m !== model)];
+                                usedModelName = `🌐 OpenRouter (${model.split('/').pop()}${isVisionCapable ? shotTagLabel : ''})`;
+                                if (!isManualScreenshot) {
+                                    window.cachedOrModelsList = [model, ...defaultOrModels.filter(m => m !== model)];
+                                }
+                                scanLog.step('OpenRouter', `הצליח עם ${model.split('/').pop()}${isVisionCapable ? shotTagLabel : ''}`, 'ok');
                                 break;
                             } catch (err) {
+                                scanLog.step('OpenRouter', `נכשל (${model.split('/').pop()}, מפתח #${keyIndex}): ${err.message}`, 'warn');
                                 if (isRecoverableError(err.message)) continue;
                             }
                         }
@@ -5432,11 +5939,11 @@ STRICT RULES:
 
                 const verification = validateAndVerifyAiOutput(parsedResult, netDiag, ci);
 
-                // עבור אתרים רגילים בלבד (ולא על טלגרם או אתר מוגן Cloudflare): בדיקת דף 404/חניה מצילום מסך
-                if (isWebsite && !isTelegramUrl && !netDiag.isBotProtected && parsedResult?.visualStatus === 'dead' && !netDiag.pageTitle) {
+                // עבור אתרים רגילים בלבד (ולא טלגרם, אתר מוגן או תמונת מסך ידנית): בדיקת דף 404/חניה מצילום מסך
+                if (isWebsite && !isTelegramUrl && !isManualScreenshot && !netDiag.isBotProtected && parsedResult?.visualStatus === 'dead' && !netDiag.pageTitle) {
                     netDiag.verifiedStatus = 'dead';
                     netDiag.httpCode = 404;
-                } else if (isWebsite && !isTelegramUrl && !netDiag.isBotProtected && parsedResult?.visualStatus === 'parked') {
+                } else if (isWebsite && !isTelegramUrl && !isManualScreenshot && !netDiag.isBotProtected && parsedResult?.visualStatus === 'parked') {
                     netDiag.verifiedStatus = 'parked';
                 }
 
@@ -5447,18 +5954,28 @@ STRICT RULES:
                 if (verification.valid) {
                     ci.aiSummary = verification.summary;
                     const aiTagsClean = Array.isArray(parsedResult.tags)
-                        ? parsedResult.tags.map(t => String(t).startsWith('#') ? String(t) : `#${t}`)
+                        ? [...new Set(parsedResult.tags.map(t => String(t).trim()).filter(Boolean).map(t => t.startsWith('#') ? t : `#${t}`))]
                         : [];
                     ci.aiTags = aiTagsClean.length > 0 ? aiTagsClean : (netDiag.tags || []);
                     ci.aiModel = `${usedModelName} ✓`;
+                    scanLog.finish(ci.siteStatus, ci.aiModel, ci.aiSummary);
+                } else if (isManualScreenshot) {
+                    scanSuccessToast = '⚠️ אף מודל Vision לא הצליח להפיק תיאור מהתמונה — בדוק בלוג האבחון את סיבת השגיאה.';
+                    scanToastIsError = true;
+                    scanLog.step('Fallback', 'כל מודלי ה-Vision נכשלו בניתוח התמונה הידנית — הנתונים הקיימים נשמרו ללא דריסה', 'error');
+                    scanLog.finish('failed_manual_shot');
                 } else {
                     ci.aiSummary = netDiag.fallbackSummary || ci.description || `הקישור ${domain} פעיל וזמין ברשת.`;
                     if (netDiag.tags && netDiag.tags.length > 0) ci.aiTags = netDiag.tags;
                     ci.aiModel = '🛡️ אימות עובדתי ישיר';
+                    scanLog.step('Fallback', `לא התקבל פלט AI מאומת (${verification.reason}) — נשמר תיאור גיבוי`, 'warn');
+                    scanLog.finish(ci.siteStatus, ci.aiModel, ci.aiSummary);
                 }
             } catch (e) {
                 if (e.name !== 'AbortError') {
                     console.warn('[Scan] Handled error:', e.message);
+                    scanLog.step('Exception', e.message || String(e), 'error');
+                    scanLog.finish('error');
                 }
             } finally {
                 const ci = state.items.find(i => i.id === id);
@@ -5468,12 +5985,11 @@ STRICT RULES:
                     updateCardInPlace(id);
                     await saveItemToCloud(ci);
                     if (isSingleManualScan && !scanController.isAborted) {
-                        showToast('✅ סריקת הפריט הושלמה בהצלחה', null, 2800, 'single-scan-toast');
+                        showToast(scanSuccessToast, null, scanToastIsError ? 4500 : 2800, 'single-scan-toast', scanToastIsError);
                     }
                 }
             }
         };
-
         // ---------------------------------------------------------------------
         // Core UI/data helpers missing from the supplied truncated export
         // ---------------------------------------------------------------------
@@ -6465,5 +6981,6 @@ STRICT RULES:
         const perfStyle=document.createElement('style');perfStyle.textContent='.card{content-visibility:auto;contain-intrinsic-size:auto 140px;}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;}}';document.head.appendChild(perfStyle);    </script>
 </body>
 </html>
+
 
 
