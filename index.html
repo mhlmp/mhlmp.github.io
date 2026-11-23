@@ -5721,104 +5721,531 @@ STRICT RULES:
                 }
             }
         }
+        function sanitizeItemForExport(item) {
+            const clean = JSON.parse(JSON.stringify(item || {}));
+            delete clean.isScanning;
+            delete clean._keepExpanded;
+            const content = String(clean.content || '');
+            return {
+                ...clean,
+                id: clean.id,
+                content,
+                description: String(clean.description || ''),
+                category: String(clean.category || 'כללי'),
+                note: String(clean.note || ''),
+                type: clean.type === 'text' ? 'text' : (URL_REGEX.test(content) ? 'link' : 'text'),
+                date: clean.date || clean.createdAt || '',
+                createdAt: clean.createdAt || clean.date || '',
+                updatedAt: clean.updatedAt || clean.date || '',
+                isPinned: Boolean(clean.isPinned),
+                aiSummary: String(clean.aiSummary || ''),
+                aiTags: Array.isArray(clean.aiTags) ? clean.aiTags.map(String).filter(Boolean) : [],
+                siteStatus: ['active', 'parked', 'dead', 'unknown', 'text'].includes(clean.siteStatus) ? clean.siteStatus : '',
+                httpCode: (clean.httpCode !== null && clean.httpCode !== undefined && clean.httpCode !== '' && Number.isFinite(Number(clean.httpCode)))
+                    ? Number(clean.httpCode)
+                    : null,
+                aiModel: String(clean.aiModel || '')
+            };
+        }
+        function countApiKeys(aiSettings) {
+            if (!aiSettings || !aiSettings.keys) return 0;
+            return ['gemini', 'groq', 'openrouter'].reduce((acc, p) => {
+                const list = Array.isArray(aiSettings.keys[p]) ? aiSettings.keys[p] : [];
+                return acc + list.filter(k => typeof k === 'string' && k.trim()).length;
+            }, 0);
+        }
+        function collectFullExportSettings() {
+            const aiSettings = getAiSettings();
+            let uiSettings = {};
+            try {
+                uiSettings = JSON.parse(localStorage.getItem('mh_ui_settings') || '{}');
+            } catch (_) {}
+            uiSettings = {
+                ...uiSettings,
+                showDuplicates: state.showDuplicates,
+                showOnlyDead: state.showOnlyDead,
+                showOnlyParked: state.showOnlyParked,
+                expandAllCards: state.expandAllCards,
+                sortOrder: document.getElementById('sortOrder')?.value || uiSettings.sortOrder || 'date-new',
+                categoryFilter: document.getElementById('categoryFilter')?.value || uiSettings.categoryFilter || ''
+            };
+            let aiQuickSettings = {};
+            try {
+                aiQuickSettings = JSON.parse(localStorage.getItem('aiQuickSettings') || '{}');
+            } catch (_) {}
+            const theme = localStorage.getItem('mh_theme') || (document.body.classList.contains('dark-mode') ? 'dark' : 'light');
+            return {
+                theme,
+                uiSettings,
+                aiSettings: {
+                    provider: aiSettings.provider || 'gemini',
+                    autoScan: Boolean(aiSettings.autoScan),
+                    keys: {
+                        gemini: [...(aiSettings.keys?.gemini || [])],
+                        groq: [...(aiSettings.keys?.groq || [])],
+                        openrouter: [...(aiSettings.keys?.openrouter || [])]
+                    }
+                },
+                aiQuickSettings
+            };
+        }
+        function restoreFullImportSettings(settingsPayload) {
+            if (!settingsPayload || typeof settingsPayload !== 'object') {
+                return { restoredSettings: false, keysCount: 0 };
+            }
+            let restoredSettings = false;
+            let keysCount = 0;
+
+            if (settingsPayload.aiSettings && typeof settingsPayload.aiSettings === 'object') {
+                const rawAi = settingsPayload.aiSettings;
+                const cleanList = (val) => {
+                    if (typeof val === 'string') return val.replace(/\s+/g, '') ? [val.replace(/\s+/g, '')] : [];
+                    if (!Array.isArray(val)) return [];
+                    return val.map(k => String(k || '').replace(/\s+/g, '')).filter(Boolean);
+                };
+                const normalizedAi = {
+                    provider: ['gemini', 'groq', 'openrouter'].includes(rawAi.provider) ? rawAi.provider : 'gemini',
+                    autoScan: rawAi.autoScan !== undefined ? Boolean(rawAi.autoScan) : true,
+                    keys: {
+                        gemini: cleanList(rawAi.keys?.gemini),
+                        groq: cleanList(rawAi.keys?.groq),
+                        openrouter: cleanList(rawAi.keys?.openrouter)
+                    }
+                };
+                localStorage.setItem('aiSettingsPro', JSON.stringify(normalizedAi));
+                state.aiSettings = normalizedAi;
+                keysCount = countApiKeys(normalizedAi);
+                restoredSettings = true;
+            }
+
+            if (settingsPayload.aiQuickSettings && typeof settingsPayload.aiQuickSettings === 'object') {
+                localStorage.setItem('aiQuickSettings', JSON.stringify(settingsPayload.aiQuickSettings));
+                restoredSettings = true;
+            }
+
+            if (settingsPayload.theme === 'dark' || settingsPayload.theme === 'light') {
+                localStorage.setItem('mh_theme', settingsPayload.theme);
+                initTheme();
+                restoredSettings = true;
+            }
+
+            if (settingsPayload.uiSettings && typeof settingsPayload.uiSettings === 'object') {
+                const ui = settingsPayload.uiSettings;
+                localStorage.setItem('mh_ui_settings', JSON.stringify(ui));
+                if (ui.showDuplicates !== undefined) state.showDuplicates = Boolean(ui.showDuplicates);
+                if (ui.showOnlyDead !== undefined) state.showOnlyDead = Boolean(ui.showOnlyDead);
+                if (ui.showOnlyParked !== undefined) state.showOnlyParked = Boolean(ui.showOnlyParked);
+                if (ui.expandAllCards !== undefined) state.expandAllCards = Boolean(ui.expandAllCards);
+
+                document.getElementById('toggleDuplicatesBtn')?.classList.toggle('dup-active', !state.showDuplicates);
+                document.getElementById('toggleDeadBtn')?.classList.toggle('dead-active', state.showOnlyDead);
+                document.getElementById('toggleParkedBtn')?.classList.toggle('parked-active', state.showOnlyParked);
+                document.getElementById('expandAllBtn')?.classList.toggle('expand-all-active', state.expandAllCards);
+
+                const so = document.getElementById('sortOrder');
+                if (so && ui.sortOrder && [...so.options].some(o => o.value === ui.sortOrder)) {
+                    so.value = ui.sortOrder;
+                }
+                const cf = document.getElementById('categoryFilter');
+                if (cf && ui.categoryFilter !== undefined && [...cf.options].some(o => o.value === ui.categoryFilter)) {
+                    cf.value = ui.categoryFilter;
+                }
+                restoredSettings = true;
+            }
+
+            return { restoredSettings, keysCount };
+        }
+        function encodeTxtField(value) {
+            return String(value ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n/g, ' ⏎ ');
+        }
+        function decodeTxtField(value) {
+            return String(value ?? '').replace(/ ⏎ /g, '\n').trim();
+        }
         function exportJson(){
             const exclude = !!document.getElementById('excludePrivateJsonCb')?.checked;
-            const items = exclude
+            const rawItems = exclude
                 ? state.items.filter(x => !isPrivateCategory(x.category))
                 : state.items;
+            const rawTrash = exclude
+                ? state.trash.filter(x => !isPrivateCategory(x.category))
+                : state.trash;
+            const items = rawItems.map(sanitizeItemForExport);
+            const trash = rawTrash.map(x => ({ ...sanitizeItemForExport(x), ...(x.deletedAt ? { deletedAt: x.deletedAt } : {}) }));
+            const settings = collectFullExportSettings();
+            const keysCount = countApiKeys(settings.aiSettings);
+
             closeAllMenus();
-            if (!items.length) {
+            if (!items.length && !trash.length && keysCount === 0) {
                 showToast('⚠️ אין פריטים זמינים לייצוא', null, 3200, null, true);
                 return;
             }
+            const payload = {
+                schemaVersion: SCHEMA_VERSION,
+                exportedAt: nowIso(),
+                excludedPrivate: exclude,
+                items,
+                trash,
+                settings
+            };
             const suffix = exclude ? '_NoPrivate' : '';
             downloadBlob(
                 getFormattedExportFilename('json', suffix),
-                JSON.stringify({ schemaVersion: SCHEMA_VERSION, exportedAt: nowIso(), items }, null, 2),
+                JSON.stringify(payload, null, 2),
                 'application/json;charset=utf-8'
             );
+            const extrasInfo = keysCount > 0 ? ` + הגדרות ו-${keysCount} מפתחות` : ' + הגדרות';
             if (exclude) {
                 const excludedCount = state.items.length - items.length;
                 showToast(
                     excludedCount > 0
-                        ? `📤 יוצאו ${items.length} פריטים ל-JSON (${excludedCount} פרטיים הוחרגו)`
-                        : `📤 יוצאו ${items.length} פריטים ל-JSON (ללא פרטי)`
+                        ? `📤 יוצאו ${items.length} פריטים ל-JSON (${excludedCount} פרטיים הוחרגו${extrasInfo})`
+                        : `📤 יוצאו ${items.length} פריטים ל-JSON (ללא פרטי${extrasInfo})`
                 );
             } else {
-                showToast(`📤 גיבוי JSON מלא יוצא בהצלחה (${items.length} פריטים)`);
+                showToast(`📤 גיבוי JSON מלא יוצא בהצלחה (${items.length} פריטים${extrasInfo})`);
             }
         }
         function exportTxt(){
             const cb = document.getElementById('excludePrivateCb');
             const exclude = cb ? cb.checked : true;
-            const items = exclude
+            const rawItems = exclude
                 ? state.items.filter(x => !isPrivateCategory(x.category))
                 : state.items;
+            const rawTrash = exclude
+                ? state.trash.filter(x => !isPrivateCategory(x.category))
+                : state.trash;
+            const items = rawItems.map(sanitizeItemForExport);
+            const trash = rawTrash.map(x => ({ ...sanitizeItemForExport(x), ...(x.deletedAt ? { deletedAt: x.deletedAt } : {}) }));
+            const settings = collectFullExportSettings();
+            const keysCount = countApiKeys(settings.aiSettings);
+
             closeAllMenus();
-            if (!items.length) {
+            if (!items.length && !trash.length && keysCount === 0) {
                 showToast('⚠️ אין פריטים זמינים לייצוא', null, 3200, null, true);
                 return;
             }
-            const txt = items.map(x => [
-                String(x.content || ''),
-                `תיאור: ${String(x.description || '')}`,
-                `קטגוריה: ${String(x.category || 'כללי')}`,
-                `הערה: ${String(x.note || '')}`
+            const itemsSection = items.map(x => [
+                encodeTxtField(x.content),
+                `תיאור: ${encodeTxtField(x.description)}`,
+                `קטגוריה: ${encodeTxtField(x.category || 'כללי')}`,
+                `הערה: ${encodeTxtField(x.note)}`,
+                `תיאור AI: ${encodeTxtField(x.aiSummary)}`,
+                `תגיות AI: ${encodeTxtField((x.aiTags || []).join(' '))}`,
+                `סטטוס: ${encodeTxtField(x.siteStatus)}`,
+                `קוד HTTP: ${x.httpCode !== null ? String(x.httpCode) : ''}`,
+                `מודל AI: ${encodeTxtField(x.aiModel)}`,
+                `מוצמד: ${x.isPinned ? 'כן' : 'לא'}`,
+                `סוג: ${encodeTxtField(x.type)}`,
+                `מזהה: ${x.id !== undefined && x.id !== null ? String(x.id) : ''}`,
+                `תאריך: ${encodeTxtField(x.date)}`,
+                `תאריך יצירה: ${encodeTxtField(x.createdAt)}`,
+                `עודכן: ${encodeTxtField(x.updatedAt)}`
             ].join('\n')).join('\n\n');
+
+            const formatKeyLines = (label, arr) => {
+                const list = Array.isArray(arr) ? arr.filter(Boolean) : [];
+                if (!list.length) return `${label}:\n  (אין)`;
+                return `${label}:\n` + list.map((k, idx) => `  ${idx + 1}. ${k}`).join('\n');
+            };
+
+            const systemPayload = {
+                schemaVersion: SCHEMA_VERSION,
+                exportedAt: nowIso(),
+                excludedPrivate: exclude,
+                settings,
+                trash
+            };
+
+            const systemSection = [
+                '========================================',
+                '=== הגדרות מערכת ומפתחות API מלאים ===',
+                '========================================',
+                `מנוע AI ראשי: ${settings.aiSettings.provider}`,
+                `סריקה אוטומטית לפריטים חדשים: ${settings.aiSettings.autoScan ? 'כן' : 'לא'}`,
+                `ערכת נושא: ${settings.theme}`,
+                `הגדרות תצוגה: מיון=${settings.uiSettings.sortOrder || 'date-new'} | קטגוריה=${settings.uiSettings.categoryFilter || 'הכל'} | הצג_כפולים=${settings.uiSettings.showDuplicates ? 'כן' : 'לא'} | לא_זמינים_בלבד=${settings.uiSettings.showOnlyDead ? 'כן' : 'לא'} | חניה_בלבד=${settings.uiSettings.showOnlyParked ? 'כן' : 'לא'} | הרחב_הכל=${settings.uiSettings.expandAllCards ? 'כן' : 'לא'}`,
+                formatKeyLines('מפתחות Gemini', settings.aiSettings.keys.gemini),
+                formatKeyLines('מפתחות Groq', settings.aiSettings.keys.groq),
+                formatKeyLines('מפתחות OpenRouter', settings.aiSettings.keys.openrouter),
+                '',
+                '=== נתוני מערכת מלאים לשחזור (JSON) ===',
+                JSON.stringify(systemPayload, null, 2),
+                '=== סוף נתוני מערכת ==='
+            ].join('\n');
+
+            const txt = itemsSection ? `${itemsSection}\n\n${systemSection}` : systemSection;
             const suffix = exclude ? '_NoPrivate' : '';
             downloadBlob(getFormattedExportFilename('txt', suffix), txt);
+            const extrasInfo = keysCount > 0 ? ` + תיאורי AI, הגדרות ו-${keysCount} מפתחות` : ' + תיאורי AI והגדרות';
             if (exclude) {
                 const excludedCount = state.items.length - items.length;
                 showToast(
                     excludedCount > 0
-                        ? `📤 יוצאו ${items.length} פריטים ל-TXT (${excludedCount} פרטיים הוחרגו)`
-                        : `📤 יוצאו ${items.length} פריטים ל-TXT (ללא פרטי)`
+                        ? `📤 יוצאו ${items.length} פריטים ל-TXT (${excludedCount} פרטיים הוחרגו${extrasInfo})`
+                        : `📤 יוצאו ${items.length} פריטים ל-TXT (ללא פרטי${extrasInfo})`
                 );
             } else {
-                showToast(`📤 יוצאו כל ${items.length} הפריטים ל-TXT (כולל פרטי)`);
+                showToast(`📤 יוצאו כל ${items.length} הפריטים ל-TXT (כולל פרטי${extrasInfo})`);
             }
         }
-        async function importJson(e){const file=e.target.files?.[0];if(!file)return;try{const data=JSON.parse(await file.text());const list=Array.isArray(data)?data:data.items;if(!Array.isArray(list))throw new Error('מבנה JSON לא מוכר');await importItems(list);showToast('✅ ייבוא JSON הושלם');}catch(err){showToast('❌ ייבוא נכשל: '+err.message,null,5000,null,true);}finally{e.target.value='';}}
+        async function importJson(e){
+            const file = e.target.files?.[0];
+            if (!file) return;
+            try {
+                const rawText = (await file.text()).replace(/^\uFEFF/, '');
+                const data = JSON.parse(rawText);
+                const list = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : null);
+                const trashList = (!Array.isArray(data) && Array.isArray(data?.trash)) ? data.trash : [];
+                const settingsPayload = (!Array.isArray(data) && data && typeof data === 'object')
+                    ? (data.settings || (data.aiSettings ? { aiSettings: data.aiSettings } : null))
+                    : null;
+
+                if (!list && !trashList.length && !settingsPayload) {
+                    throw new Error('מבנה JSON לא מוכר');
+                }
+
+                let importedItemsCount = 0;
+                if (Array.isArray(list) && list.length > 0) {
+                    importedItemsCount = await importItems(list);
+                }
+
+                let importedTrashCount = 0;
+                if (trashList.length > 0) {
+                    importedTrashCount = await importTrashItems(trashList);
+                }
+
+                const restoredMeta = settingsPayload
+                    ? restoreFullImportSettings(settingsPayload)
+                    : { restoredSettings: false, keysCount: 0 };
+
+                if (importedItemsCount > 0 || restoredMeta.restoredSettings) {
+                    updateCategoryDropdowns();
+                    renderList();
+                }
+
+                const parts = [];
+                if (importedItemsCount > 0) parts.push(`${importedItemsCount} פריטים`);
+                if (importedTrashCount > 0) parts.push(`${importedTrashCount} בסל מחזור`);
+                if (restoredMeta.restoredSettings) {
+                    parts.push(restoredMeta.keysCount > 0 ? `הגדרות ו-${restoredMeta.keysCount} מפתחות AI` : 'הגדרות מערכת');
+                }
+                showToast(parts.length ? `✅ ייבוא JSON הושלם (${parts.join(' + ')})` : '✅ ייבוא JSON הושלם');
+            } catch (err) {
+                showToast('❌ ייבוא נכשל: ' + err.message, null, 5000, null, true);
+            } finally {
+                e.target.value = '';
+            }
+        }
         async function smartImport(e){
-            const file=e.target.files?.[0];if(!file)return;
-            try{
-                const text=await file.text();
-                const blocks=text.split(/\r?\n\s*\r?\n/).map(x=>x.trim()).filter(Boolean);
-                let list=[];
-                if(blocks.some(b=>/^תיאור:|^קטגוריה:|^הערה:/m.test(b))){
-                    list=blocks.map(block=>{const lines=block.split(/\r?\n/);const content=(lines.shift()||'').trim();const get=(label)=>{const line=lines.find(x=>x.startsWith(label+':'));return line?line.slice(label.length+1).trim():'';};return {content,description:get('תיאור'),category:get('קטגוריה')||'כללי',note:get('הערה')};}).filter(x=>x.content);
+            const file = e.target.files?.[0];
+            if (!file) return;
+            try {
+                const rawText = (await file.text()).replace(/^\uFEFF/, '');
+                const systemSectionRegex = /\r?\n*={10,}\r?\n=== הגדרות מערכת ומפתחות API מלאים ===[\s\S]*$/;
+                const systemMatch = rawText.match(systemSectionRegex);
+                const itemsText = systemMatch ? rawText.slice(0, systemMatch.index).trim() : rawText.trim();
+
+                let restoredMeta = { restoredSettings: false, keysCount: 0 };
+                let importedTrashCount = 0;
+
+                if (systemMatch && systemMatch[0]) {
+                    const jsonBlockMatch = systemMatch[0].match(/=== נתוני מערכת מלאים לשחזור \(JSON\) ===\s*([\s\S]*?)\s*=== סוף נתוני מערכת ===/);
+                    if (jsonBlockMatch && jsonBlockMatch[1]) {
+                        try {
+                            const sysData = JSON.parse(jsonBlockMatch[1]);
+                            if (sysData?.settings) {
+                                restoredMeta = restoreFullImportSettings(sysData.settings);
+                            }
+                            if (Array.isArray(sysData?.trash) && sysData.trash.length > 0) {
+                                importedTrashCount = await importTrashItems(sysData.trash);
+                            }
+                        } catch (sysErr) {
+                            console.warn('[SmartImport] System JSON parse failed:', sysErr);
+                        }
+                    }
+                }
+
+                let list = [];
+                if (itemsText) {
+                    const blocks = itemsText.split(/\r?\n\s*\r?\n/).map(x => x.trim()).filter(Boolean);
+                    const hasLabeledFormat = blocks.some(b => /^(?:תיאור|קטגוריה|הערה|תיאור AI|תגיות AI|סטטוס|קוד HTTP|מודל AI|מוצמד|סוג|מזהה|תאריך):/m.test(b));
+                    if (hasLabeledFormat) {
+                        list = blocks.map(block => {
+                            const lines = block.split(/\r?\n/);
+                            const content = decodeTxtField(lines.shift() || '');
+                            const get = (label) => {
+                                const prefix = label + ':';
+                                const line = lines.find(x => x.startsWith(prefix));
+                                return line ? decodeTxtField(line.slice(prefix.length)) : '';
+                            };
+                            const rawStatus = get('סטטוס');
+                            const rawHttp = get('קוד HTTP');
+                            const rawId = get('מזהה');
+                            const rawTags = get('תגיות AI');
+                            const rawPinned = get('מוצמד');
+                            const rawType = get('סוג');
+                            const rawDate = get('תאריך');
+                            const rawCreated = get('תאריך יצירה');
+                            const rawUpdated = get('עודכן');
+
+                            return {
+                                ...(rawId !== '' && Number.isFinite(Number(rawId)) ? { id: Number(rawId) } : {}),
+                                content,
+                                description: get('תיאור'),
+                                category: get('קטגוריה') || 'כללי',
+                                note: get('הערה'),
+                                ...(rawType === 'link' || rawType === 'text' ? { type: rawType } : {}),
+                                ...(rawDate ? { date: rawDate } : {}),
+                                ...(rawCreated ? { createdAt: rawCreated } : {}),
+                                ...(rawUpdated ? { updatedAt: rawUpdated } : {}),
+                                isPinned: /^(?:כן|true|1|yes)$/i.test(rawPinned),
+                                ...(get('תיאור AI') ? { aiSummary: get('תיאור AI') } : {}),
+                                ...(rawTags ? { aiTags: rawTags.split(/\s+/).filter(Boolean) } : {}),
+                                ...(['active', 'parked', 'dead', 'unknown', 'text'].includes(rawStatus) ? { siteStatus: rawStatus } : {}),
+                                ...(rawHttp !== '' && Number.isFinite(Number(rawHttp)) ? { httpCode: Number(rawHttp) } : {}),
+                                ...(get('מודל AI') ? { aiModel: get('מודל AI') } : {})
+                            };
+                        }).filter(x => x.content);
+                    } else {
+                        list = itemsText.split(/\r?\n/).map(x => x.trim()).filter(Boolean).map(content => ({ content, category: 'כללי' }));
+                    }
+                }
+
+                const existingByContent = new Map(state.items.map(x => [String(x.content || '').toLowerCase().trim(), x]));
+                const seenInFile = new Set();
+                const fresh = [];
+                const toEnrich = [];
+
+                for (const x of list) {
+                    const k = String(x.content || '').toLowerCase().trim();
+                    if (!k || seenInFile.has(k)) continue;
+                    seenInFile.add(k);
+
+                    const existing = existingByContent.get(k);
+                    if (!existing) {
+                        fresh.push(x);
+                    } else {
+                        const patch = {};
+                        if (!existing.description && x.description) patch.description = x.description;
+                        if (!existing.note && x.note) patch.note = x.note;
+                        if ((!existing.category || existing.category === 'כללי') && x.category && x.category !== 'כללי') patch.category = x.category;
+                        if (!existing.aiSummary && x.aiSummary) patch.aiSummary = x.aiSummary;
+                        if ((!existing.aiTags || !existing.aiTags.length) && Array.isArray(x.aiTags) && x.aiTags.length) patch.aiTags = x.aiTags;
+                        if (!existing.siteStatus && x.siteStatus) patch.siteStatus = x.siteStatus;
+                        if ((existing.httpCode === null || existing.httpCode === undefined) && x.httpCode !== undefined && x.httpCode !== null) patch.httpCode = x.httpCode;
+                        if (!existing.aiModel && x.aiModel) patch.aiModel = x.aiModel;
+                        if (!existing.isPinned && x.isPinned) patch.isPinned = true;
+
+                        if (Object.keys(patch).length > 0) {
+                            toEnrich.push({ ...existing, ...patch, id: existing.id, content: existing.content, updatedAt: nowIso() });
+                        }
+                    }
+                }
+
+                if (fresh.length > 0) await importItems(fresh);
+                if (toEnrich.length > 0) await importItems(toEnrich);
+
+                if (fresh.length > 0 || toEnrich.length > 0 || restoredMeta.restoredSettings) {
+                    updateCategoryDropdowns();
+                    renderList();
+                }
+
+                const skippedCount = Math.max(0, list.length - fresh.length - toEnrich.length);
+                const summaryParts = [];
+                if (fresh.length > 0) summaryParts.push(`${fresh.length} חדשים`);
+                if (toEnrich.length > 0) summaryParts.push(`${toEnrich.length} עודכנו במידע חסר`);
+                if (skippedCount > 0 && (fresh.length > 0 || toEnrich.length > 0)) summaryParts.push(`${skippedCount} כפולים דולגו`);
+                if (importedTrashCount > 0) summaryParts.push(`${importedTrashCount} בסל מחזור`);
+                if (restoredMeta.restoredSettings) {
+                    summaryParts.push(restoredMeta.keysCount > 0 ? `הגדרות ו-${restoredMeta.keysCount} מפתחות AI` : 'הגדרות מערכת');
+                }
+
+                if (!summaryParts.length) {
+                    showToast('ℹ️ לא נמצאו פריטים או הגדרות חדשים — הכל כבר מעודכן.');
                 } else {
-                    list=text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map(content=>({content,category:'כללי'}));
+                    showToast(`✅ ייבוא TXT הושלם: ${summaryParts.join(', ')}`);
                 }
-                const known=new Set(state.items.map(x=>String(x.content||'').toLowerCase().trim()));
-                const fresh=[];
-                for(const x of list){
-                    const k=String(x.content||'').toLowerCase().trim();
-                    if(!k||known.has(k))continue;
-                    known.add(k);fresh.push(x);
-                }
-                if(!fresh.length){showToast('ℹ️ לא נמצאו פריטים חדשים — כולם כבר קיימים.');return;}
-                await importItems(fresh);
-                showToast(`✅ ייבוא TXT הושלם: ${fresh.length} חדשים, ${list.length-fresh.length} כפולים דולגו`);
-            }catch(err){showToast('❌ ייבוא נכשל: '+err.message,null,5000,null,true);}finally{e.target.value='';}
+            } catch (err) {
+                showToast('❌ ייבוא נכשל: ' + err.message, null, 5000, null, true);
+            } finally {
+                e.target.value = '';
+            }
+        }
+        async function importTrashItems(trashList){
+            if (!state.user || !Array.isArray(trashList) || !trashList.length) return 0;
+            const prepared = [];
+            let seq = 0;
+            for (const raw of trashList) {
+                const content = String(raw?.content ?? raw?.url ?? '').trim();
+                if (!content) continue;
+                const id = (raw.id !== null && raw.id !== undefined && raw.id !== '' && Number.isFinite(Number(raw.id)))
+                    ? Number(raw.id)
+                    : Date.now() + seq++;
+                const clean = sanitizeItemForExport(raw);
+                const item = {
+                    ...clean,
+                    id,
+                    content,
+                    deletedAt: raw.deletedAt || nowIso()
+                };
+                if (!item.aiSummary) delete item.aiSummary;
+                if (!item.aiTags || !item.aiTags.length) delete item.aiTags;
+                if (!['active', 'parked', 'dead', 'unknown', 'text'].includes(item.siteStatus)) delete item.siteStatus;
+                if (item.httpCode === null || item.httpCode === undefined) delete item.httpCode;
+                if (!item.aiModel) delete item.aiModel;
+                prepared.push(item);
+            }
+            for (let i = 0; i < prepared.length; i += 450) {
+                const batch = writeBatch(db);
+                prepared.slice(i, i + 450).forEach(item => {
+                    batch.set(doc(db, 'users', state.user.uid, 'trash', String(item.id)), item, { merge: true });
+                });
+                await commitBatch(batch);
+            }
+            return prepared.length;
         }
         async function importItems(list){
             if(!state.user)throw new Error('יש להתחבר לפני ייבוא');
             const existingById=new Map(state.items.map(x=>[String(x.id),x.content]));
             const prepared=[];let seq=0;const used=new Set(existingById.keys());
+            const reservedKeys=new Set(['id','content','url','description','category','note','type','date','createdAt','updatedAt','isPinned','aiSummary','aiTags','siteStatus','httpCode','aiModel','isScanning','_keepExpanded','deletedAt']);
             for(const raw of list){
+                if(!raw || typeof raw !== 'object') continue;
                 const content=String(raw.content??raw.url??'').trim();if(!content)continue;
                 let id=(raw.id!==null && raw.id!==undefined && raw.id!=='' && Number.isFinite(Number(raw.id)))?Number(raw.id):Date.now()+seq;
                 if(used.has(String(id)) && existingById.get(String(id))!==content){do{id=Date.now()+seq++;}while(used.has(String(id)));}
                 used.add(String(id));
-                const item={id,content,description:String(raw.description||''),category:String(raw.category||'כללי'),note:String(raw.note||''),type:raw.type==='text'?'text':(URL_REGEX.test(content)?'link':'text'),date:raw.date||nowIso(),createdAt:raw.createdAt||raw.date||nowIso(),updatedAt:nowIso(),isPinned:!!raw.isPinned,...(raw.aiSummary?{aiSummary:String(raw.aiSummary)}:{}),...(Array.isArray(raw.aiTags)?{aiTags:raw.aiTags.map(String)}:{}),...(['active','parked','dead','unknown','text'].includes(raw.siteStatus)?{siteStatus:raw.siteStatus}:{}),...((raw.httpCode!==null && raw.httpCode!==undefined && raw.httpCode!=='' && Number.isFinite(Number(raw.httpCode)))?{httpCode:Number(raw.httpCode)}:{}),...(raw.aiModel?{aiModel:String(raw.aiModel)}:{})};
+                const extras={};
+                Object.keys(raw).forEach(k=>{
+                    if(!reservedKeys.has(k) && raw[k]!==undefined) extras[k]=raw[k];
+                });
+                const cleanTags=Array.isArray(raw.aiTags)?raw.aiTags.map(String).filter(Boolean):[];
+                const item={
+                    ...extras,
+                    id,
+                    content,
+                    description:String(raw.description||''),
+                    category:String(raw.category||'כללי'),
+                    note:String(raw.note||''),
+                    type:raw.type==='text'?'text':(URL_REGEX.test(content)?'link':'text'),
+                    date:raw.date||raw.createdAt||nowIso(),
+                    createdAt:raw.createdAt||raw.date||nowIso(),
+                    updatedAt:raw.updatedAt||nowIso(),
+                    isPinned:!!raw.isPinned,
+                    ...(raw.aiSummary?{aiSummary:String(raw.aiSummary)}:{}),
+                    ...(cleanTags.length?{aiTags:cleanTags}:{}),
+                    ...(['active','parked','dead','unknown','text'].includes(raw.siteStatus)?{siteStatus:raw.siteStatus}:{}),
+                    ...((raw.httpCode!==null && raw.httpCode!==undefined && raw.httpCode!=='' && Number.isFinite(Number(raw.httpCode)))?{httpCode:Number(raw.httpCode)}:{}),
+                    ...(raw.aiModel?{aiModel:String(raw.aiModel)}:{})
+                };
                 prepared.push(item);seq++;
             }
             for(let i=0;i<prepared.length;i+=450){
                 const batch=writeBatch(db);
                 prepared.slice(i,i+450).forEach(item=>batch.set(doc(db,'users',state.user.uid,'items',String(item.id)),item,{merge:true}));
-                await batch.commit();
+                await commitBatch(batch);
             }
+            return prepared.length;
         }
         function openAiFloatingMenu(id,event){const menu=document.getElementById('aiFloatingMenu');if(!menu)return;menu.dataset.itemId=String(id);const check=document.getElementById('aiUrlOnlyCheckbox');if(check){const q=JSON.parse(localStorage.getItem('aiQuickSettings')||'{}');check.checked=!!q.urlOnly;}menu.style.display='block';const pt=event?.touches?.[0]||event;const x=pt?.clientX ?? 24,y=pt?.clientY ?? 120;menu.style.left=Math.max(8,Math.min(x,window.innerWidth-250))+'px';menu.style.top=Math.max(8,Math.min(y,window.innerHeight-260))+'px';}
         function enterSelectionMode(id){state.isSelectionMode=true;document.body.classList.add('selection-mode-active');if(id!=null)state.selectedIds.add(id);updateBulkActionBar();renderList();}
@@ -5938,3 +6365,4 @@ STRICT RULES:
         const perfStyle=document.createElement('style');perfStyle.textContent='.card{content-visibility:auto;contain-intrinsic-size:auto 140px;}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;}}';document.head.appendChild(perfStyle);    </script>
 </body>
 </html>
+
