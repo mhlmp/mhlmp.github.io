@@ -1924,8 +1924,7 @@
         </div>
         <div class="bulk-actions">
             <button class="bulk-btn" id="bulkAiBtn" style="background: rgba(139, 92, 246, 0.25); border-color: #8b5cf6; color: #ddd6fe;">🤖 סרוק ונתח נבחרים</button>
-            <button class="bulk-btn" id="bulkQuickCheckBtn" style="background: rgba(16, 185, 129, 0.22); border-color: #10b981; color: #a7f3d0;">⚡ בדוק סטטוס</button>
-            <button class="bulk-btn" id="bulkClearAiBtn" style="background: rgba(245, 158, 11, 0.2); border-color: var(--accent-gold); color: #fcd34d;">🧹 נקה ניתוח</button>
+            <button class="bulk-btn" id="bulkQuickCheckBtn" style="background: rgba(16, 185, 129, 0.22); border-color: #10b981; color: #a7f3d0;">📡 בדוק סטטוס</button>            <button class="bulk-btn" id="bulkClearAiBtn" style="background: rgba(245, 158, 11, 0.2); border-color: var(--accent-gold); color: #fcd34d;">🧹 נקה ניתוח</button>
             <button class="bulk-btn" id="bulkMoveBtn">📂 העבר</button>
             <button class="bulk-btn delete" id="bulkDeleteBtn">🗑️ מחק</button>
             <button class="bulk-btn" id="cancelBulkBtn">✖ ביטול</button>
@@ -2063,7 +2062,7 @@
                         <div class="dropdown-divider"></div>
                         <button id="fixBadScansBtn" style="color:#60a5fa; font-weight:700;">🛠️ תקן שגיאות וניחושים ("ככל הנראה" / שגיאות)</button>
                         <button id="bulkAiScanBtn">🤖 סרוק ונתח הכל לעומק (AI + אימות)</button>
-                        <button id="fastStatusScanBtn">⚡ בדיקת זמינות ושגיאות שרת מהירה</button>
+                        <button id="fastStatusScanBtn">📡 בדיקת זמינות ושגיאות שרת מהירה</button>
                         <div class="dropdown-divider"></div>
                         <button id="rescanDeadBtn">🔄 בדוק מחדש קישורים לא זמינים (🔴)</button>
                         <button id="rescanParkedBtn">🔄 בדוק מחדש דומיינים בחניה (🟠)</button>
@@ -2301,7 +2300,7 @@
                 <span style="font-size: 10px; opacity: 0.7;">(בדיקת DNS + מידע מוכר בלבד)</span>
             </label>
         </div>
-        <button class="ai-provider-btn" data-provider="fast-status">⚡ בדיקת זמינות וסטטוס מהירה</button>
+        <button class="ai-provider-btn" data-provider="fast-status">📡 בדיקת זמינות וסטטוס מהירה</button>
         <button class="ai-provider-btn" data-provider="gemini">🔹 Google Gemini</button>
         <button class="ai-provider-btn" data-provider="groq">⚡ Groq (Llama 3.3)</button>
         <button class="ai-provider-btn" data-provider="openrouter">🌐 OpenRouter</button>
@@ -5478,7 +5477,7 @@
             const manualHint = String(options?.manualHint || '').trim();
             const modeLabel = isManualScreenshot
                 ? '📸 תמונת מסך ידנית'
-                : (overrideProvider === 'fast-status' ? '⚡ בדיקה מהירה' : (overrideProvider || '🤖 סריקה מלאה'));
+                : (overrideProvider === 'fast-status' ? '📡 בדיקה מהירה' : (overrideProvider || '🤖 סריקה מלאה'));
             const scanLog = createScanLogger(item, modeLabel);
 
             const isSingleManualScan = !scanController.isRunning;
@@ -5588,7 +5587,7 @@
                         if (!keepExisting) {
                             ci.aiSummary = netDiag.reason || netDiag.fallbackSummary || 'בדיקת זמינות הושלמה.';
                             if (netDiag.tags && netDiag.tags.length > 0) ci.aiTags = netDiag.tags;
-                            ci.aiModel = '⚡ אימות שרת ורשת';
+                            ci.aiModel = '📡 אימות שרת ורשת';
                         }
                         ci.updatedAt = nowIso();
                         scanLog.step('Fast Exit', `הוחלט סטטוס סופי=${newStatus} (HTTP ${ci.httpCode ?? 'N/A'}) ללא צורך ב-AI`, newStatus === 'active' ? 'ok' : 'warn');
@@ -5642,7 +5641,7 @@
                         ci.httpCode = netDiag.httpCode || null;
                         ci.aiSummary = netDiag.fallbackSummary || ci.description || `הקישור ${domain} פעיל ותקין.`;
                         if (netDiag.tags?.length) ci.aiTags = netDiag.tags;
-                        ci.aiModel = '⚡ אבחון רשת מאומת';
+                        ci.aiModel = '📡 אבחון רשת מאומת';
                         ci.updatedAt = nowIso();
                         scanLog.finish(ci.siteStatus, ci.aiModel, ci.aiSummary);
                     }
@@ -6981,6 +6980,7 @@ STRICT RULES:
         const perfStyle=document.createElement('style');perfStyle.textContent='.card{content-visibility:auto;contain-intrinsic-size:auto 140px;}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;}}';document.head.appendChild(perfStyle);    </script>
 </body>
 </html>
+
 
 
 
