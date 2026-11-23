@@ -3,40 +3,78 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // =======================================================
-    // 🧠 פונקציות עזר - הגדרות זהות
+    // 🧠 פונקציות עזר - זהות, אימות והרשאות
     // =======================================================
-    
-    function isLoggedIn() { return request.auth != null; }
-    function isOwner(userId) { return isLoggedIn() && request.auth.uid == userId; }
-    function isAdmin() { 
-      return isLoggedIn() && (request.auth.token.email == "meirhadad74@gmail.com" || request.auth.token.email == "meirhadad75@gmail.com"); 
+
+    function isLoggedIn() {
+      return request.auth != null
+        && 'email' in request.auth.token
+        && request.auth.token.email is string
+        && request.auth.token.email.size() > 0;
     }
-    
+
+    function userEmail() {
+      return isLoggedIn() ? request.auth.token.email.lower() : '';
+    }
+
+    function isAdmin() {
+      return userEmail() in [
+        'meirhadad74@gmail.com',
+        'meirhadad75@gmail.com'
+      ];
+    }
+
+    // קריאת get יחידה בלבד (ללא exists כפול) — מקטינה ב-50% את קריאות החוקים ונחסמת אוטומטית אם המסמך לא קיים
+    function isApprovedUser() {
+      let email = userEmail();
+      return isAdmin() || (
+        email != '' &&
+        get(/databases/$(database)/documents/allowedUsers/$(email)).data.status == 'approved'
+      );
+    }
+
+    function isApprovedOwner(userId) {
+      return isLoggedIn() && request.auth.uid == userId && isApprovedUser();
+    }
+
     // =======================================================
     // 🛡️ פונקציות הגנה מתקדמות (Validation & Schema)
     // =======================================================
 
-    // 1. הגנה מפני ניפוח כמות השדות
-    function isPayloadSafe() { 
-      return request.resource.data.keys().size() <= 30; 
+    function isPayloadSafe() {
+      return request.resource.data.keys().size() <= 35;
     }
 
-    // 2. הגנה מפני מפלצות טקסט והזרקות קוד:
-    // מוודא שאם נשלח טקסט, הוא בגבולות הסביר ולא יקריס את המסד (עד 15,000 תווים לתוכן/AI, עד 2,000 לתיאור).
     function isContentSizeSafe() {
       let data = request.resource.data;
       return (!("content" in data) || (data.content is string && data.content.size() < 15000)) &&
-             (!("aiSummary" in data) || (data.aiSummary is string && data.aiSummary.size() < 15000)) &&
-             (!("description" in data) || (data.description is string && data.description.size() < 2000));
+             (!("aiSummary" in data) || data.aiSummary == null || (data.aiSummary is string && data.aiSummary.size() < 15000)) &&
+             (!("description" in data) || data.description == null || (data.description is string && data.description.size() < 5000)) &&
+             (!("note" in data) || data.note == null || (data.note is string && data.note.size() < 10000)) &&
+             (!("category" in data) || data.category == null || (data.category is string && data.category.size() < 300)) &&
+             (!("aiModel" in data) || data.aiModel == null || (data.aiModel is string && data.aiModel.size() < 500)) &&
+             (!("aiTags" in data) || data.aiTags == null || (data.aiTags is list && data.aiTags.size() <= 50)) &&
+             (!("type" in data) || data.type == null || data.type in ['link', 'text']) &&
+             (!("siteStatus" in data) || data.siteStatus == null || data.siteStatus in ['active', 'parked', 'dead', 'unknown', 'text', '']) &&
+             (!("httpCode" in data) || data.httpCode == null || data.httpCode is int || data.httpCode is float) &&
+             (!("isPinned" in data) || data.isPinned == null || data.isPinned is bool);
     }
 
-    // 3. הגנה על היסטוריה (Immutable Fields):
-    // כשמישהו מעדכן פריט קיים, אסור לו לשנות את ה-ID המקורי או את זמן היצירה המקורי.
     function isNotChangingImmutableFields() {
       let data = request.resource.data;
       let oldData = resource.data;
-      return (!("id" in data) || data.id == oldData.id) &&
-             (!("createdAt" in data) || data.createdAt == oldData.createdAt);
+      return (!("id" in oldData) || !("id" in data) || data.id == oldData.id);
+    }
+
+    function isAccessDocSafe(emailId) {
+      let data = request.resource.data;
+      return emailId == emailId.lower() &&
+             data.keys().size() <= 10 &&
+             (!("email" in data) || data.email == emailId) &&
+             (!("displayName" in data) || (data.displayName is string && data.displayName.size() <= 200)) &&
+             (!("photoURL" in data) || (data.photoURL is string && data.photoURL.size() <= 1000)) &&
+             (!("reviewedBy" in data) || (data.reviewedBy is string && data.reviewedBy.size() <= 200)) &&
+             (!("status" in data) || data.status in ['pending', 'approved', 'rejected']);
     }
 
     // =======================================================
@@ -47,30 +85,60 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /allowedUsers/{emailId} {
+      allow list: if isAdmin();
+      allow get: if isAdmin() || (isLoggedIn() && userEmail() == emailId);
+
+      allow create: if (isAdmin() && isAccessDocSafe(emailId)) || (
+        isLoggedIn() &&
+        userEmail() == emailId &&
+        request.resource.data.keys().hasOnly([
+          'email', 'uid', 'displayName', 'photoURL', 'status', 'requestedAt', 'updatedAt'
+        ]) &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.uid == request.auth.uid &&
+        isAccessDocSafe(emailId)
+      );
+
+      allow update: if (isAdmin() && isAccessDocSafe(emailId)) || (
+        isLoggedIn() &&
+        userEmail() == emailId &&
+        resource.data.status == 'approved' &&
+        request.resource.data.status == 'approved' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'uid', 'displayName', 'photoURL', 'updatedAt'
+        ]) &&
+        (!("uid" in request.resource.data) || request.resource.data.uid == request.auth.uid) &&
+        isAccessDocSafe(emailId)
+      );
+
+      allow delete: if isAdmin();
+    }
+
     match /users/{userId} {
-      allow read, create, update: if isOwner(userId) || isAdmin();
-      allow delete: if isAdmin(); 
+      allow read: if isAdmin() || isApprovedOwner(userId);
+      allow create, update: if (isAdmin() || isApprovedOwner(userId))
+                            && request.resource.data.keys().size() <= 20;
+      allow delete: if isAdmin();
 
       match /items/{itemId} {
-        allow read, delete: if isOwner(userId) || isAdmin();
-        
-        // יצירה חדשה: בודק בעלות, כמות שדות, ואורך טקסט תקין
-        allow create: if (isOwner(userId) || isAdmin()) 
-                      && isPayloadSafe() 
+        allow read, delete: if isAdmin() || isApprovedOwner(userId);
+
+        allow create: if (isAdmin() || isApprovedOwner(userId))
+                      && isPayloadSafe()
                       && isContentSizeSafe();
-                      
-        // עדכון פריט קיים: הכל כמו ביצירה + מוודא שלא משנים שדות נעולים (ID/createdAt)
-        allow update: if (isOwner(userId) || isAdmin()) 
-                      && isPayloadSafe() 
+
+        allow update: if (isAdmin() || isApprovedOwner(userId))
+                      && isPayloadSafe()
                       && isContentSizeSafe()
                       && isNotChangingImmutableFields();
       }
 
       match /trash/{trashId} {
-        allow read, delete: if isOwner(userId) || isAdmin();
-        // סל המחזור מקבל את אותן הגנות מבניות כמו הרשימה הראשית
-        allow create, update: if (isOwner(userId) || isAdmin()) 
-                              && isPayloadSafe() 
+        allow read, delete: if isAdmin() || isApprovedOwner(userId);
+
+        allow create, update: if (isAdmin() || isApprovedOwner(userId))
+                              && isPayloadSafe()
                               && isContentSizeSafe();
       }
     }
