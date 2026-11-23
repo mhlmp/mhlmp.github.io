@@ -2334,10 +2334,10 @@
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import {
             getFirestore, doc, setDoc, collection, onSnapshot,
-            getDocFromServer, getDocsFromServer,
+            getDocsFromServer,
             deleteDoc, writeBatch, enableNetwork, disableNetwork,
-            initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-            terminate, clearIndexedDbPersistence, waitForPendingWrites, deleteField
+            initializeFirestore, memoryLocalCache,
+            waitForPendingWrites, deleteField
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -2509,7 +2509,7 @@
             auth = getAuth(app);
             try {
                 db = initializeFirestore(app, {
-                    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+                    localCache: memoryLocalCache()
                 });
             } catch (err) {
                 db = getFirestore(app);
@@ -2797,12 +2797,8 @@
                 scanController.isRunning = false;
                 window._mhApprovedBatchCap = null;
                 stopAllCloudListeners();
-                showToast('מתנתק...', null, 2000);
+                showToast('מתנתק...', null, 1500);
                 await signOut(auth);
-                try {
-                    await terminate(db);
-                    await clearIndexedDbPersistence(db);
-                } catch (_) {}
                 window.location.reload();
             } catch (e) {
                 removeToast('switch-sync-toast');
@@ -3283,6 +3279,10 @@
             }
 
             state.unsubItems = onSnapshot(itemsRef, { includeMetadataChanges: true }, (snapshot) => {
+                // מונע מתמונת מטמון ריקה לדרוס פריטים שכבר נמשכו ישירות מהשרת
+                if (snapshot.metadata.fromCache && navigator.onLine && snapshot.docs.length === 0 && state.items.length > 0) {
+                    return;
+                }
                 retryAttempt = 0;
                 const prevById = new Map();
                 for (let i = 0; i < state.items.length; i++) {
@@ -3669,14 +3669,11 @@
         }
 
         function commitBatch(batch) {
-            const p = batch.commit();
             if (!navigator.onLine) {
-                p.catch(e => console.error('Offline batch error:', e));
-                return Promise.resolve();
+                return Promise.reject(new Error('אין חיבור לאינטרנט — השמירה לענן נעצרה.'));
             }
-            return p;
+            return batch.commit();
         }
-
         async function saveItemToCloud(item) {
             if (!state.user) return;
             try {
@@ -3792,30 +3789,20 @@
                 showToast('⏳ מתבצעת כרגע שמירה/ייבוא לענן — המתן לסיום ההודעה לפני יציאה.', null, 4500, null, true);
                 return;
             }
-            if (!navigator.onLine && !confirm('⚠️ אין חיבור לאינטרנט. שינויים מקומיים שעדיין לא עלו לענן יאבדו ביציאה. להמשיך בכל זאת?')) return;
-
-            let syncedToServer = true;
             if (navigator.onLine && db) {
                 showToast('☁️ מוודא שכל הנתונים נשמרו בשרת הענן לפני יציאה...', null, 0, 'logout-sync-toast');
-                syncedToServer = await waitForCloudSyncStrict(30000);
+                const syncedToServer = await waitForCloudSyncStrict(30000);
                 removeToast('logout-sync-toast');
-                if (!syncedToServer && !confirm('⚠️ חלק מהשינויים עדיין לא קיבלו אישור משרת הענן! יציאה כעת עלולה למחוק אותם. להמשיך בכל זאת?')) {
+                if (!syncedToServer && !confirm('⚠️ חלק מהשינויים עדיין לא קיבלו אישור משרת הענן! יציאה כעת עלולה לאבד אותם. להמשיך בכל זאת?')) {
                     return;
                 }
             }
-
             keepAwakeController.activeTasks = 0;
             keepAwakeController.release();
             scanController.isRunning = false;
             window._mhApprovedBatchCap = null;
             stopAllCloudListeners();
             try { await signOut(auth); } catch (_) {}
-            if (syncedToServer) {
-                try {
-                    await terminate(db);
-                    await clearIndexedDbPersistence(db);
-                } catch (_) {}
-            }
             window.location.reload();
         }
 
@@ -3829,25 +3816,25 @@
                 showToast('⏳ מתבצעת כרגע שמירה לענן — המתן לסיום לפני רענון.', null, 4000, null, true);
                 return;
             }
-            if (!silent && !confirm('⚠️ פעולה זו תסנכרן את כל הנתונים מחדש מול הענן.\nהאם להמשיך?')) return;
 
             const btn = document.getElementById('forceReloadBtn');
             if (btn) btn.classList.add('spinning');
-            if (!silent) showToast("🔄 משלים שמירה לענן ומרענן נתונים...", null, 0, 'reset-toast', false);
-            
             try {
-                await Promise.race([waitForPendingWrites(db), new Promise(r => setTimeout(r, 15000))]);
-                keepAwakeController.activeTasks = 0;
-                keepAwakeController.release();
-                scanController.isRunning = false;
-                window._mhApprovedBatchCap = null;
-                stopAllCloudListeners();
-                await terminate(db);
-                await clearIndexedDbPersistence(db);
-                window.location.reload();
+                const [itemsSnap, trashSnap] = await Promise.all([
+                    getDocsFromServer(collection(db, 'users', state.user.uid, 'items')),
+                    getDocsFromServer(collection(db, 'users', state.user.uid, 'trash')).catch(() => null)
+                ]);
+                state.items = itemsSnap.docs.map(d => d.data() || {});
+                if (trashSnap) state.trash = trashSnap.docs.map(d => d.data() || {});
+                updateCategoryDropdowns();
+                renderList();
+                updateSyncStatus('online', `מחובר ומסונכרן ✓ (${state.items.length})`);
+                if (!silent) showToast(`☁️ נטענו ${state.items.length} פריטים ישירות מהענן`);
             } catch (err) {
+                updateSyncStatus('error', 'שגיאת קריאה מהענן');
+                if (!silent) showToast('❌ רענון מהענן נכשל: ' + err.message, null, 5000, null, true);
+            } finally {
                 if (btn) btn.classList.remove('spinning');
-                updateSyncStatus('error', 'שגיאת רשת');
             }
         }
 
@@ -6816,7 +6803,7 @@ STRICT RULES:
             }
             showToast(message, null, 0, id, false);
         }
-        async function commitChunkWithRetry(chunk, applyToBatch) {
+        async function commitChunkWithRetry(chunk, applyToBatch, maxRetries = 5) {
             const run = async () => {
                 const batch = writeBatch(db);
                 for (let i = 0; i < chunk.length; i++) {
@@ -6824,20 +6811,26 @@ STRICT RULES:
                 }
                 await commitBatch(batch);
             };
-            try {
-                await run();
-            } catch (err) {
-                const transient = ['unavailable', 'resource-exhausted', 'deadline-exceeded', 'aborted'].includes(err?.code);
-                if (transient) {
-                    await new Promise(r => setTimeout(r, 400));
+            const retryDelays = [500, 1000, 2000, 3500, 5000];
+            let attempt = 0;
+            while (true) {
+                try {
                     await run();
-                } else {
+                    return;
+                } catch (err) {
+                    const transient = ['unavailable', 'resource-exhausted', 'deadline-exceeded', 'aborted', 'internal', 'unknown'].includes(err?.code);
+                    if (transient && attempt < maxRetries) {
+                        const waitMs = retryDelays[attempt] || 4000;
+                        attempt++;
+                        await new Promise(r => setTimeout(r, waitMs));
+                        continue;
+                    }
                     throw err;
                 }
             }
         }
         // מנוע כתיבה/מחיקה מרובה ברמת Production:
-        // מאתר אוטומטית את גודל ה-writeBatch המרבי המותר (עד 450 בבאץ') ומריץ באצ'ים במקביל
+        // מאתר אוטומטית את גודל ה-writeBatch המרבי המותר (עד 450 בבאץ'), מבצע backoff אוטומטי ומפצל כל תקלה עד פריט בודד
         async function runAdaptiveCloudBatch({ items, writesPerItem = 1, applyToBatch, progressToastId = null, progressLabel = '⚡ מעבד' }) {
             if (!Array.isArray(items) || !items.length) return 0;
             if (!navigator.onLine) {
@@ -6868,7 +6861,7 @@ STRICT RULES:
                     try { await state.user.getIdToken(); } catch (_) {}
 
                     if (navigator.onLine && !window._mhApprovedBatchCap) {
-                        // גישוש אוטומטי מהיר: בודק אם Firestore מבצע Cache ל-get() בבאץ' (400 בבאץ'), או יורד ל-18 / 9 / 1
+                        // גישוש אוטומטי מהיר: בודק אם Firestore מאפשר באץ' גדול (400), או יורד ל-18 / 9 / 1
                         const probeCaps = total * writesPerItem > 25 ? [25, 18, 9, 1] : [18, 9, 1];
                         let detectedCap = null;
                         let lastErr = null;
@@ -6877,7 +6870,7 @@ STRICT RULES:
                             const count = Math.min(total, Math.max(1, Math.floor(cap / writesPerItem)));
                             const probeChunk = items.slice(0, count);
                             try {
-                                await commitChunkWithRetry(probeChunk, applyToBatch);
+                                await commitChunkWithRetry(probeChunk, applyToBatch, 3);
                                 detectedCap = cap >= 25 ? 400 : cap;
                                 startIdx = count;
                                 done = count;
@@ -6885,8 +6878,7 @@ STRICT RULES:
                                 break;
                             } catch (err) {
                                 lastErr = err;
-                                const isRuleOrLimitErr = ['permission-denied', 'invalid-argument', 'failed-precondition'].includes(err?.code);
-                                if (!isRuleOrLimitErr || count === 1) {
+                                if (count === 1) {
                                     console.error('[Batch Preflight Failed]', {
                                         uid: state.user?.uid,
                                         email: state.user?.email,
@@ -6917,13 +6909,15 @@ STRICT RULES:
                     const failedItems = [];
                     const commitChunkSafe = async (chunk) => {
                         try {
-                            await commitChunkWithRetry(chunk, applyToBatch);
+                            await commitChunkWithRetry(chunk, applyToBatch, 5);
                             done += chunk.length;
                             reportProgress(done === total);
                         } catch (err) {
-                            const canSplit = chunk.length > 1 && ['permission-denied', 'invalid-argument', 'failed-precondition'].includes(err?.code);
-                            if (canSplit) {
-                                if (!isAdminNow && chunk.length > 18) window._mhApprovedBatchCap = 18;
+                            // לעולם לא זורק קבוצה שלמה — מפצל כל כשל עד רמת פריט בודד
+                            if (chunk.length > 1) {
+                                if (!isAdminNow && chunk.length > 18 && err?.code === 'permission-denied') {
+                                    window._mhApprovedBatchCap = 18;
+                                }
                                 const mid = Math.ceil(chunk.length / 2);
                                 await commitChunkSafe(chunk.slice(0, mid));
                                 await commitChunkSafe(chunk.slice(mid));
@@ -6934,7 +6928,7 @@ STRICT RULES:
                         }
                     };
 
-                    const parallelBatches = batchSize >= 100 ? 4 : (batchSize >= 9 ? 6 : 20);
+                    const parallelBatches = batchSize >= 100 ? 3 : (batchSize >= 9 ? 4 : 12);
                     let nextChunkIdx = 0;
 
                     const runWorker = async () => {
@@ -6952,7 +6946,7 @@ STRICT RULES:
                         if (done === 0) {
                             throw new Error(`כל הפריטים נדחו על ידי שרת הענן (${failedItems[0].code}: ${failedItems[0].message})`);
                         }
-                        showToast(`⚠️ ${failedItems.length} פריטים נדחו בשמירה לענן (פירוט ב-Console)`, null, 6000, null, true);
+                        showToast(`⚠️ ${failedItems.length} פריטים נדחו בשמירה לענן (${failedItems[0].code}) — פירוט ב-Console`, null, 7000, null, true);
                     }
                 }
 
@@ -7354,6 +7348,10 @@ STRICT RULES:
                     throw new Error('מבנה JSON לא מוכר');
                 }
 
+                const validInFile = Array.isArray(list)
+                    ? list.filter(x => x && typeof x === 'object' && String(x.content ?? x.url ?? '').trim() !== '').length
+                    : 0;
+
                 let importedItemsCount = 0;
                 if (Array.isArray(list) && list.length > 0) {
                     importedItemsCount = await importItems(list, { preserveAllFromBackup: true });
@@ -7386,16 +7384,21 @@ STRICT RULES:
                 }
 
                 const parts = [];
-                if (importedItemsCount > 0) {
-                    parts.push(verifiedServerTotal !== null
-                        ? `${importedItemsCount} הועלו (מאומת בענן: ${verifiedServerTotal})`
-                        : `${importedItemsCount} פריטים`);
+                if (validInFile > 0) {
+                    parts.push(`הועלו ${importedItemsCount}/${validInFile} | שמור בשרת: ${verifiedServerTotal ?? state.items.length}`);
                 }
                 if (importedTrashCount > 0) parts.push(`${importedTrashCount} בסל מחזור`);
                 if (restoredMeta.restoredSettings) {
                     parts.push(restoredMeta.keysCount > 0 ? `הגדרות ו-${restoredMeta.keysCount} מפתחות AI` : 'הגדרות מערכת');
                 }
-                showToast(parts.length ? `✅ ייבוא JSON הושלם (${parts.join(' + ')})` : '✅ ייבוא JSON הושלם', null, 5000);
+                const hasMismatch = validInFile > 0 && importedItemsCount < validInFile;
+                showToast(
+                    parts.length ? `${hasMismatch ? '⚠️' : '✅'} ייבוא JSON: ${parts.join(' • ')}` : '✅ ייבוא JSON הושלם',
+                    null,
+                    6000,
+                    null,
+                    hasMismatch
+                );
             } catch (err) {
                 showToast('❌ ייבוא נכשל: ' + err.message, null, 5000, null, true);
             } finally {
@@ -7512,28 +7515,43 @@ STRICT RULES:
                     }
                 }
 
-                if (fresh.length > 0) await importItems(fresh);
-                if (toEnrich.length > 0) await importItems(toEnrich);
+                let uploadedFresh = 0;
+                let uploadedEnrich = 0;
+                if (fresh.length > 0) uploadedFresh = await importItems(fresh, { preserveAllFromBackup: true });
+                if (toEnrich.length > 0) uploadedEnrich = await importItems(toEnrich, { preserveAllFromBackup: true });
 
-                if (fresh.length > 0 || toEnrich.length > 0 || restoredMeta.restoredSettings) {
+                let verifiedServerTotal = null;
+                if (state.user && navigator.onLine && (uploadedFresh > 0 || uploadedEnrich > 0 || importedTrashCount > 0)) {
+                    try {
+                        const serverSnap = await getDocsFromServer(collection(db, 'users', state.user.uid, 'items'));
+                        state.items = serverSnap.docs.map(d => d.data() || {});
+                        verifiedServerTotal = state.items.length;
+                    } catch (vErr) {
+                        console.warn('[SmartImport Server Verify Failed]', vErr);
+                    }
+                }
+
+                if (uploadedFresh > 0 || uploadedEnrich > 0 || restoredMeta.restoredSettings) {
                     updateCategoryDropdowns();
                     renderList();
                 }
 
                 const skippedCount = Math.max(0, list.length - fresh.length - toEnrich.length);
                 const summaryParts = [];
-                if (fresh.length > 0) summaryParts.push(`${fresh.length} חדשים`);
-                if (toEnrich.length > 0) summaryParts.push(`${toEnrich.length} עודכנו במידע חסר`);
+                if (fresh.length > 0) summaryParts.push(`${uploadedFresh}/${fresh.length} חדשים`);
+                if (toEnrich.length > 0) summaryParts.push(`${uploadedEnrich}/${toEnrich.length} עודכנו במידע חסר`);
                 if (skippedCount > 0 && (fresh.length > 0 || toEnrich.length > 0)) summaryParts.push(`${skippedCount} כפולים דולגו`);
+                if (verifiedServerTotal !== null) summaryParts.push(`שמור בשרת: ${verifiedServerTotal}`);
                 if (importedTrashCount > 0) summaryParts.push(`${importedTrashCount} בסל מחזור`);
                 if (restoredMeta.restoredSettings) {
                     summaryParts.push(restoredMeta.keysCount > 0 ? `הגדרות ו-${restoredMeta.keysCount} מפתחות AI` : 'הגדרות מערכת');
                 }
 
+                const hasMismatch = (uploadedFresh < fresh.length) || (uploadedEnrich < toEnrich.length);
                 if (!summaryParts.length) {
                     showToast('ℹ️ לא נמצאו פריטים או הגדרות חדשים — הכל כבר מעודכן.');
                 } else {
-                    showToast(`✅ ייבוא TXT הושלם: ${summaryParts.join(', ')}`);
+                    showToast(`${hasMismatch ? '⚠️' : '✅'} ייבוא TXT: ${summaryParts.join(' • ')}`, null, 6000, null, hasMismatch);
                 }
             } catch (err) {
                 showToast('❌ ייבוא נכשל: ' + err.message, null, 5000, null, true);
