@@ -6546,23 +6546,38 @@ STRICT RULES:
         async function restoreTrashItem(item){if(!state.user)return;try{const clean={...item};delete clean.deletedAt;await setDoc(doc(db,'users',state.user.uid,'items',String(item.id)),clean);await deleteDoc(doc(db,'users',state.user.uid,'trash',String(item.id)));showToast('♻️ הפריט שוחזר');}catch(e){showToast('❌ השחזור נכשל',null,3000,null,true);}}
         async function permanentlyDeleteTrashItem(item){if(!state.user||!confirm('למחוק את הפריט לצמיתות?'))return;try{await deleteDoc(doc(db,'users',state.user.uid,'trash',String(item.id)));showToast('הפריט נמחק לצמיתות');}catch(e){showToast('❌ המחיקה נכשלה',null,3000,null,true);}}
         async function restoreAllTrash(){for(const item of [...state.trash]) await restoreTrashItem(item);}
-        function getSafeBatchLimit(writesPerItem = 1) {
-            const isAdminNow = typeof isAdminEmail === 'function'
+        function isCurrentUserAdmin() {
+            return typeof isAdminEmail === 'function'
                 ? isAdminEmail(state.user?.email)
                 : ADMIN_EMAILS.some(e => String(e).toLowerCase() === String(state.user?.email || '').toLowerCase());
-            if (isAdminNow) return Math.max(1, Math.floor(400 / writesPerItem));
-            // Firestore מגביל עד 20 קריאות get/exists לכל writeBatch — שומר תמיד מתחת למגבלה (<= 16)
-            return Math.max(1, Math.floor(8 / writesPerItem));
+        }
+        function commitSingleWrite(writePromise) {
+            if (!navigator.onLine || state.isOffline) {
+                writePromise.catch(e => console.error('Offline write error:', e));
+                return Promise.resolve();
+            }
+            return writePromise;
+        }
+        async function runInParallelWaves(items, workerFn, concurrency = 15) {
+            for (let i = 0; i < items.length; i += concurrency) {
+                await Promise.all(items.slice(i, i + concurrency).map(workerFn));
+            }
         }
         async function emptyTrash(){
             if(!state.user||!confirm('לרוקן את סל המחזור לצמיתות?'))return;
             try{
                 const list=[...state.trash];
-                const chunkSize=getSafeBatchLimit(1);
-                for(let i=0;i<list.length;i+=chunkSize){
-                    const batch=writeBatch(db);
-                    list.slice(i,i+chunkSize).forEach(x=>batch.delete(doc(db,'users',state.user.uid,'trash',String(x.id))));
-                    await commitBatch(batch);
+                const uid=state.user.uid;
+                if (isCurrentUserAdmin()) {
+                    for(let i=0;i<list.length;i+=400){
+                        const batch=writeBatch(db);
+                        list.slice(i,i+400).forEach(x=>batch.delete(doc(db,'users',uid,'trash',String(x.id))));
+                        await commitBatch(batch);
+                    }
+                } else {
+                    await runInParallelWaves(list, (x) =>
+                        commitSingleWrite(deleteDoc(doc(db,'users',uid,'trash',String(x.id))))
+                    , 15);
                 }
                 showToast('סל המחזור רוקן');
             }catch(e){showToast('❌ לא ניתן לרוקן את הסל: '+e.message,null,4000,null,true);}
@@ -7131,33 +7146,74 @@ STRICT RULES:
         }
         async function writeRecordsInSafeBatches(collectionName, prepared, showProgress = false) {
             if (!prepared.length) return 0;
-            const chunkSize = getSafeBatchLimit(1);
-            const chunks = [];
-            for (let i = 0; i < prepared.length; i += chunkSize) {
-                chunks.push(prepared.slice(i, i + chunkSize));
-            }
-
+            const uid = state.user.uid;
+            const isAdminNow = isCurrentUserAdmin();
             let written = 0;
-            const concurrency = chunkSize <= 10 ? 4 : 1;
+
+            const writeOneWithRetry = async (item) => {
+                const ref = doc(db, 'users', uid, collectionName, String(item.id));
+                try {
+                    await commitSingleWrite(setDoc(ref, item, { merge: true }));
+                } catch (err) {
+                    const transient = ['unavailable', 'resource-exhausted', 'deadline-exceeded', 'aborted'].includes(err?.code);
+                    if (transient) {
+                        await new Promise(r => setTimeout(r, 450));
+                        await commitSingleWrite(setDoc(ref, item, { merge: true }));
+                    } else {
+                        throw err;
+                    }
+                }
+            };
 
             try {
-                for (let i = 0; i < chunks.length; i += concurrency) {
-                    const group = chunks.slice(i, i + concurrency);
-                    await Promise.all(group.map(async (chunk) => {
+                if (isAdminNow) {
+                    for (let i = 0; i < prepared.length; i += 400) {
+                        const chunk = prepared.slice(i, i + 400);
                         const batch = writeBatch(db);
                         chunk.forEach(item => {
-                            batch.set(
-                                doc(db, 'users', state.user.uid, collectionName, String(item.id)),
-                                item,
-                                { merge: true }
-                            );
+                            batch.set(doc(db, 'users', uid, collectionName, String(item.id)), item, { merge: true });
                         });
                         await commitBatch(batch);
                         written += chunk.length;
-                    }));
+                        if (showProgress && prepared.length > 400) {
+                            showToast(`⏳ מייבא נתונים לענן... ${written} / ${prepared.length}`, null, 0, 'import-progress-toast');
+                        }
+                    }
+                } else {
+                    try { await state.user.getIdToken(); } catch (_) {}
 
-                    if (showProgress && prepared.length > chunkSize) {
-                        showToast(`⏳ מייבא נתונים לענן... ${Math.min(written, prepared.length)} / ${prepared.length}`, null, 0, 'import-progress-toast');
+                    // בדיקת קדם-טיסה על הפריט הראשון (ללא writeBatch)
+                    try {
+                        await writeOneWithRetry(prepared[0]);
+                        written = 1;
+                    } catch (firstErr) {
+                        console.error('[Import Preflight Failed]', {
+                            collection: collectionName,
+                            uid,
+                            email: state.user?.email,
+                            accessState: state.accessState,
+                            code: firstErr?.code,
+                            message: firstErr?.message,
+                            sampleItem: prepared[0]
+                        });
+                        if (firstErr?.code === 'permission-denied') {
+                            throw new Error(`אין הרשאת כתיבה ל-${collectionName} (ודא שחוקי Firestore המעודכנים פורסמו ב-Publish וש-${state.user?.email} מאושר).`);
+                        }
+                        throw firstErr;
+                    }
+
+                    // יתר הפריטים ככתיבות בודדות בגלים מקבילים — קריאת חוק יחידה לכל פריט, אפס חסימות באץ'
+                    const rest = prepared.slice(1);
+                    const waveSize = 15;
+                    for (let i = 0; i < rest.length; i += waveSize) {
+                        const wave = rest.slice(i, i + waveSize);
+                        await Promise.all(wave.map(async (item) => {
+                            await writeOneWithRetry(item);
+                            written++;
+                        }));
+                        if (showProgress && prepared.length > waveSize) {
+                            showToast(`⏳ מייבא נתונים לענן... ${Math.min(written, prepared.length)} / ${prepared.length}`, null, 0, 'import-progress-toast');
+                        }
                     }
                 }
             } finally {
@@ -7168,15 +7224,18 @@ STRICT RULES:
         async function importTrashItems(trashList){
             if (!state.user || !Array.isArray(trashList) || !trashList.length) return 0;
             const existingTrashById = new Map(state.trash.map(x => [String(x.id), x]));
+            const usedIds = new Set();
             const prepared = [];
             let seq = 0;
             for (const raw of trashList) {
                 if (!raw || typeof raw !== 'object') continue;
                 const content = String(raw.content ?? raw.url ?? '').trim();
                 if (!content) continue;
-                const id = (raw.id !== null && raw.id !== undefined && raw.id !== '' && Number.isFinite(Number(raw.id)))
+                let id = (raw.id !== null && raw.id !== undefined && raw.id !== '' && Number.isFinite(Number(raw.id)))
                     ? Number(raw.id)
                     : Date.now() + seq++;
+                while (usedIds.has(String(id))) { id = Date.now() + seq++; }
+                usedIds.add(String(id));
                 const existing = existingTrashById.get(String(id)) || null;
                 prepared.push(normalizeRecordForCloud(raw, id, existing, true));
             }
@@ -7184,10 +7243,7 @@ STRICT RULES:
         }
         async function importItems(list){
             if(!state.user) throw new Error('יש להתחבר לפני ייבוא');
-            const isAdminNow = typeof isAdminEmail === 'function'
-                ? isAdminEmail(state.user.email)
-                : ADMIN_EMAILS.some(e => String(e).toLowerCase() === String(state.user.email || '').toLowerCase());
-            if (!isAdminNow && state.accessState !== 'approved') {
+            if (!isCurrentUserAdmin() && state.accessState !== 'approved') {
                 throw new Error('החשבון עדיין לא אושר על ידי מנהל המערכת');
             }
 
@@ -7228,19 +7284,30 @@ STRICT RULES:
             if(!state.user || !confirm(`להעביר ${state.selectedIds.size} פריטים לסל המחזור?`))return;
             const uid=state.user.uid;
             const ids=[...state.selectedIds];
-            const chunkSize=getSafeBatchLimit(2);
             let moved=0;
             try{
-                for(let i=0;i<ids.length;i+=chunkSize){
-                    const batch=writeBatch(db);
-                    ids.slice(i,i+chunkSize).forEach(id=>{
+                if (isCurrentUserAdmin()) {
+                    for(let i=0;i<ids.length;i+=200){
+                        const batch=writeBatch(db);
+                        ids.slice(i,i+200).forEach(id=>{
+                            const item=state.items.find(x=>x.id===id); if(!item)return;
+                            const clean=normalizeRecordForCloud(item, item.id, item, true);
+                            batch.set(doc(db,'users',uid,'trash',String(id)), clean);
+                            batch.delete(doc(db,'users',uid,'items',String(id)));
+                            moved++;
+                        });
+                        await commitBatch(batch);
+                    }
+                } else {
+                    await runInParallelWaves(ids, async (id) => {
                         const item=state.items.find(x=>x.id===id); if(!item)return;
                         const clean=normalizeRecordForCloud(item, item.id, item, true);
+                        const batch=writeBatch(db);
                         batch.set(doc(db,'users',uid,'trash',String(id)), clean);
                         batch.delete(doc(db,'users',uid,'items',String(id)));
+                        await commitBatch(batch);
                         moved++;
-                    });
-                    await commitBatch(batch);
+                    }, 10);
                 }
                 showToast(`🗑️ ${moved} פריטים הועברו לסל המחזור`);
             }catch(e){showToast('❌ המחיקה נכשלה: '+e.message,null,4000,null,true);}
@@ -7248,17 +7315,25 @@ STRICT RULES:
         }
         async function bulkClearAi(){
             if(!state.user)return;
+            const uid=state.user.uid;
             const ids=[...state.selectedIds];
-            const chunkSize=getSafeBatchLimit(1);
             try{
-                for(let i=0;i<ids.length;i+=chunkSize){
-                    const batch=writeBatch(db);
-                    ids.slice(i,i+chunkSize).forEach(id=>{
+                if (isCurrentUserAdmin()) {
+                    for(let i=0;i<ids.length;i+=400){
+                        const batch=writeBatch(db);
+                        ids.slice(i,i+400).forEach(id=>{
+                            const item=state.items.find(x=>x.id===id); if(!item)return;
+                            delete item.aiSummary;delete item.aiTags;delete item.aiModel;delete item.siteStatus;delete item.httpCode;
+                            batch.set(doc(db,'users',uid,'items',String(id)), {...aiClearPatch(), updatedAt:nowIso()}, {merge:true});
+                        });
+                        await commitBatch(batch);
+                    }
+                } else {
+                    await runInParallelWaves(ids, async (id) => {
                         const item=state.items.find(x=>x.id===id); if(!item)return;
                         delete item.aiSummary;delete item.aiTags;delete item.aiModel;delete item.siteStatus;delete item.httpCode;
-                        batch.set(doc(db,'users',state.user.uid,'items',String(id)), {...aiClearPatch(), updatedAt:nowIso()}, {merge:true});
-                    });
-                    await commitBatch(batch);
+                        await commitSingleWrite(setDoc(doc(db,'users',uid,'items',String(id)), {...aiClearPatch(), updatedAt:nowIso()}, {merge:true}));
+                    }, 15);
                 }
                 showToast('🧹 ניתוחי AI נוקו');
             }catch(e){showToast('❌ הניקוי נכשל: '+e.message,null,4000,null,true);}
@@ -7338,6 +7413,7 @@ STRICT RULES:
         const perfStyle=document.createElement('style');perfStyle.textContent='.card{content-visibility:auto;contain-intrinsic-size:auto 140px;}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;}}';document.head.appendChild(perfStyle);    </script>
 </body>
 </html>
+
 
 
 
