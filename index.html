@@ -3023,7 +3023,7 @@
                 if (e.target.closest('.trash-btn')) { e.stopPropagation(); moveToTrash(id); return; }
                 if (e.target.closest('.ai-edit-btn')) { e.stopPropagation(); window.openEditAiModal(item); return; }
                 if (e.target.closest('.ai-rescan-inline-btn')) { e.stopPropagation(); window.scanSingleItem(id, null, false); return; }
-                if (e.target.closest('.btn-manual-shot, .ai-manual-shot-inline-btn')) { e.stopPropagation(); window.openManualShotModal(item); return; }
+                if (e.target.closest('.ai-manual-shot-inline-btn')) { e.stopPropagation(); window.openManualShotModal(item); return; }
                 
                 const linkEl = e.target.closest('.card-link');
                 if (linkEl && !e.target.closest('.card-actions')) {
@@ -4032,7 +4032,6 @@
                     <div class="card-actions-inner">
                         <div class="card-actions-content card-actions">
                             <button class="icon-btn btn-ai-scan" title="סרוק / נתח עם AI (לחיצה ארוכה לאפשרויות)">✨</button>
-                            <button class="icon-btn btn-manual-shot" title="סרוק עם תמונת מסך ידנית (הדבקה / העלאה)">📸</button>
                             <button class="icon-btn btn-share" title="שתף">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
                             </button>
@@ -7339,6 +7338,7 @@ STRICT RULES:
         const perfStyle=document.createElement('style');perfStyle.textContent='.card{content-visibility:auto;contain-intrinsic-size:auto 140px;}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;}}';document.head.appendChild(perfStyle);    </script>
 </body>
 </html>
+
 
 
 
