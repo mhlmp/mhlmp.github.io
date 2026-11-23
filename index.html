@@ -1972,6 +1972,7 @@
                     </div>
                 </div>
                 <div style="display:flex; flex-direction: column; gap:6px; align-items: flex-end;">
+                    <button id="manageUsersBtn" class="btn-action-sm" style="display:none; background: rgba(96, 165, 250, 0.16); color: var(--primary-color); border-color: rgba(96, 165, 250, 0.4);">👥 אישורים <span id="pendingUsersBadge" class="status-count-badge dead-badge" style="display:none;">0</span></button>
                     <button id="switchAccountBtn" class="btn-action-sm">👤 החלף חשבון</button>
                     <button id="logoutBtn" class="btn-action-sm" style="background: rgba(239, 68, 68, 0.1); color: #ef4444; border-color: rgba(239, 68, 68, 0.3);">🚪 יציאה</button>
                 </div>
@@ -2243,6 +2244,25 @@
         </div>
     </div>
 
+    <div id="usersAdminModal" class="edit-modal-wrap">
+        <div class="edit-modal-box" style="max-width:540px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:12px;">
+                <h3 style="margin:0;">👥 ניהול הרשאות ואישור חשבונות</h3>
+                <button type="button" onclick="document.getElementById('usersAdminModal').style.display='none'" class="modal-close-pill" title="סגור">✖</button>
+            </div>
+            <div class="edit-modal-form">
+                <div style="padding:8px 10px; border:1px solid rgba(96,165,250,0.35); border-radius:8px; background:rgba(96,165,250,0.08); font-size:12px; line-height:1.45;">
+                    🔒 לכל חשבון מאושר יש מאגר קישורים פרטי ומבודד משלו — משתמשים אינם רואים קישורים אחד של השני.
+                </div>
+                <form id="preApproveEmailForm" style="display:flex; gap:8px;">
+                    <input type="email" id="preApproveEmailInput" class="edit-modal-input" placeholder="הזן כתובת Gmail לאישור מראש..." required style="direction:ltr; text-align:left;">
+                    <button type="submit" class="btn-save" style="padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:bold; white-space:nowrap;">➕ אשר</button>
+                </form>
+                <div id="usersAdminList" style="max-height:55vh; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div>
+            </div>
+        </div>
+    </div>
+
     <div id="toast-container"></div>
     <button id="scrollTopBtn" title="גלול למעלה">☝️</button>
 
@@ -2393,6 +2413,7 @@
         
         let state = {
             items: [], trash: [], user: null, unsubItems: null, unsubTrash: null,
+            unsubAccess: null, unsubAdminUsers: null, allowedUsers: [], accessState: 'guest',
             showDuplicates: true, showOnlyDead: false, showOnlyParked: false,
             expandAllCards: false,
             isOffline: false,
@@ -2679,8 +2700,7 @@
 
         async function switchAccount() {
             try {
-                if (state.unsubItems) state.unsubItems();
-                if (state.unsubTrash) state.unsubTrash();
+                stopAllCloudListeners();
                 showToast('מתנתק...', null, 2000);
                 await signOut(auth);
             } catch (e) { showToast('❌ ' + e.message, null, 4000, null, true); }
@@ -3053,131 +3073,374 @@
             requestAnimationFrame(alignMenu);
         }
 
+        function isAdminEmail(email) {
+            const clean = String(email || '').toLowerCase().trim();
+            return ADMIN_EMAILS.some(e => String(e).toLowerCase().trim() === clean);
+        }
+
+        function stopUserDataListeners() {
+            if (state.unsubItems) { state.unsubItems(); state.unsubItems = null; }
+            if (state.unsubTrash) { state.unsubTrash(); state.unsubTrash = null; }
+        }
+
+        function stopAllCloudListeners() {
+            stopUserDataListeners();
+            if (state.unsubAccess) { state.unsubAccess(); state.unsubAccess = null; }
+            if (state.unsubAdminUsers) { state.unsubAdminUsers(); state.unsubAdminUsers = null; }
+        }
+
+        function startUserDataSubscriptions(user) {
+            stopUserDataListeners();
+            const itemsRef = collection(db, 'users', user.uid, 'items');
+
+            state.unsubItems = onSnapshot(itemsRef, { includeMetadataChanges: true }, (snapshot) => {
+                let structuralChanges = false;
+                const modifiedIdsInPlace = [];
+
+                snapshot.docChanges().forEach((change) => {
+                    const data = change.doc.data();
+                    if (change.type === "added") {
+                        if (!state.items.find(i => i.id === data.id)) {
+                            state.items.push(data);
+                            structuralChanges = true;
+                        }
+                    }
+                    if (change.type === "modified") {
+                        const idx = state.items.findIndex(i => i.id === data.id);
+                        if (idx > -1) {
+                            const prev = state.items[idx];
+                            const wasScanning = prev.isScanning;
+                            const keepExpanded = prev._keepExpanded;
+                            state.items[idx] = data;
+                            if (wasScanning) state.items[idx].isScanning = true;
+                            if (keepExpanded) state.items[idx]._keepExpanded = true;
+
+                            const layoutChanged =
+                                (prev.category || 'כללי') !== (data.category || 'כללי') ||
+                                Boolean(prev.isPinned) !== Boolean(data.isPinned) ||
+                                (prev.content || '') !== (data.content || '') ||
+                                (prev.date || '') !== (data.date || '') ||
+                                ((state.showOnlyDead || state.showOnlyParked) && prev.siteStatus !== data.siteStatus);
+
+                            if (!layoutChanged) {
+                                modifiedIdsInPlace.push(data.id);
+                            } else {
+                                structuralChanges = true;
+                            }
+                        }
+                    }
+                    if (change.type === "removed") {
+                        state.items = state.items.filter(i => i.id !== data.id);
+                        structuralChanges = true;
+                    }
+                });
+
+                if (!snapshot.metadata.fromCache || !navigator.onLine) {
+                    isServerDataArrived = true;
+                }
+
+                updateStatusBadges(false);
+
+                if (structuralChanges || !isInitialSnapshotRendered) {
+                    isInitialSnapshotRendered = true;
+                    renderList();
+                    updateCategoryDropdowns();
+                } else if (modifiedIdsInPlace.length > 0) {
+                    modifiedIdsInPlace.forEach(id => updateCardInPlace(id));
+                }
+                updateSyncStatus(navigator.onLine ? 'online' : 'offline', navigator.onLine ? 'מחובר ✓' : 'מקומי');
+            }, (err) => {
+                console.error('[Sync] onSnapshot items error:', err);
+                updateSyncStatus('error', err.code === 'permission-denied' ? 'נדרש עדכון חוקי Firestore' : 'שגיאת חיבור');
+            });
+
+            const trashRef = collection(db, 'users', user.uid, 'trash');
+            state.unsubTrash = onSnapshot(trashRef, (snapshot) => {
+                let trashChanged = false;
+                snapshot.docChanges().forEach((change) => {
+                    const data = change.doc.data();
+                    if (change.type === "added") {
+                        if (!state.trash.find(i => i.id === data.id)) { state.trash.push(data); trashChanged = true; }
+                    }
+                    if (change.type === "modified") {
+                        const idx = state.trash.findIndex(i => i.id === data.id);
+                        if (idx > -1) { state.trash[idx] = data; trashChanged = true; }
+                    }
+                    if (change.type === "removed") {
+                        state.trash = state.trash.filter(i => i.id !== data.id);
+                        trashChanged = true;
+                    }
+                });
+                if (trashChanged && document.getElementById('trashModal').classList.contains('open')) {
+                    openTrashModal();
+                }
+            });
+        }
+
+        function updateAdminUsersBadge() {
+            const btn = document.getElementById('manageUsersBtn');
+            const badge = document.getElementById('pendingUsersBadge');
+            const showAdmin = Boolean(state.user && isAdminEmail(state.user.email));
+            if (btn) btn.style.display = showAdmin ? 'flex' : 'none';
+            if (!badge) return;
+            const pendingCount = state.allowedUsers.filter(u => u.status === 'pending').length;
+            badge.textContent = pendingCount;
+            badge.style.display = pendingCount > 0 ? 'inline-flex' : 'none';
+        }
+
+        function renderAdminUsersModal() {
+            const host = document.getElementById('usersAdminList');
+            if (!host) return;
+            host.innerHTML = '';
+
+            const order = { pending: 0, approved: 1, rejected: 2 };
+            const sorted = [...state.allowedUsers]
+                .filter(u => u.email && !isAdminEmail(u.email))
+                .sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+
+            if (!sorted.length) {
+                host.innerHTML = '<div style="text-align:center; padding:18px; color:var(--text-secondary); font-size:0.9rem;">אין עדיין בקשות או חשבונות נוספים. אפשר לאשר כתובת Gmail מראש בשדה למעלה.</div>';
+                return;
+            }
+
+            const statusLabels = {
+                pending: '⏳ ממתין לאישור',
+                approved: '🟢 מאושר',
+                rejected: '🔴 חסום / נדחה'
+            };
+
+            sorted.forEach(u => {
+                const row = document.createElement('div');
+                row.className = 'trash-item';
+                row.style.marginBottom = '0';
+
+                const info = document.createElement('div');
+                info.style.cssText = 'display:flex; flex-direction:column; gap:3px; min-width:0; flex:1;';
+
+                const titleLine = document.createElement('div');
+                titleLine.style.cssText = 'font-weight:700; font-size:0.88rem; overflow-wrap:anywhere;';
+                titleLine.textContent = u.displayName ? `${u.displayName} (${statusLabels[u.status] || u.status})` : (statusLabels[u.status] || u.status);
+
+                const mailLine = document.createElement('div');
+                mailLine.style.cssText = 'font-size:0.78rem; color:var(--primary-color); font-family:monospace; direction:ltr; text-align:right; overflow-wrap:anywhere;';
+                mailLine.textContent = u.email;
+
+                info.append(titleLine, mailLine);
+
+                const actions = document.createElement('div');
+                actions.className = 'trash-item-actions';
+
+                if (u.status !== 'approved') {
+                    const approveBtn = document.createElement('button');
+                    approveBtn.type = 'button';
+                    approveBtn.className = 'trash-btn-restore';
+                    approveBtn.textContent = '✅ אשר';
+                    approveBtn.addEventListener('click', () => setUserAccessStatus(u.email, 'approved'));
+                    actions.appendChild(approveBtn);
+                }
+                if (u.status !== 'rejected') {
+                    const rejectBtn = document.createElement('button');
+                    rejectBtn.type = 'button';
+                    rejectBtn.className = 'trash-btn-delete';
+                    rejectBtn.textContent = u.status === 'approved' ? '🚫 בטל גישה' : '🚫 דחה';
+                    rejectBtn.addEventListener('click', () => setUserAccessStatus(u.email, 'rejected'));
+                    actions.appendChild(rejectBtn);
+                }
+                if (u.status === 'rejected') {
+                    const delBtn = document.createElement('button');
+                    delBtn.type = 'button';
+                    delBtn.className = 'btn-action-sm';
+                    delBtn.textContent = '🗑️';
+                    delBtn.title = 'מחק רשומה';
+                    delBtn.addEventListener('click', () => deleteUserAccessRecord(u.email));
+                    actions.appendChild(delBtn);
+                }
+
+                row.append(info, actions);
+                host.appendChild(row);
+            });
+        }
+
+        async function setUserAccessStatus(email, status) {
+            const cleanEmail = String(email || '').toLowerCase().trim();
+            if (!cleanEmail || !state.user || !isAdminEmail(state.user.email)) return;
+            try {
+                await setDoc(doc(db, 'allowedUsers', cleanEmail), {
+                    email: cleanEmail,
+                    status,
+                    reviewedBy: state.user.email,
+                    updatedAt: nowIso()
+                }, { merge: true });
+                showToast(status === 'approved' ? `✅ החשבון ${cleanEmail} אושר בהצלחה` : `🚫 הגישה עבור ${cleanEmail} נחסמה`);
+            } catch (err) {
+                showToast('❌ פעולת ההרשאה נכשלה (בדוק חוקי Firestore): ' + err.message, null, 5000, null, true);
+            }
+        }
+
+        async function deleteUserAccessRecord(email) {
+            const cleanEmail = String(email || '').toLowerCase().trim();
+            if (!cleanEmail || !state.user || !isAdminEmail(state.user.email)) return;
+            try {
+                await deleteDoc(doc(db, 'allowedUsers', cleanEmail));
+                showToast(`🗑️ הרשומה של ${cleanEmail} הוסרה`);
+            } catch (err) {
+                showToast('❌ המחיקה נכשלה: ' + err.message, null, 4000, null, true);
+            }
+        }
+
+        function startAdminUsersSubscription() {
+            if (state.unsubAdminUsers) { state.unsubAdminUsers(); state.unsubAdminUsers = null; }
+            state.unsubAdminUsers = onSnapshot(collection(db, 'allowedUsers'), (snap) => {
+                state.allowedUsers = snap.docs.map(d => ({ email: d.id, ...d.data() }));
+                updateAdminUsersBadge();
+                if (document.getElementById('usersAdminModal')?.style.display === 'flex') {
+                    renderAdminUsersModal();
+                }
+            }, (err) => {
+                console.warn('[AdminUsers] Listen error:', err.message);
+            });
+        }
+
+        function initAdminUsersUi() {
+            document.getElementById('manageUsersBtn')?.addEventListener('click', () => {
+                renderAdminUsersModal();
+                const modal = document.getElementById('usersAdminModal');
+                if (modal) modal.style.display = 'flex';
+            });
+            document.getElementById('preApproveEmailForm')?.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const input = document.getElementById('preApproveEmailInput');
+                const email = String(input?.value || '').toLowerCase().trim();
+                if (!email || !email.includes('@')) return;
+                await setUserAccessStatus(email, 'approved');
+                if (input) input.value = '';
+            });
+        }
+
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAdminUsersUi, { once: true });
+        else initAdminUsersUi();
+
         function setupFirebaseListeners() {
             if (!auth || !db) return;
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     const previousUid = state.user?.uid || null;
                     if (previousUid && previousUid !== user.uid) {
-                        if (state.unsubItems) { state.unsubItems(); state.unsubItems = null; }
-                        if (state.unsubTrash) { state.unsubTrash(); state.unsubTrash = null; }
-                        state.items = []; state.trash = []; state.selectedIds.clear(); state.isSelectionMode = false;
+                        stopAllCloudListeners();
+                        state.items = []; state.trash = []; state.allowedUsers = [];
+                        state.selectedIds.clear(); state.isSelectionMode = false;
                     }
                     state.isOffline = !navigator.onLine;
                     state.user = user;
                     isServerDataArrived = false;
                     isInitialSnapshotRendered = false;
-                    
+
                     try { if (navigator.onLine) await enableNetwork(db); } catch(e) {}
-                    
-                                        document.getElementById('userName').textContent = user.displayName || user.email || 'משתמש';
+
+                    document.getElementById('userName').textContent = user.displayName || user.email || 'משתמש';
                     document.getElementById('userEmailDisplay').textContent = user.email || '';
                     const avatarEl = document.getElementById('userAvatar');
                     if (user.photoURL) { avatarEl.src = user.photoURL; avatarEl.style.visibility = 'visible'; }
                     else { avatarEl.removeAttribute('src'); avatarEl.style.visibility = 'hidden'; }
-                    handleLockScreen(true);
-                    const isAdmin = ADMIN_EMAILS.some(email => String(email).toLowerCase() === String(user.email || '').toLowerCase());
-                    if (!isAdmin) {
-                        state.items = []; state.trash = []; renderList();
-                        showToast('❌ לחשבון Google זה אין הרשאה למערכת.', null, 5000, null, true);
+
+                    const email = String(user.email || '').toLowerCase().trim();
+                    const isAdmin = isAdminEmail(email);
+
+                    if (isAdmin) {
+                        if (state.unsubAccess) { state.unsubAccess(); state.unsubAccess = null; }
+                        state.accessState = 'approved';
+                        updateAdminUsersBadge();
+                        handleLockScreen(true, 'approved');
+                        startUserDataSubscriptions(user);
+                        startAdminUsersSubscription();
                         return;
                     }
 
-                    if (state.unsubItems) state.unsubItems();
-                    if (state.unsubTrash) state.unsubTrash();
+                    // משתמש שאינו מנהל — בדיקת אישור בזמן אמת מול Firestore
+                    updateAdminUsersBadge();
+                    stopUserDataListeners();
+                    if (state.unsubAccess) { state.unsubAccess(); state.unsubAccess = null; }
+                    state.items = []; state.trash = [];
+                    state.accessState = 'checking';
+                    handleLockScreen(true, 'checking');
 
-                    const itemsRef = collection(db, 'users', user.uid, 'items');
-                    
-                    state.unsubItems = onSnapshot(itemsRef, { includeMetadataChanges: true }, (snapshot) => {
-                        let structuralChanges = false;
-                        const modifiedIdsInPlace = [];
+                    const accessDocRef = doc(db, 'allowedUsers', email);
+                    let requestSentOnce = false;
 
-                        snapshot.docChanges().forEach((change) => {
-                            const data = change.doc.data();
-                            if (change.type === "added") {
-                                if (!state.items.find(i => i.id === data.id)) {
-                                    state.items.push(data);
-                                    structuralChanges = true;
+                    state.unsubAccess = onSnapshot(accessDocRef, async (snap) => {
+                        if (!snap.exists()) {
+                            stopUserDataListeners();
+                            state.items = []; state.trash = [];
+                            state.accessState = 'pending';
+                            handleLockScreen(true, 'pending');
+                            if (!requestSentOnce) {
+                                requestSentOnce = true;
+                                try {
+                                    await setDoc(accessDocRef, {
+                                        email,
+                                        uid: user.uid,
+                                        displayName: user.displayName || '',
+                                        photoURL: user.photoURL || '',
+                                        status: 'pending',
+                                        requestedAt: nowIso(),
+                                        updatedAt: nowIso()
+                                    }, { merge: true });
+                                    showToast('⏳ בקשת הצטרפות נשלחה למנהל המערכת וממתינה לאישור.', null, 5000);
+                                } catch (reqErr) {
+                                    console.error('[AccessRequest] Failed:', reqErr);
+                                    handleLockScreen(true, 'rules-error');
+                                    showToast('❌ נדרש עדכון חוקי Firestore כדי לאפשר בקשות גישה.', null, 6000, null, true);
                                 }
                             }
-                            if (change.type === "modified") {
-                                const idx = state.items.findIndex(i => i.id === data.id);
-                                if (idx > -1) {
-                                    const prev = state.items[idx];
-                                    const wasScanning = prev.isScanning;
-                                    const keepExpanded = prev._keepExpanded;
-                                    state.items[idx] = data;
-                                    if (wasScanning) state.items[idx].isScanning = true;
-                                    if (keepExpanded) state.items[idx]._keepExpanded = true;
-
-                                    const layoutChanged =
-                                        (prev.category || 'כללי') !== (data.category || 'כללי') ||
-                                        Boolean(prev.isPinned) !== Boolean(data.isPinned) ||
-                                        (prev.content || '') !== (data.content || '') ||
-                                        (prev.date || '') !== (data.date || '') ||
-                                        ((state.showOnlyDead || state.showOnlyParked) && prev.siteStatus !== data.siteStatus);
-
-                                    if (!layoutChanged) {
-                                        modifiedIdsInPlace.push(data.id);
-                                    } else {
-                                        structuralChanges = true;
-                                    }
-                                }
-                            }
-                            if (change.type === "removed") {
-                                state.items = state.items.filter(i => i.id !== data.id);
-                                structuralChanges = true;
-                            }
-                        });
-
-                        if (!snapshot.metadata.fromCache || !navigator.onLine) {
-                            isServerDataArrived = true;
+                            return;
                         }
 
-                        updateStatusBadges(false);
-
-                        if (structuralChanges || !isInitialSnapshotRendered) {
-                            isInitialSnapshotRendered = true;
-                            renderList();
-                            updateCategoryDropdowns();
-                        } else if (modifiedIdsInPlace.length > 0) {
-                            modifiedIdsInPlace.forEach(id => updateCardInPlace(id));
+                        const data = snap.data() || {};
+                        if (data.status === 'approved') {
+                            const wasApproved = state.accessState === 'approved';
+                            state.accessState = 'approved';
+                            handleLockScreen(true, 'approved');
+                            if (!wasApproved) {
+                                startUserDataSubscriptions(user);
+                                showToast('✅ החשבון מאושר! נטען המאגר האישי שלך.', null, 3500);
+                            }
+                            if (!data.uid || data.uid !== user.uid) {
+                                setDoc(accessDocRef, {
+                                    uid: user.uid,
+                                    displayName: user.displayName || data.displayName || '',
+                                    photoURL: user.photoURL || data.photoURL || '',
+                                    status: 'approved',
+                                    updatedAt: nowIso()
+                                }, { merge: true }).catch(() => {});
+                            }
+                        } else if (data.status === 'rejected') {
+                            stopUserDataListeners();
+                            state.items = []; state.trash = [];
+                            state.accessState = 'rejected';
+                            handleLockScreen(true, 'rejected');
+                            showToast('❌ הגישה לחשבון זה נדחתה על ידי מנהל המערכת.', null, 5000, null, true);
+                        } else {
+                            stopUserDataListeners();
+                            state.items = []; state.trash = [];
+                            state.accessState = 'pending';
+                            handleLockScreen(true, 'pending');
                         }
-                        updateSyncStatus(navigator.onLine ? 'online' : 'offline', navigator.onLine ? 'מחובר ✓' : 'מקומי');
                     }, (err) => {
-                        console.error('[Sync] onSnapshot items error:', err);
-                        updateSyncStatus('error', 'שגיאת חיבור');
-                    });
-
-                    const trashRef = collection(db, 'users', user.uid, 'trash');
-                    state.unsubTrash = onSnapshot(trashRef, (snapshot) => {
-                        let trashChanged = false;
-                        snapshot.docChanges().forEach((change) => {
-                            const data = change.doc.data();
-                            if (change.type === "added") {
-                                if (!state.trash.find(i => i.id === data.id)) { state.trash.push(data); trashChanged = true; }
-                            }
-                            if (change.type === "modified") {
-                                const idx = state.trash.findIndex(i => i.id === data.id);
-                                if (idx > -1) { state.trash[idx] = data; trashChanged = true; }
-                            }
-                            if (change.type === "removed") {
-                                state.trash = state.trash.filter(i => i.id !== data.id);
-                                trashChanged = true;
-                            }
-                        });
-                        if (trashChanged && document.getElementById('trashModal').classList.contains('open')) {
-                            openTrashModal();
-                        }
+                        console.error('[Access] Snapshot error:', err);
+                        state.accessState = 'rules-error';
+                        handleLockScreen(true, 'rules-error');
+                        showToast('❌ שגיאת הרשאות Firestore — יש לעדכן את חוקי המסד ב-Firebase Console.', null, 6000, null, true);
                     });
                 } else {
-                    state.user = null; state.items = []; state.trash = []; state.selectedIds.clear(); state.isSelectionMode = false;
+                    stopAllCloudListeners();
+                    state.user = null; state.items = []; state.trash = []; state.allowedUsers = [];
+                    state.accessState = 'guest';
+                    state.selectedIds.clear(); state.isSelectionMode = false;
                     isInitialSnapshotRendered = false;
                     document.body.classList.remove('selection-mode-active');
                     if (forceHideLockScreenTimer) clearTimeout(forceHideLockScreenTimer);
-                    handleLockScreen(false);
-                    if (state.unsubItems) { state.unsubItems(); state.unsubItems = null; }
-                    if (state.unsubTrash) { state.unsubTrash(); state.unsubTrash = null; }
+                    updateAdminUsersBadge();
+                    handleLockScreen(false, 'guest');
                     renderList(); updateStatusBadges(false);
                 }
             });
@@ -3233,61 +3496,77 @@
             }));
         }
 
-      function handleLockScreen(isLoggedIn) {
+      function handleLockScreen(isLoggedIn, accessMode = null) {
             const loggedInView = document.getElementById('loggedInView');
             const loggedOutView = document.getElementById('loggedOutView');
             const welcomeScreen = document.getElementById('welcomeScreen');
-                        const protectedContent = document.getElementById('protectedContent');
-
-            document.body.classList.toggle(
-                'pre-login-screen',
-                !isLoggedIn || !state.user
-            );
+            const protectedContent = document.getElementById('protectedContent');
+            const itemCountEl = document.getElementById('itemCount');
+            const heading = welcomeScreen?.querySelector('h2');
+            const infoGroup = welcomeScreen?.querySelector('.welcome-info-group');
 
             if (loggedInView) loggedInView.style.display = isLoggedIn ? 'flex' : 'none';
             if (loggedOutView) loggedOutView.style.display = isLoggedIn ? 'none' : 'flex';
-            
+
             if (!isLoggedIn || !state.user) {
+                document.body.classList.add('pre-login-screen');
                 if (welcomeScreen) {
                     welcomeScreen.style.display = 'flex';
                     welcomeScreen.classList.add('visible');
                 }
                 if (protectedContent) protectedContent.classList.add('locked');
-                const itemCountEl = document.getElementById('itemCount');
                 if (itemCountEl) itemCountEl.textContent = 'ממתין להתחברות...';
+                if (heading) heading.innerHTML = 'ברוכים הבאים,<br><span style="color: var(--primary-color);">MH Link Manager Pro</span>';
+                if (infoGroup) {
+                    infoGroup.innerHTML = '<p>כדי לשמור על פרטיותך, הקישורים נטענים מהענן בלבד.</p><p>בעת יציאה הכל נמחק מהמכשיר לחלוטין.</p>';
+                }
                 return;
             }
 
-            const email = String(state.user.email || '').toLowerCase().trim();
-            // בדיקת התאמה מוחלטת לשתי כתובות הדוא"ל שלך
-            const isMyAccount = ADMIN_EMAILS.map(e => e.toLowerCase()).includes(email);
+            const mode = accessMode || state.accessState || (isAdminEmail(state.user.email) ? 'approved' : 'checking');
 
-            if (isMyAccount) {
-                // פתיחה מיידית של האתר ללא שום עיכוב וללא הצגת מסך מנעול
+            if (mode === 'approved') {
+                document.body.classList.remove('pre-login-screen');
                 if (welcomeScreen) {
                     welcomeScreen.style.display = 'none';
                     welcomeScreen.classList.remove('visible');
                 }
-                if (protectedContent) {
-                    protectedContent.classList.remove('locked');
-                }
+                if (protectedContent) protectedContent.classList.remove('locked');
                 isServerDataArrived = true;
                 renderList();
                 return;
             }
 
-                        // גישה לחשבון שאינו מורשה
             document.body.classList.add('pre-login-screen');
-
             if (welcomeScreen) {
                 welcomeScreen.style.display = 'flex';
                 welcomeScreen.classList.add('visible');
             }
             if (protectedContent) protectedContent.classList.add('locked');
-            const itemCountEl = document.getElementById('itemCount');
-            if (itemCountEl) itemCountEl.textContent = 'אין הרשאה לחשבון זה';
-            const heading = welcomeScreen?.querySelector('h2');
-            if (heading) heading.innerHTML = 'הגישה למערכת מוגבלת לחשבונות מורשים';
+
+            if (mode === 'checking') {
+                if (itemCountEl) itemCountEl.textContent = 'בודק הרשאות...';
+                if (heading) heading.innerHTML = '⏳ בודק הרשאות גישה...';
+                if (infoGroup) infoGroup.innerHTML = '<p>מאמת את סטטוס החשבון מול הענן, רק רגע.</p>';
+            } else if (mode === 'pending') {
+                if (itemCountEl) itemCountEl.textContent = 'ממתין לאישור מנהל...';
+                if (heading) heading.innerHTML = '⏳ בקשת הגישה ממתינה לאישור';
+                if (infoGroup) {
+                    infoGroup.innerHTML = '<p>הבקשה עבור החשבון שלך נשלחה למנהל המערכת.</p><p>ברגע שהמנהל יאשר אותך — המערכת תיפתח כאן אוטומטית.</p>';
+                }
+            } else if (mode === 'rules-error') {
+                if (itemCountEl) itemCountEl.textContent = 'נדרש עדכון הרשאות ענן';
+                if (heading) heading.innerHTML = '⚠️ נדרש עדכון חוקי Firestore';
+                if (infoGroup) {
+                    infoGroup.innerHTML = '<p>הגישה נחסמה ברמת מסד הנתונים (Firebase Rules).</p><p>יש לעדכן את חוקי Firestore ב-Firebase Console.</p>';
+                }
+            } else {
+                if (itemCountEl) itemCountEl.textContent = 'אין הרשאה לחשבון זה';
+                if (heading) heading.innerHTML = '🚫 הגישה לחשבון זה נדחתה';
+                if (infoGroup) {
+                    infoGroup.innerHTML = '<p>לחשבון Google זה אין הרשאה למערכת.</p><p>ניתן להחליף חשבון למעלה או לפנות למנהל המערכת.</p>';
+                }
+            }
         }
         function updateSyncStatus(status, label) {
             const dot = document.getElementById('syncDot');
@@ -3298,8 +3577,7 @@
 
          async function cloudLogout() {
             if (!navigator.onLine && !confirm('אין חיבור לרשת. שינויים שלא סונכרנו יימחקו ביציאה. להמשיך?')) return;
-            if (state.unsubItems) state.unsubItems();
-            if (state.unsubTrash) state.unsubTrash();
+            stopAllCloudListeners();
             try {
                 if (navigator.onLine && db) {
                     await Promise.race([waitForPendingWrites(db), new Promise(r => setTimeout(r, 4000))]);
@@ -6980,6 +7258,7 @@ STRICT RULES:
         const perfStyle=document.createElement('style');perfStyle.textContent='.card{content-visibility:auto;contain-intrinsic-size:auto 140px;}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;}}';document.head.appendChild(perfStyle);    </script>
 </body>
 </html>
+
 
 
 
