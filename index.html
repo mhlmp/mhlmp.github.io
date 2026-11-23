@@ -2765,11 +2765,32 @@
         }
 
         async function switchAccount() {
+            if (keepAwakeController.activeTasks > 0) {
+                showToast('⏳ מתבצעת כרגע שמירה לענן — המתן לסיום לפני החלפת חשבון.', null, 4000, null, true);
+                return;
+            }
             try {
+                if (navigator.onLine && db) {
+                    showToast('☁️ מוודא שכל הנתונים נשמרו בענן לפני החלפת חשבון...', null, 0, 'switch-sync-toast');
+                    await Promise.race([waitForPendingWrites(db), new Promise(r => setTimeout(r, 15000))]);
+                    removeToast('switch-sync-toast');
+                }
+                keepAwakeController.activeTasks = 0;
+                keepAwakeController.release();
+                scanController.isRunning = false;
+                window._mhApprovedBatchCap = null;
                 stopAllCloudListeners();
                 showToast('מתנתק...', null, 2000);
                 await signOut(auth);
-            } catch (e) { showToast('❌ ' + e.message, null, 4000, null, true); }
+                try {
+                    await terminate(db);
+                    await clearIndexedDbPersistence(db);
+                } catch (_) {}
+                window.location.reload();
+            } catch (e) {
+                removeToast('switch-sync-toast');
+                showToast('❌ ' + e.message, null, 4000, null, true);
+            }
         }
 
         function initServiceWorker() {
@@ -3209,72 +3230,74 @@
             }
         }
 
-        function startUserDataSubscriptions(user) {
+        let itemsRetryTimer = null;
+
+        function startUserDataSubscriptions(user, retryAttempt = 0) {
             stopUserDataListeners();
+            if (itemsRetryTimer) { clearTimeout(itemsRetryTimer); itemsRetryTimer = null; }
             const itemsRef = collection(db, 'users', user.uid, 'items');
 
             state.unsubItems = onSnapshot(itemsRef, { includeMetadataChanges: true }, (snapshot) => {
-                let structuralChanges = false;
-                const modifiedIdsInPlace = [];
+                retryAttempt = 0;
+                const prevById = new Map();
+                for (let i = 0; i < state.items.length; i++) {
+                    prevById.set(String(state.items[i].id), state.items[i]);
+                }
+
                 const changes = snapshot.docChanges();
+                let structuralChanges = snapshot.docs.length !== state.items.length;
+                const modifiedIdsInPlace = [];
 
-                if (changes.length > 0) {
-                    const indexById = new Map();
-                    for (let i = 0; i < state.items.length; i++) {
-                        indexById.set(String(state.items[i].id), i);
+                const nextItems = snapshot.docs.map((docSnap) => {
+                    const data = docSnap.data() || {};
+                    const key = String(data.id ?? docSnap.id);
+                    const prev = prevById.get(key);
+                    if (prev) {
+                        if (prev.isScanning) data.isScanning = true;
+                        if (prev._keepExpanded) data._keepExpanded = true;
                     }
-                    const removedKeys = new Set();
+                    return data;
+                });
 
+                if (!structuralChanges && changes.length > 0) {
                     for (let c = 0; c < changes.length; c++) {
-                        const change = changes[c];
-                        const data = change.doc.data() || {};
-                        const docKey = String(data.id ?? change.doc.id);
-                        const rawDocId = String(change.doc.id);
-
-                        if (change.type === "added") {
-                            const existingIdx = indexById.get(docKey) ?? indexById.get(rawDocId);
-                            if (existingIdx === undefined) {
-                                indexById.set(docKey, state.items.length);
-                                state.items.push(data);
-                                structuralChanges = true;
-                            } else {
-                                state.items[existingIdx] = data;
-                            }
-                        } else if (change.type === "modified") {
-                            const idx = indexById.get(docKey) ?? indexById.get(rawDocId);
-                            if (idx !== undefined) {
-                                const prev = state.items[idx];
-                                const wasScanning = prev.isScanning;
-                                const keepExpanded = prev._keepExpanded;
-                                state.items[idx] = data;
-                                if (wasScanning) state.items[idx].isScanning = true;
-                                if (keepExpanded) state.items[idx]._keepExpanded = true;
-
-                                const layoutChanged =
-                                    (prev.category || 'כללי') !== (data.category || 'כללי') ||
-                                    Boolean(prev.isPinned) !== Boolean(data.isPinned) ||
-                                    (prev.content || '') !== (data.content || '') ||
-                                    (prev.date || '') !== (data.date || '') ||
-                                    ((state.showOnlyDead || state.showOnlyParked) && prev.siteStatus !== data.siteStatus);
-
-                                if (!layoutChanged) modifiedIdsInPlace.push(data.id);
-                                else structuralChanges = true;
-                            }
-                        } else if (change.type === "removed") {
-                            removedKeys.add(docKey);
-                            removedKeys.add(rawDocId);
+                        const ch = changes[c];
+                        if (ch.type !== 'modified') {
+                            structuralChanges = true;
+                            break;
                         }
-                    }
+                        const data = ch.doc.data() || {};
+                        const prev = prevById.get(String(data.id ?? ch.doc.id));
+                        if (!prev) {
+                            structuralChanges = true;
+                            break;
+                        }
+                        const layoutChanged =
+                            (prev.category || 'כללי') !== (data.category || 'כללי') ||
+                            Boolean(prev.isPinned) !== Boolean(data.isPinned) ||
+                            (prev.content || '') !== (data.content || '') ||
+                            (prev.date || '') !== (data.date || '') ||
+                            ((state.showOnlyDead || state.showOnlyParked) && prev.siteStatus !== data.siteStatus);
 
-                    if (removedKeys.size > 0) {
-                        const before = state.items.length;
-                        state.items = state.items.filter(i => !removedKeys.has(String(i.id)));
-                        if (state.items.length !== before) structuralChanges = true;
+                        if (layoutChanged) structuralChanges = true;
+                        else modifiedIdsInPlace.push(data.id);
                     }
                 }
 
+                state.items = nextItems;
+
                 if (!snapshot.metadata.fromCache || !navigator.onLine) {
                     isServerDataArrived = true;
+                }
+
+                if (snapshot.metadata.hasPendingWrites) {
+                    updateSyncStatus('syncing', 'מסנכרן לענן...');
+                } else if (!navigator.onLine) {
+                    updateSyncStatus('offline', 'מקומי (אין רשת)');
+                } else if (snapshot.metadata.fromCache) {
+                    updateSyncStatus('syncing', 'טוען מהענן...');
+                } else {
+                    updateSyncStatus('online', 'מחובר ומסונכרן ✓');
                 }
 
                 if (bulkUiHoldCount > 0) {
@@ -3289,51 +3312,28 @@
                 } else if (modifiedIdsInPlace.length > 0) {
                     modifiedIdsInPlace.forEach(id => updateCardInPlace(id));
                 }
-                updateSyncStatus(navigator.onLine ? 'online' : 'offline', navigator.onLine ? 'מחובר ✓' : 'מקומי');
-            }, (err) => {
+            }, async (err) => {
                 console.error('[Sync] onSnapshot items error:', err);
+                if (state.user?.uid === user.uid && retryAttempt < 3) {
+                    updateSyncStatus('syncing', `מתחבר מחדש לענן (${retryAttempt + 1}/3)...`);
+                    try { await user.getIdToken(true); } catch (_) {}
+                    itemsRetryTimer = setTimeout(() => {
+                        if (state.user?.uid === user.uid && state.accessState === 'approved') {
+                            startUserDataSubscriptions(user, retryAttempt + 1);
+                        }
+                    }, 900 * (retryAttempt + 1));
+                    return;
+                }
                 updateSyncStatus('error', err.code === 'permission-denied' ? 'נדרש עדכון חוקי Firestore' : 'שגיאת חיבור');
+                showToast('❌ שגיאה בטעינת הקישורים מהענן: ' + err.message, null, 5000, null, true);
             });
 
             const trashRef = collection(db, 'users', user.uid, 'trash');
             state.unsubTrash = onSnapshot(trashRef, (snapshot) => {
-                let trashChanged = false;
-                const changes = snapshot.docChanges();
-                if (changes.length > 0) {
-                    const trashIdxMap = new Map();
-                    for (let i = 0; i < state.trash.length; i++) {
-                        trashIdxMap.set(String(state.trash[i].id), i);
-                    }
-                    const removedTrash = new Set();
-
-                    for (let c = 0; c < changes.length; c++) {
-                        const change = changes[c];
-                        const data = change.doc.data() || {};
-                        const docKey = String(data.id ?? change.doc.id);
-                        const rawDocId = String(change.doc.id);
-
-                        if (change.type === "added") {
-                            if (!trashIdxMap.has(docKey)) {
-                                trashIdxMap.set(docKey, state.trash.length);
-                                state.trash.push(data);
-                                trashChanged = true;
-                            }
-                        } else if (change.type === "modified") {
-                            const idx = trashIdxMap.get(docKey) ?? trashIdxMap.get(rawDocId);
-                            if (idx !== undefined) { state.trash[idx] = data; trashChanged = true; }
-                        } else if (change.type === "removed") {
-                            removedTrash.add(docKey);
-                            removedTrash.add(rawDocId);
-                        }
-                    }
-
-                    if (removedTrash.size > 0) {
-                        const before = state.trash.length;
-                        state.trash = state.trash.filter(i => !removedTrash.has(String(i.id)));
-                        if (state.trash.length !== before) trashChanged = true;
-                    }
-                }
-                if (trashChanged) scheduleTrashRender();
+                state.trash = snapshot.docs.map(d => d.data() || {});
+                scheduleTrashRender();
+            }, (err) => {
+                console.warn('[Sync] onSnapshot trash error:', err.message);
             });
         }
 
@@ -3528,8 +3528,11 @@
                     const accessDocRef = doc(db, 'allowedUsers', email);
                     let requestSentOnce = false;
 
-                    state.unsubAccess = onSnapshot(accessDocRef, async (snap) => {
+                    state.unsubAccess = onSnapshot(accessDocRef, { includeMetadataChanges: true }, async (snap) => {
                         if (!snap.exists()) {
+                            // לא מניחים שהחשבון לא מאושר על סמך מטמון ריק — ממתינים לתשובת השרת
+                            if (snap.metadata.fromCache && navigator.onLine) return;
+
                             stopUserDataListeners();
                             state.items = []; state.trash = [];
                             state.accessState = 'pending';
@@ -3562,10 +3565,13 @@
                             state.accessState = 'approved';
                             handleLockScreen(true, 'approved');
                             if (!wasApproved) {
-                                startUserDataSubscriptions(user);
-                                showToast('✅ החשבון מאושר! נטען המאגר האישי שלך.', null, 3500);
+                                try { if (navigator.onLine) await user.getIdToken(true); } catch (_) {}
+                                if (state.user?.uid === user.uid && state.accessState === 'approved') {
+                                    startUserDataSubscriptions(user);
+                                    showToast('✅ החשבון מאושר! נטען המאגר האישי שלך.', null, 3500);
+                                }
                             }
-                            if (!data.uid || data.uid !== user.uid) {
+                            if (!snap.metadata.fromCache && (!data.uid || data.uid !== user.uid)) {
                                 setDoc(accessDocRef, {
                                     uid: user.uid,
                                     displayName: user.displayName || data.displayName || '',
@@ -3737,17 +3743,20 @@
         }
 
          async function cloudLogout() {
+            if (keepAwakeController.activeTasks > 0 && !confirm('⚠️ מתבצעת כרגע שמירה/ייבוא לענן. יציאה עכשיו תעצור אותה. להמשיך בכל זאת?')) return;
             if (!navigator.onLine && !confirm('אין חיבור לרשת. שינויים שלא סונכרנו יימחקו ביציאה. להמשיך?')) return;
+            try {
+                if (navigator.onLine && db) {
+                    showToast('☁️ מוודא שכל הנתונים נשמרו בענן לפני יציאה...', null, 0, 'logout-sync-toast');
+                    await Promise.race([waitForPendingWrites(db), new Promise(r => setTimeout(r, 15000))]);
+                    removeToast('logout-sync-toast');
+                }
+            } catch (_) { removeToast('logout-sync-toast'); }
             keepAwakeController.activeTasks = 0;
             keepAwakeController.release();
             scanController.isRunning = false;
             window._mhApprovedBatchCap = null;
             stopAllCloudListeners();
-            try {
-                if (navigator.onLine && db) {
-                    await Promise.race([waitForPendingWrites(db), new Promise(r => setTimeout(r, 4000))]);
-                }
-            } catch (_) {}
             try { await signOut(auth); } catch (_) {}
             try {
                 await terminate(db);
@@ -3762,13 +3771,18 @@
                 if (!silent) showToast('❌ ללא אינטרנט לא ניתן לרענן מהענן.', null, 4000, null, true);
                 return;
             }
+            if (keepAwakeController.activeTasks > 0) {
+                showToast('⏳ מתבצעת כרגע שמירה לענן — המתן לסיום לפני רענון.', null, 4000, null, true);
+                return;
+            }
             if (!silent && !confirm('⚠️ פעולה זו תסנכרן את כל הנתונים מחדש מול הענן.\nהאם להמשיך?')) return;
 
             const btn = document.getElementById('forceReloadBtn');
             if (btn) btn.classList.add('spinning');
-            if (!silent) showToast("🔄 מסנכרן ומאתחל מסד נתונים...", null, 0, 'reset-toast', false);
+            if (!silent) showToast("🔄 משלים שמירה לענן ומרענן נתונים...", null, 0, 'reset-toast', false);
             
             try {
+                await Promise.race([waitForPendingWrites(db), new Promise(r => setTimeout(r, 15000))]);
                 keepAwakeController.activeTasks = 0;
                 keepAwakeController.release();
                 scanController.isRunning = false;
@@ -6772,6 +6786,9 @@ STRICT RULES:
         // מאתר אוטומטית את גודל ה-writeBatch המרבי המותר (עד 450 בבאץ') ומריץ באצ'ים במקביל
         async function runAdaptiveCloudBatch({ items, writesPerItem = 1, applyToBatch, progressToastId = null, progressLabel = '⚡ מעבד' }) {
             if (!Array.isArray(items) || !items.length) return 0;
+            if (!navigator.onLine) {
+                throw new Error('אין חיבור אינטרנט — לא ניתן לשמור פעולה מרובה לענן.');
+            }
             const total = items.length;
             const isAdminNow = isCurrentUserAdmin();
             let done = 0;
@@ -6874,6 +6891,10 @@ STRICT RULES:
                     await Promise.all(Array.from({ length: workerCount }, runWorker));
                 }
 
+                // מוודא שכל הבאצ'ים אושרו סופית על ידי שרת Firestore לפני הודעת ההצלחה
+                if (navigator.onLine && db) {
+                    await Promise.race([waitForPendingWrites(db), new Promise(r => setTimeout(r, 15000))]);
+                }
                 return done;
             } finally {
                 if (progressToastId) removeToast(progressToastId);
@@ -7095,15 +7116,15 @@ STRICT RULES:
 
             if (settingsPayload.uiSettings && typeof settingsPayload.uiSettings === 'object') {
                 const ui = settingsPayload.uiSettings;
-                localStorage.setItem('mh_ui_settings', JSON.stringify(ui));
-                if (ui.showDuplicates !== undefined) state.showDuplicates = Boolean(ui.showDuplicates);
-                if (ui.showOnlyDead !== undefined) state.showOnlyDead = Boolean(ui.showOnlyDead);
-                if (ui.showOnlyParked !== undefined) state.showOnlyParked = Boolean(ui.showOnlyParked);
+                // משחזר העדפות תצוגה (מיון/הרחבה) מבלי להפעיל מסננים מסתירים שעלולים להציג רשימה ריקה
+                state.showDuplicates = true;
+                state.showOnlyDead = false;
+                state.showOnlyParked = false;
                 if (ui.expandAllCards !== undefined) state.expandAllCards = Boolean(ui.expandAllCards);
 
-                document.getElementById('toggleDuplicatesBtn')?.classList.toggle('dup-active', !state.showDuplicates);
-                document.getElementById('toggleDeadBtn')?.classList.toggle('dead-active', state.showOnlyDead);
-                document.getElementById('toggleParkedBtn')?.classList.toggle('parked-active', state.showOnlyParked);
+                document.getElementById('toggleDuplicatesBtn')?.classList.remove('dup-active');
+                document.getElementById('toggleDeadBtn')?.classList.remove('dead-active');
+                document.getElementById('toggleParkedBtn')?.classList.remove('parked-active');
                 document.getElementById('expandAllBtn')?.classList.toggle('expand-all-active', state.expandAllCards);
 
                 const so = document.getElementById('sortOrder');
@@ -7111,9 +7132,8 @@ STRICT RULES:
                     so.value = ui.sortOrder;
                 }
                 const cf = document.getElementById('categoryFilter');
-                if (cf && ui.categoryFilter !== undefined && [...cf.options].some(o => o.value === ui.categoryFilter)) {
-                    cf.value = ui.categoryFilter;
-                }
+                if (cf) cf.value = '';
+                saveUiSettings();
                 restoredSettings = true;
             }
 
