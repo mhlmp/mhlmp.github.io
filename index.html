@@ -2334,8 +2334,9 @@
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import {
             getFirestore, doc, setDoc, collection, onSnapshot,
+            getDocFromServer, getDocsFromServer,
             deleteDoc, writeBatch, enableNetwork, disableNetwork,
-            initializeFirestore, persistentLocalCache, persistentSingleTabManager,
+            initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
             terminate, clearIndexedDbPersistence, waitForPendingWrites, deleteField
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
@@ -2508,7 +2509,7 @@
             auth = getAuth(app);
             try {
                 db = initializeFirestore(app, {
-                    localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() })
+                    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
                 });
             } catch (err) {
                 db = getFirestore(app);
@@ -2764,6 +2765,19 @@
             }
         }
 
+        async function waitForCloudSyncStrict(timeoutMs = 30000) {
+            if (!navigator.onLine || !db) return false;
+            try {
+                const res = await Promise.race([
+                    waitForPendingWrites(db).then(() => 'synced'),
+                    new Promise(r => setTimeout(() => r('timeout'), timeoutMs))
+                ]);
+                return res === 'synced';
+            } catch (_) {
+                return false;
+            }
+        }
+
         async function switchAccount() {
             if (keepAwakeController.activeTasks > 0) {
                 showToast('⏳ מתבצעת כרגע שמירה לענן — המתן לסיום לפני החלפת חשבון.', null, 4000, null, true);
@@ -2772,8 +2786,11 @@
             try {
                 if (navigator.onLine && db) {
                     showToast('☁️ מוודא שכל הנתונים נשמרו בענן לפני החלפת חשבון...', null, 0, 'switch-sync-toast');
-                    await Promise.race([waitForPendingWrites(db), new Promise(r => setTimeout(r, 15000))]);
+                    const synced = await waitForCloudSyncStrict(30000);
                     removeToast('switch-sync-toast');
+                    if (!synced && !confirm('⚠️ הסנכרון מול הענן עדיין לא הסתיים. החלפת חשבון כעת עלולה לאבד שינויים אחרונים שלא עלו. להמשיך בכל זאת?')) {
+                        return;
+                    }
                 }
                 keepAwakeController.activeTasks = 0;
                 keepAwakeController.release();
@@ -3232,10 +3249,38 @@
 
         let itemsRetryTimer = null;
 
+        async function pullServerSnapshotNow(user) {
+            if (!user || !navigator.onLine || state.user?.uid !== user.uid) return;
+            try {
+                const [itemsSnap, trashSnap] = await Promise.all([
+                    getDocsFromServer(collection(db, 'users', user.uid, 'items')),
+                    getDocsFromServer(collection(db, 'users', user.uid, 'trash')).catch(() => null)
+                ]);
+                if (state.user?.uid !== user.uid) return;
+                state.items = itemsSnap.docs.map(d => d.data() || {});
+                if (trashSnap) state.trash = trashSnap.docs.map(d => d.data() || {});
+                isServerDataArrived = true;
+                updateStatusBadges(false);
+                scheduleFullRender(true);
+                updateSyncStatus('online', `מחובר ומסונכרן ✓ (${state.items.length})`);
+            } catch (err) {
+                console.error('[Server Pull Failed]', err?.code, err?.message);
+                if (err?.code === 'permission-denied') {
+                    updateSyncStatus('error', 'חסום בחוקי Firestore');
+                    showToast('❌ שרת Firestore חסם קריאת נתונים לחשבון זה — ודא שחוקי Firestore המעודכנים פורסמו.', null, 6000, null, true);
+                }
+            }
+        }
+
         function startUserDataSubscriptions(user, retryAttempt = 0) {
             stopUserDataListeners();
             if (itemsRetryTimer) { clearTimeout(itemsRetryTimer); itemsRetryTimer = null; }
             const itemsRef = collection(db, 'users', user.uid, 'items');
+
+            // משיכה ישירה מהשרת מיד בהתחברות כדי למנוע מצב של מטמון ריק אחרי יציאה
+            if (navigator.onLine && retryAttempt === 0) {
+                pullServerSnapshotNow(user);
+            }
 
             state.unsubItems = onSnapshot(itemsRef, { includeMetadataChanges: true }, (snapshot) => {
                 retryAttempt = 0;
@@ -3743,25 +3788,34 @@
         }
 
          async function cloudLogout() {
-            if (keepAwakeController.activeTasks > 0 && !confirm('⚠️ מתבצעת כרגע שמירה/ייבוא לענן. יציאה עכשיו תעצור אותה. להמשיך בכל זאת?')) return;
-            if (!navigator.onLine && !confirm('אין חיבור לרשת. שינויים שלא סונכרנו יימחקו ביציאה. להמשיך?')) return;
-            try {
-                if (navigator.onLine && db) {
-                    showToast('☁️ מוודא שכל הנתונים נשמרו בענן לפני יציאה...', null, 0, 'logout-sync-toast');
-                    await Promise.race([waitForPendingWrites(db), new Promise(r => setTimeout(r, 15000))]);
-                    removeToast('logout-sync-toast');
+            if (keepAwakeController.activeTasks > 0) {
+                showToast('⏳ מתבצעת כרגע שמירה/ייבוא לענן — המתן לסיום ההודעה לפני יציאה.', null, 4500, null, true);
+                return;
+            }
+            if (!navigator.onLine && !confirm('⚠️ אין חיבור לאינטרנט. שינויים מקומיים שעדיין לא עלו לענן יאבדו ביציאה. להמשיך בכל זאת?')) return;
+
+            let syncedToServer = true;
+            if (navigator.onLine && db) {
+                showToast('☁️ מוודא שכל הנתונים נשמרו בשרת הענן לפני יציאה...', null, 0, 'logout-sync-toast');
+                syncedToServer = await waitForCloudSyncStrict(30000);
+                removeToast('logout-sync-toast');
+                if (!syncedToServer && !confirm('⚠️ חלק מהשינויים עדיין לא קיבלו אישור משרת הענן! יציאה כעת עלולה למחוק אותם. להמשיך בכל זאת?')) {
+                    return;
                 }
-            } catch (_) { removeToast('logout-sync-toast'); }
+            }
+
             keepAwakeController.activeTasks = 0;
             keepAwakeController.release();
             scanController.isRunning = false;
             window._mhApprovedBatchCap = null;
             stopAllCloudListeners();
             try { await signOut(auth); } catch (_) {}
-            try {
-                await terminate(db);
-                await clearIndexedDbPersistence(db);
-            } catch (_) {}
+            if (syncedToServer) {
+                try {
+                    await terminate(db);
+                    await clearIndexedDbPersistence(db);
+                } catch (_) {}
+            }
             window.location.reload();
         }
 
@@ -6860,40 +6914,52 @@ STRICT RULES:
                         chunks.push(items.slice(i, i + batchSize));
                     }
 
-                    const parallelBatches = batchSize >= 100 ? 4 : (batchSize >= 9 ? 8 : 25);
+                    const failedItems = [];
+                    const commitChunkSafe = async (chunk) => {
+                        try {
+                            await commitChunkWithRetry(chunk, applyToBatch);
+                            done += chunk.length;
+                            reportProgress(done === total);
+                        } catch (err) {
+                            const canSplit = chunk.length > 1 && ['permission-denied', 'invalid-argument', 'failed-precondition'].includes(err?.code);
+                            if (canSplit) {
+                                if (!isAdminNow && chunk.length > 18) window._mhApprovedBatchCap = 18;
+                                const mid = Math.ceil(chunk.length / 2);
+                                await commitChunkSafe(chunk.slice(0, mid));
+                                await commitChunkSafe(chunk.slice(mid));
+                                return;
+                            }
+                            console.error('[Cloud Write Rejected Item]', { code: err?.code, message: err?.message, item: chunk[0] });
+                            failedItems.push({ item: chunk[0], code: err?.code || 'error', message: err?.message || String(err) });
+                        }
+                    };
+
+                    const parallelBatches = batchSize >= 100 ? 4 : (batchSize >= 9 ? 6 : 20);
                     let nextChunkIdx = 0;
 
                     const runWorker = async () => {
                         while (true) {
                             const idx = nextChunkIdx++;
                             if (idx >= chunks.length) break;
-                            const chunk = chunks[idx];
-                            try {
-                                await commitChunkWithRetry(chunk, applyToBatch);
-                            } catch (err) {
-                                // גיבוי אוטומטי אם באץ' גדול נתקל במגבלה בהמשך
-                                if (!isAdminNow && chunk.length > 1 && err?.code === 'permission-denied') {
-                                    window._mhApprovedBatchCap = 18;
-                                    const safeSize = Math.max(1, Math.floor(18 / writesPerItem));
-                                    for (let j = 0; j < chunk.length; j += safeSize) {
-                                        await commitChunkWithRetry(chunk.slice(j, j + safeSize), applyToBatch);
-                                    }
-                                } else {
-                                    throw err;
-                                }
-                            }
-                            done += chunk.length;
-                            reportProgress(done === total);
+                            await commitChunkSafe(chunks[idx]);
                         }
                     };
 
                     const workerCount = Math.min(parallelBatches, chunks.length);
                     await Promise.all(Array.from({ length: workerCount }, runWorker));
+
+                    if (failedItems.length > 0) {
+                        if (done === 0) {
+                            throw new Error(`כל הפריטים נדחו על ידי שרת הענן (${failedItems[0].code}: ${failedItems[0].message})`);
+                        }
+                        showToast(`⚠️ ${failedItems.length} פריטים נדחו בשמירה לענן (פירוט ב-Console)`, null, 6000, null, true);
+                    }
                 }
 
                 // מוודא שכל הבאצ'ים אושרו סופית על ידי שרת Firestore לפני הודעת ההצלחה
-                if (navigator.onLine && db) {
-                    await Promise.race([waitForPendingWrites(db), new Promise(r => setTimeout(r, 15000))]);
+                const synced = await waitForCloudSyncStrict(30000);
+                if (!synced) {
+                    throw new Error('השרת לא אישר את השמירה בזמן — בדוק חיבור לאינטרנט ונסה שוב.');
                 }
                 return done;
             } finally {
@@ -7290,7 +7356,7 @@ STRICT RULES:
 
                 let importedItemsCount = 0;
                 if (Array.isArray(list) && list.length > 0) {
-                    importedItemsCount = await importItems(list);
+                    importedItemsCount = await importItems(list, { preserveAllFromBackup: true });
                 }
 
                 let importedTrashCount = 0;
@@ -7302,18 +7368,34 @@ STRICT RULES:
                     ? restoreFullImportSettings(settingsPayload)
                     : { restoredSettings: false, keysCount: 0 };
 
+                // אימות אמיתי מול שרת Firestore שהפריטים באמת נשמרו בענן
+                let verifiedServerTotal = null;
+                if (state.user && navigator.onLine && (importedItemsCount > 0 || importedTrashCount > 0)) {
+                    try {
+                        const serverSnap = await getDocsFromServer(collection(db, 'users', state.user.uid, 'items'));
+                        state.items = serverSnap.docs.map(d => d.data() || {});
+                        verifiedServerTotal = state.items.length;
+                    } catch (vErr) {
+                        console.warn('[Import Server Verify Failed]', vErr);
+                    }
+                }
+
                 if (importedItemsCount > 0 || restoredMeta.restoredSettings) {
                     updateCategoryDropdowns();
                     renderList();
                 }
 
                 const parts = [];
-                if (importedItemsCount > 0) parts.push(`${importedItemsCount} פריטים`);
+                if (importedItemsCount > 0) {
+                    parts.push(verifiedServerTotal !== null
+                        ? `${importedItemsCount} הועלו (מאומת בענן: ${verifiedServerTotal})`
+                        : `${importedItemsCount} פריטים`);
+                }
                 if (importedTrashCount > 0) parts.push(`${importedTrashCount} בסל מחזור`);
                 if (restoredMeta.restoredSettings) {
                     parts.push(restoredMeta.keysCount > 0 ? `הגדרות ו-${restoredMeta.keysCount} מפתחות AI` : 'הגדרות מערכת');
                 }
-                showToast(parts.length ? `✅ ייבוא JSON הושלם (${parts.join(' + ')})` : '✅ ייבוא JSON הושלם');
+                showToast(parts.length ? `✅ ייבוא JSON הושלם (${parts.join(' + ')})` : '✅ ייבוא JSON הושלם', null, 5000);
             } catch (err) {
                 showToast('❌ ייבוא נכשל: ' + err.message, null, 5000, null, true);
             } finally {
@@ -7459,11 +7541,23 @@ STRICT RULES:
                 e.target.value = '';
             }
         }
+        const utf8Encoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
+        function clampUtf8(value, maxBytes) {
+            const str = String(value ?? '');
+            if (!utf8Encoder || str.length * 4 <= maxBytes) return str;
+            if (utf8Encoder.encode(str).length <= maxBytes) return str;
+            let low = 0, high = str.length;
+            while (low < high) {
+                const mid = (low + high + 1) >> 1;
+                if (utf8Encoder.encode(str.slice(0, mid)).length <= maxBytes) low = mid;
+                else high = mid - 1;
+            }
+            return str.slice(0, low);
+        }
         function normalizeRecordForCloud(raw, id, existingDoc = null, isTrash = false) {
-            const clampStr = (val, maxLen) => String(val ?? '').slice(0, maxLen);
-            const content = clampStr(raw.content ?? raw.url ?? '', 14900).trim();
+            const content = clampUtf8(raw.content ?? raw.url ?? '', 14500).trim();
             const cleanTags = Array.isArray(raw.aiTags)
-                ? [...new Set(raw.aiTags.map(t => clampStr(t, 80).trim()).filter(Boolean))].slice(0, 50)
+                ? [...new Set(raw.aiTags.map(t => clampUtf8(t, 120).trim()).filter(Boolean))].slice(0, 50)
                 : [];
             const rawHttp = (raw.httpCode !== null && raw.httpCode !== undefined && raw.httpCode !== '' && Number.isFinite(Number(raw.httpCode)))
                 ? Number(raw.httpCode)
@@ -7473,35 +7567,35 @@ STRICT RULES:
                 : '';
 
             const preservedId = existingDoc && existingDoc.id !== undefined ? existingDoc.id : id;
-            const baseDate = clampStr(raw.date || raw.createdAt || existingDoc?.date || nowIso(), 64);
+            const baseDate = clampUtf8(raw.date || raw.createdAt || existingDoc?.date || nowIso(), 64);
             const preservedCreatedAt = existingDoc?.createdAt
                 ? existingDoc.createdAt
-                : clampStr(raw.createdAt || raw.date || nowIso(), 64);
+                : clampUtf8(raw.createdAt || raw.date || nowIso(), 64);
 
             const item = {
                 id: preservedId,
                 content,
-                description: clampStr(raw.description || '', 4900),
-                category: clampStr(raw.category || 'כללי', 290) || 'כללי',
-                note: clampStr(raw.note || '', 9900),
+                description: clampUtf8(raw.description || '', 4800),
+                category: clampUtf8(raw.category || 'כללי', 280).trim() || 'כללי',
+                note: clampUtf8(raw.note || '', 9500),
                 type: raw.type === 'text' ? 'text' : (URL_REGEX.test(content) ? 'link' : 'text'),
                 date: baseDate,
                 createdAt: preservedCreatedAt,
-                updatedAt: clampStr(raw.updatedAt || nowIso(), 64),
+                updatedAt: clampUtf8(raw.updatedAt || nowIso(), 64),
                 isPinned: Boolean(raw.isPinned)
             };
 
-            const aiSummaryClean = clampStr(raw.aiSummary || '', 14900).trim();
+            const aiSummaryClean = clampUtf8(raw.aiSummary || '', 14500).trim();
             if (aiSummaryClean) item.aiSummary = aiSummaryClean;
             if (cleanTags.length) item.aiTags = cleanTags;
             if (validStatus) item.siteStatus = validStatus;
             if (rawHttp !== null) item.httpCode = rawHttp;
 
-            const aiModelClean = clampStr(raw.aiModel || '', 490).trim();
+            const aiModelClean = clampUtf8(raw.aiModel || '', 450).trim();
             if (aiModelClean) item.aiModel = aiModelClean;
 
             if (isTrash) {
-                item.deletedAt = clampStr(raw.deletedAt || nowIso(), 64);
+                item.deletedAt = clampUtf8(raw.deletedAt || nowIso(), 64);
             }
 
             return item;
@@ -7577,63 +7671,84 @@ STRICT RULES:
             }
             return await writeRecordsInSafeBatches('trash', prepared, false);
         }
-        async function importItems(list){
+        async function importItems(list, { preserveAllFromBackup = false } = {}){
             if(!state.user) throw new Error('יש להתחבר לפני ייבוא');
             if (!isCurrentUserAdmin() && state.accessState !== 'approved') {
                 throw new Error('החשבון עדיין לא אושר על ידי מנהל המערכת');
             }
 
-            // סינון ומיזוג כפילויות פנימיות בתוך הקובץ המיובא (כולל http/https, www וסלאש סופי)
-            const dedupedFileMap = new Map();
-            for (const raw of list) {
-                if (!raw || typeof raw !== 'object') continue;
-                const content = String(raw.content ?? raw.url ?? '').trim();
-                const norm = normalizeContentKey(content);
-                if (!norm) continue;
-                if (dedupedFileMap.has(norm)) {
-                    dedupedFileMap.set(norm, mergeIncomingRecord(dedupedFileMap.get(norm), { ...raw, content }));
-                } else {
-                    dedupedFileMap.set(norm, { ...raw, content });
-                }
-            }
-
             const existingById = new Map(state.items.map(x => [String(x.id), x]));
-            const existingByKey = new Map();
-            state.items.forEach(x => {
-                const k = normalizeContentKey(x.content);
-                if (k && !existingByKey.has(k)) existingByKey.set(k, x);
-            });
-
-            const usedIds = new Set(existingById.keys());
+            const usedIds = new Set();
             const prepared = [];
             let seq = 0;
 
-            for (const [norm, raw] of dedupedFileMap.entries()) {
-                let matchedExisting = null;
-                const rawId = raw.id;
-                if (rawId !== null && rawId !== undefined && rawId !== '' && Number.isFinite(Number(rawId))) {
-                    const exById = existingById.get(String(Number(rawId)));
-                    if (exById && normalizeContentKey(exById.content) === norm) {
-                        matchedExisting = exById;
+            if (preserveAllFromBackup) {
+                // ייבוא JSON מלא: משמר 100% מהפריטים בקובץ בלי להשמיט אף פריט
+                for (const raw of list) {
+                    if (!raw || typeof raw !== 'object') continue;
+                    const content = String(raw.content ?? raw.url ?? '').trim();
+                    if (!content) continue;
+
+                    const hasValidId = raw.id !== null && raw.id !== undefined && raw.id !== '' && Number.isFinite(Number(raw.id));
+                    let id = hasValidId ? Number(raw.id) : (Date.now() + seq++);
+                    let matchedExisting = existingById.get(String(id)) || null;
+
+                    if (matchedExisting && normalizeContentKey(matchedExisting.content) !== normalizeContentKey(content)) {
+                        matchedExisting = null;
+                        do { id = Date.now() + seq++; } while (usedIds.has(String(id)) || existingById.has(String(id)));
+                    }
+                    while (usedIds.has(String(id))) {
+                        id = Date.now() + seq++;
+                        matchedExisting = null;
+                    }
+                    usedIds.add(String(id));
+
+                    const merged = matchedExisting ? mergeIncomingRecord(matchedExisting, { ...raw, content }) : { ...raw, content };
+                    prepared.push(normalizeRecordForCloud(merged, id, matchedExisting, false));
+                }
+            } else {
+                // ייבוא חכם (מיזוג TXT): מאחד כפילויות ושומר על רשימה נקייה
+                const dedupedFileMap = new Map();
+                for (const raw of list) {
+                    if (!raw || typeof raw !== 'object') continue;
+                    const content = String(raw.content ?? raw.url ?? '').trim();
+                    const norm = normalizeContentKey(content);
+                    if (!norm) continue;
+                    if (dedupedFileMap.has(norm)) {
+                        dedupedFileMap.set(norm, mergeIncomingRecord(dedupedFileMap.get(norm), { ...raw, content }));
+                    } else {
+                        dedupedFileMap.set(norm, { ...raw, content });
                     }
                 }
-                if (!matchedExisting) {
-                    matchedExisting = existingByKey.get(norm) || null;
-                }
 
-                let id;
-                if (matchedExisting) {
-                    id = matchedExisting.id;
-                } else {
-                    id = (rawId !== null && rawId !== undefined && rawId !== '' && Number.isFinite(Number(rawId)))
-                        ? Number(rawId)
-                        : Date.now() + seq++;
-                    while (usedIds.has(String(id))) { id = Date.now() + seq++; }
-                    usedIds.add(String(id));
-                }
+                const existingByKey = new Map();
+                state.items.forEach(x => {
+                    const k = normalizeContentKey(x.content);
+                    if (k && !existingByKey.has(k)) existingByKey.set(k, x);
+                });
+                existingById.forEach((_, k) => usedIds.add(k));
 
-                const merged = matchedExisting ? mergeIncomingRecord(matchedExisting, raw) : raw;
-                prepared.push(normalizeRecordForCloud(merged, id, matchedExisting, false));
+                for (const [norm, raw] of dedupedFileMap.entries()) {
+                    let matchedExisting = null;
+                    const hasValidId = raw.id !== null && raw.id !== undefined && raw.id !== '' && Number.isFinite(Number(raw.id));
+                    if (hasValidId) {
+                        const exById = existingById.get(String(Number(raw.id)));
+                        if (exById && normalizeContentKey(exById.content) === norm) matchedExisting = exById;
+                    }
+                    if (!matchedExisting) matchedExisting = existingByKey.get(norm) || null;
+
+                    let id;
+                    if (matchedExisting) {
+                        id = matchedExisting.id;
+                    } else {
+                        id = hasValidId ? Number(raw.id) : (Date.now() + seq++);
+                        while (usedIds.has(String(id))) { id = Date.now() + seq++; }
+                        usedIds.add(String(id));
+                    }
+
+                    const merged = matchedExisting ? mergeIncomingRecord(matchedExisting, raw) : raw;
+                    prepared.push(normalizeRecordForCloud(merged, id, matchedExisting, false));
+                }
             }
 
             return await writeRecordsInSafeBatches('items', prepared, true);
