@@ -3088,6 +3088,60 @@
             if (state.unsubAdminUsers) { state.unsubAdminUsers(); state.unsubAdminUsers = null; }
         }
 
+        let bulkUiHoldCount = 0;
+        let pendingFullRender = false;
+        let pendingTrashRender = false;
+        let renderDebounceTimer = null;
+        let trashDebounceTimer = null;
+
+        function scheduleFullRender(immediate = false) {
+            if (bulkUiHoldCount > 0) {
+                pendingFullRender = true;
+                return;
+            }
+            if (renderDebounceTimer) {
+                clearTimeout(renderDebounceTimer);
+                renderDebounceTimer = null;
+            }
+            const run = () => {
+                pendingFullRender = false;
+                isInitialSnapshotRendered = true;
+                renderList();
+                updateCategoryDropdowns();
+            };
+            if (immediate) run();
+            else renderDebounceTimer = setTimeout(run, 120);
+        }
+
+        function scheduleTrashRender() {
+            if (bulkUiHoldCount > 0) {
+                pendingTrashRender = true;
+                return;
+            }
+            if (!document.getElementById('trashModal')?.classList.contains('open')) return;
+            if (trashDebounceTimer) clearTimeout(trashDebounceTimer);
+            trashDebounceTimer = setTimeout(() => {
+                pendingTrashRender = false;
+                if (document.getElementById('trashModal')?.classList.contains('open')) openTrashModal();
+            }, 120);
+        }
+
+        function beginBulkUiHold() {
+            bulkUiHoldCount++;
+        }
+
+        function endBulkUiHold() {
+            bulkUiHoldCount = Math.max(0, bulkUiHoldCount - 1);
+            if (bulkUiHoldCount === 0) {
+                if (pendingFullRender) scheduleFullRender(true);
+                else updateStatusBadges(false);
+                if (pendingTrashRender) {
+                    pendingTrashRender = false;
+                    if (document.getElementById('trashModal')?.classList.contains('open')) openTrashModal();
+                }
+            }
+        }
+
         function startUserDataSubscriptions(user) {
             stopUserDataListeners();
             const itemsRef = collection(db, 'users', user.uid, 'items');
@@ -3097,15 +3151,21 @@
                 const modifiedIdsInPlace = [];
 
                 snapshot.docChanges().forEach((change) => {
-                    const data = change.doc.data();
+                    const data = change.doc.data() || {};
+                    const docKey = String(data.id ?? change.doc.id);
+                    const rawDocId = String(change.doc.id);
+
                     if (change.type === "added") {
-                        if (!state.items.find(i => i.id === data.id)) {
+                        const existingIdx = state.items.findIndex(i => String(i.id) === docKey);
+                        if (existingIdx === -1) {
                             state.items.push(data);
                             structuralChanges = true;
+                        } else {
+                            state.items[existingIdx] = data;
                         }
                     }
                     if (change.type === "modified") {
-                        const idx = state.items.findIndex(i => i.id === data.id);
+                        const idx = state.items.findIndex(i => String(i.id) === docKey || String(i.id) === rawDocId);
                         if (idx > -1) {
                             const prev = state.items[idx];
                             const wasScanning = prev.isScanning;
@@ -3129,8 +3189,9 @@
                         }
                     }
                     if (change.type === "removed") {
-                        state.items = state.items.filter(i => i.id !== data.id);
-                        structuralChanges = true;
+                        const before = state.items.length;
+                        state.items = state.items.filter(i => String(i.id) !== docKey && String(i.id) !== rawDocId);
+                        if (state.items.length !== before) structuralChanges = true;
                     }
                 });
 
@@ -3138,12 +3199,15 @@
                     isServerDataArrived = true;
                 }
 
+                if (bulkUiHoldCount > 0) {
+                    if (structuralChanges || modifiedIdsInPlace.length > 0) pendingFullRender = true;
+                    return;
+                }
+
                 updateStatusBadges(false);
 
                 if (structuralChanges || !isInitialSnapshotRendered) {
-                    isInitialSnapshotRendered = true;
-                    renderList();
-                    updateCategoryDropdowns();
+                    scheduleFullRender(!isInitialSnapshotRendered);
                 } else if (modifiedIdsInPlace.length > 0) {
                     modifiedIdsInPlace.forEach(id => updateCardInPlace(id));
                 }
@@ -3157,22 +3221,24 @@
             state.unsubTrash = onSnapshot(trashRef, (snapshot) => {
                 let trashChanged = false;
                 snapshot.docChanges().forEach((change) => {
-                    const data = change.doc.data();
+                    const data = change.doc.data() || {};
+                    const docKey = String(data.id ?? change.doc.id);
+                    const rawDocId = String(change.doc.id);
+
                     if (change.type === "added") {
-                        if (!state.trash.find(i => i.id === data.id)) { state.trash.push(data); trashChanged = true; }
+                        if (!state.trash.find(i => String(i.id) === docKey)) { state.trash.push(data); trashChanged = true; }
                     }
                     if (change.type === "modified") {
-                        const idx = state.trash.findIndex(i => i.id === data.id);
+                        const idx = state.trash.findIndex(i => String(i.id) === docKey || String(i.id) === rawDocId);
                         if (idx > -1) { state.trash[idx] = data; trashChanged = true; }
                     }
                     if (change.type === "removed") {
-                        state.trash = state.trash.filter(i => i.id !== data.id);
-                        trashChanged = true;
+                        const before = state.trash.length;
+                        state.trash = state.trash.filter(i => String(i.id) !== docKey && String(i.id) !== rawDocId);
+                        if (state.trash.length !== before) trashChanged = true;
                     }
                 });
-                if (trashChanged && document.getElementById('trashModal').classList.contains('open')) {
-                    openTrashModal();
-                }
+                if (trashChanged) scheduleTrashRender();
             });
         }
 
@@ -6545,7 +6611,6 @@ STRICT RULES:
         function closeTrashModal(){document.getElementById('trashModal')?.classList.remove('open');}
         async function restoreTrashItem(item){if(!state.user)return;try{const clean={...item};delete clean.deletedAt;await setDoc(doc(db,'users',state.user.uid,'items',String(item.id)),clean);await deleteDoc(doc(db,'users',state.user.uid,'trash',String(item.id)));showToast('♻️ הפריט שוחזר');}catch(e){showToast('❌ השחזור נכשל',null,3000,null,true);}}
         async function permanentlyDeleteTrashItem(item){if(!state.user||!confirm('למחוק את הפריט לצמיתות?'))return;try{await deleteDoc(doc(db,'users',state.user.uid,'trash',String(item.id)));showToast('הפריט נמחק לצמיתות');}catch(e){showToast('❌ המחיקה נכשלה',null,3000,null,true);}}
-        async function restoreAllTrash(){for(const item of [...state.trash]) await restoreTrashItem(item);}
         function isCurrentUserAdmin() {
             return typeof isAdminEmail === 'function'
                 ? isAdminEmail(state.user?.email)
@@ -6558,16 +6623,68 @@ STRICT RULES:
             }
             return writePromise;
         }
-        async function runInParallelWaves(items, workerFn, concurrency = 15) {
-            for (let i = 0; i < items.length; i += concurrency) {
-                await Promise.all(items.slice(i, i + concurrency).map(workerFn));
+        async function runInParallelWaves(items, workerFn, concurrency = 35, onProgress = null) {
+            if (!items.length) return;
+            let nextIdx = 0;
+            let done = 0;
+            const total = items.length;
+            const workerCount = Math.min(Math.max(1, concurrency), total);
+
+            const workers = Array.from({ length: workerCount }, async () => {
+                while (true) {
+                    const idx = nextIdx++;
+                    if (idx >= total) break;
+                    await workerFn(items[idx], idx);
+                    done++;
+                    if (onProgress && (done === total || done % 20 === 0)) {
+                        onProgress(done, total);
+                    }
+                }
+            });
+            await Promise.all(workers);
+        }
+        async function restoreAllTrash(){
+            if (!state.user || !state.trash.length) return;
+            const uid = state.user.uid;
+            const list = [...state.trash];
+            beginBulkUiHold();
+            try {
+                if (isCurrentUserAdmin()) {
+                    for (let i = 0; i < list.length; i += 200) {
+                        const batch = writeBatch(db);
+                        list.slice(i, i + 200).forEach(item => {
+                            const clean = { ...item }; delete clean.deletedAt;
+                            batch.set(doc(db, 'users', uid, 'items', String(item.id)), clean);
+                            batch.delete(doc(db, 'users', uid, 'trash', String(item.id)));
+                        });
+                        await commitBatch(batch);
+                    }
+                } else {
+                    await runInParallelWaves(list, async (item) => {
+                        const clean = { ...item }; delete clean.deletedAt;
+                        const batch = writeBatch(db);
+                        batch.set(doc(db, 'users', uid, 'items', String(item.id)), clean);
+                        batch.delete(doc(db, 'users', uid, 'trash', String(item.id)));
+                        await commitBatch(batch);
+                    }, 30, (done, total) => {
+                        showToast(`♻️ משחזר מסל המחזור... ${done} / ${total}`, null, 0, 'trash-op-toast');
+                    });
+                }
+                showToast(`♻️ שוחזרו ${list.length} פריטים`);
+            } catch (e) {
+                showToast('❌ השחזור נכשל: ' + e.message, null, 4000, null, true);
+            } finally {
+                removeToast('trash-op-toast');
+                endBulkUiHold();
             }
         }
         async function emptyTrash(){
             if(!state.user||!confirm('לרוקן את סל המחזור לצמיתות?'))return;
+            const list=[...state.trash];
+            if(!list.length) return;
+            const uid=state.user.uid;
+            beginBulkUiHold();
             try{
-                const list=[...state.trash];
-                const uid=state.user.uid;
                 if (isCurrentUserAdmin()) {
                     for(let i=0;i<list.length;i+=400){
                         const batch=writeBatch(db);
@@ -6577,10 +6694,16 @@ STRICT RULES:
                 } else {
                     await runInParallelWaves(list, (x) =>
                         commitSingleWrite(deleteDoc(doc(db,'users',uid,'trash',String(x.id))))
-                    , 15);
+                    , 35, (done, total) => {
+                        showToast(`🧹 מרוקן סל מחזור... ${done} / ${total}`, null, 0, 'trash-op-toast');
+                    });
                 }
-                showToast('סל המחזור רוקן');
+                showToast(`🧹 סל המחזור רוקן (${list.length} פריטים נמחקו)`);
             }catch(e){showToast('❌ לא ניתן לרוקן את הסל: '+e.message,null,4000,null,true);}
+            finally{
+                removeToast('trash-op-toast');
+                endBulkUiHold();
+            }
         }
         function downloadBlob(name, content, type='text/plain;charset=utf-8') { const blob=new Blob([content],{type}); const url=URL.createObjectURL(blob); const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500); }
        function isPrivateCategory(category) {
@@ -7165,6 +7288,7 @@ STRICT RULES:
                 }
             };
 
+            beginBulkUiHold();
             try {
                 if (isAdminNow) {
                     for (let i = 0; i < prepared.length; i += 400) {
@@ -7182,7 +7306,6 @@ STRICT RULES:
                 } else {
                     try { await state.user.getIdToken(); } catch (_) {}
 
-                    // בדיקת קדם-טיסה על הפריט הראשון (ללא writeBatch)
                     try {
                         await writeOneWithRetry(prepared[0]);
                         written = 1;
@@ -7202,22 +7325,17 @@ STRICT RULES:
                         throw firstErr;
                     }
 
-                    // יתר הפריטים ככתיבות בודדות בגלים מקבילים — קריאת חוק יחידה לכל פריט, אפס חסימות באץ'
                     const rest = prepared.slice(1);
-                    const waveSize = 15;
-                    for (let i = 0; i < rest.length; i += waveSize) {
-                        const wave = rest.slice(i, i + waveSize);
-                        await Promise.all(wave.map(async (item) => {
-                            await writeOneWithRetry(item);
-                            written++;
-                        }));
-                        if (showProgress && prepared.length > waveSize) {
-                            showToast(`⏳ מייבא נתונים לענן... ${Math.min(written, prepared.length)} / ${prepared.length}`, null, 0, 'import-progress-toast');
-                        }
-                    }
+                    await runInParallelWaves(rest, async (item) => {
+                        await writeOneWithRetry(item);
+                        written++;
+                    }, 35, showProgress ? () => {
+                        showToast(`⏳ מייבא נתונים לענן... ${Math.min(written, prepared.length)} / ${prepared.length}`, null, 0, 'import-progress-toast');
+                    } : null);
                 }
             } finally {
                 if (showProgress) removeToast('import-progress-toast');
+                endBulkUiHold();
             }
             return written;
         }
@@ -7248,29 +7366,68 @@ STRICT RULES:
             }
 
             const existingById = new Map(state.items.map(x => [String(x.id), x]));
-            const prepared = [];
-            let seq = 0;
-            const used = new Set(existingById.keys());
-
+            const validRows = [];
             for (const raw of list) {
                 if (!raw || typeof raw !== 'object') continue;
                 const content = String(raw.content ?? raw.url ?? '').trim();
                 if (!content) continue;
-
-                let id = (raw.id !== null && raw.id !== undefined && raw.id !== '' && Number.isFinite(Number(raw.id)))
-                    ? Number(raw.id)
-                    : Date.now() + seq;
-                const existing = existingById.get(String(id)) || null;
-
-                if (used.has(String(id)) && (!existing || String(existing.content || '').trim() !== content)) {
-                    do { id = Date.now() + seq++; } while (used.has(String(id)));
-                }
-                used.add(String(id));
-
-                const matchedExisting = existing && String(existing.id) === String(id) ? existing : null;
-                prepared.push(normalizeRecordForCloud(raw, id, matchedExisting, false));
-                seq++;
+                validRows.push({ raw, content, norm: content.toLowerCase() });
             }
+
+            // מעבר 1: שיוך פריטים שיש להם התאמת ID מדויקת בענן (מונע כפילות ושומר על מזהים קיימים)
+            const claimedExistingIds = new Set();
+            const assignedByIndex = new Map();
+            validRows.forEach((row, idx) => {
+                const rawId = row.raw.id;
+                if (rawId !== null && rawId !== undefined && rawId !== '' && Number.isFinite(Number(rawId))) {
+                    const key = String(Number(rawId));
+                    const ex = existingById.get(key);
+                    if (ex && !claimedExistingIds.has(key) && String(ex.content || '').trim().toLowerCase() === row.norm) {
+                        claimedExistingIds.add(key);
+                        assignedByIndex.set(idx, ex);
+                    }
+                }
+            });
+
+            // בניית תור פריטים קיימים לפי תוכן (למיזוג פריטים שנשארו בחשבון עם ID שונה)
+            const unclaimedByContent = new Map();
+            state.items.forEach(x => {
+                const key = String(x.id);
+                if (claimedExistingIds.has(key)) return;
+                const norm = String(x.content || '').trim().toLowerCase();
+                if (!norm) return;
+                if (!unclaimedByContent.has(norm)) unclaimedByContent.set(norm, []);
+                unclaimedByContent.get(norm).push(x);
+            });
+
+            // מעבר 2: בניית הרשומות הסופיות בלי ליצור כפילויות מיותרות מעל פריטים קיימים
+            const usedIds = new Set(existingById.keys());
+            const prepared = [];
+            let seq = 0;
+
+            validRows.forEach((row, idx) => {
+                let matchedExisting = assignedByIndex.get(idx) || null;
+                if (!matchedExisting) {
+                    const bucket = unclaimedByContent.get(row.norm);
+                    if (bucket && bucket.length > 0) {
+                        matchedExisting = bucket.shift();
+                    }
+                }
+
+                let id;
+                if (matchedExisting) {
+                    id = matchedExisting.id;
+                } else {
+                    const rawId = row.raw.id;
+                    id = (rawId !== null && rawId !== undefined && rawId !== '' && Number.isFinite(Number(rawId)))
+                        ? Number(rawId)
+                        : Date.now() + seq++;
+                    while (usedIds.has(String(id))) { id = Date.now() + seq++; }
+                    usedIds.add(String(id));
+                }
+
+                prepared.push(normalizeRecordForCloud(row.raw, id, matchedExisting, false));
+            });
 
             return await writeRecordsInSafeBatches('items', prepared, true);
         }
@@ -7281,48 +7438,82 @@ STRICT RULES:
         function exitSelectionMode(){state.selectedIds.clear();state.isSelectionMode=false;document.body.classList.remove('selection-mode-active');updateBulkActionBar();renderList();}
         async function bulkMove(){const category=prompt('לאיזו קטגוריה להעביר את הפריטים שנבחרו?');if(!category?.trim())return;for(const id of state.selectedIds){const item=state.items.find(x=>x.id===id);if(item){item.category=category.trim();item.updatedAt=nowIso();await saveItemToCloud(item);}}exitSelectionMode();updateCategoryDropdowns();}
         async function bulkDelete(){
-            if(!state.user || !confirm(`להעביר ${state.selectedIds.size} פריטים לסל המחזור?`))return;
-            const uid=state.user.uid;
+            if(!state.user || !state.selectedIds.size) return;
             const ids=[...state.selectedIds];
-            let moved=0;
+            if (!confirm(`למחוק ${ids.length} פריטים נבחרים?`)) return;
+
+            let permanentDelete = false;
+            if (ids.length >= 30) {
+                permanentDelete = confirm(
+                    `למחוק ${ids.length} פריטים לצמיתות ישירות (מהיר פי 2, ללא העברה לסל המחזור)?\n\nאישור = מחיקה מיידית לצמיתות\nביטול = העברה לסל המחזור`
+                );
+            }
+
+            const uid=state.user.uid;
+            const itemsMap=new Map(state.items.map(x=>[String(x.id), x]));
+            let processed=0;
+
+            beginBulkUiHold();
             try{
                 if (isCurrentUserAdmin()) {
-                    for(let i=0;i<ids.length;i+=200){
+                    const step = permanentDelete ? 400 : 200;
+                    for(let i=0;i<ids.length;i+=step){
                         const batch=writeBatch(db);
-                        ids.slice(i,i+200).forEach(id=>{
-                            const item=state.items.find(x=>x.id===id); if(!item)return;
-                            const clean=normalizeRecordForCloud(item, item.id, item, true);
-                            batch.set(doc(db,'users',uid,'trash',String(id)), clean);
+                        ids.slice(i,i+step).forEach(id=>{
+                            const item=itemsMap.get(String(id));
+                            if (!permanentDelete && item) {
+                                const clean=normalizeRecordForCloud(item, item.id, item, true);
+                                batch.set(doc(db,'users',uid,'trash',String(id)), clean);
+                            }
                             batch.delete(doc(db,'users',uid,'items',String(id)));
-                            moved++;
+                            processed++;
                         });
                         await commitBatch(batch);
+                        if (ids.length > step) {
+                            showToast(`🗑️ מוחק... ${processed} / ${ids.length}`, null, 0, 'bulk-delete-toast');
+                        }
                     }
+                } else if (permanentDelete) {
+                    await runInParallelWaves(ids, async (id) => {
+                        await commitSingleWrite(deleteDoc(doc(db,'users',uid,'items',String(id))));
+                        processed++;
+                    }, 35, (done, total) => {
+                        showToast(`🗑️ מוחק לצמיתות... ${done} / ${total}`, null, 0, 'bulk-delete-toast');
+                    });
                 } else {
                     await runInParallelWaves(ids, async (id) => {
-                        const item=state.items.find(x=>x.id===id); if(!item)return;
+                        const item=itemsMap.get(String(id)); if(!item) return;
                         const clean=normalizeRecordForCloud(item, item.id, item, true);
                         const batch=writeBatch(db);
                         batch.set(doc(db,'users',uid,'trash',String(id)), clean);
                         batch.delete(doc(db,'users',uid,'items',String(id)));
                         await commitBatch(batch);
-                        moved++;
-                    }, 10);
+                        processed++;
+                    }, 30, (done, total) => {
+                        showToast(`🗑️ מעביר לסל מחזור... ${done} / ${total}`, null, 0, 'bulk-delete-toast');
+                    });
                 }
-                showToast(`🗑️ ${moved} פריטים הועברו לסל המחזור`);
-            }catch(e){showToast('❌ המחיקה נכשלה: '+e.message,null,4000,null,true);}
-            exitSelectionMode();
+                showToast(permanentDelete ? `🗑️ ${processed} פריטים נמחקו לצמיתות` : `🗑️ ${processed} פריטים הועברו לסל המחזור`);
+            }catch(e){
+                showToast('❌ המחיקה נכשלה: '+e.message,null,4000,null,true);
+            } finally {
+                removeToast('bulk-delete-toast');
+                exitSelectionMode();
+                endBulkUiHold();
+            }
         }
         async function bulkClearAi(){
-            if(!state.user)return;
+            if(!state.user || !state.selectedIds.size)return;
             const uid=state.user.uid;
             const ids=[...state.selectedIds];
+            const itemsMap=new Map(state.items.map(x=>[String(x.id), x]));
+            beginBulkUiHold();
             try{
                 if (isCurrentUserAdmin()) {
                     for(let i=0;i<ids.length;i+=400){
                         const batch=writeBatch(db);
                         ids.slice(i,i+400).forEach(id=>{
-                            const item=state.items.find(x=>x.id===id); if(!item)return;
+                            const item=itemsMap.get(String(id)); if(!item)return;
                             delete item.aiSummary;delete item.aiTags;delete item.aiModel;delete item.siteStatus;delete item.httpCode;
                             batch.set(doc(db,'users',uid,'items',String(id)), {...aiClearPatch(), updatedAt:nowIso()}, {merge:true});
                         });
@@ -7330,14 +7521,20 @@ STRICT RULES:
                     }
                 } else {
                     await runInParallelWaves(ids, async (id) => {
-                        const item=state.items.find(x=>x.id===id); if(!item)return;
+                        const item=itemsMap.get(String(id)); if(!item)return;
                         delete item.aiSummary;delete item.aiTags;delete item.aiModel;delete item.siteStatus;delete item.httpCode;
                         await commitSingleWrite(setDoc(doc(db,'users',uid,'items',String(id)), {...aiClearPatch(), updatedAt:nowIso()}, {merge:true}));
-                    }, 15);
+                    }, 35, (done, total) => {
+                        showToast(`🧹 מנקה ניתוחי AI... ${done} / ${total}`, null, 0, 'bulk-clear-toast');
+                    });
                 }
                 showToast('🧹 ניתוחי AI נוקו');
             }catch(e){showToast('❌ הניקוי נכשל: '+e.message,null,4000,null,true);}
-            exitSelectionMode();
+            finally{
+                removeToast('bulk-clear-toast');
+                exitSelectionMode();
+                endBulkUiHold();
+            }
         }
         function setupMissingUiActions(){
             document.getElementById('restoreAllBtn')?.addEventListener('click',restoreAllTrash);document.getElementById('emptyTrashBtn')?.addEventListener('click',emptyTrash);
@@ -7413,6 +7610,7 @@ STRICT RULES:
         const perfStyle=document.createElement('style');perfStyle.textContent='.card{content-visibility:auto;contain-intrinsic-size:auto 140px;}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;}}';document.head.appendChild(perfStyle);    </script>
 </body>
 </html>
+
 
 
 
