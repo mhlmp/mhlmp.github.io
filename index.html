@@ -13,6 +13,15 @@
     <link rel="apple-touch-icon" href="/icon.png">
     <link rel="icon" type="image/png" href="/icon.png">
     <link rel="preload" href="/icon.png" as="image">
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
+    <link rel="dns-prefetch" href="https://www.gstatic.com">
+    <link rel="dns-prefetch" href="https://firestore.googleapis.com">
+    <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js">
+    <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js">
+    <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js">
     
     <script id="offline-data" type="application/json"></script>
     
@@ -50,14 +59,47 @@
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background: var(--bg-gradient);
-            background-attachment: fixed;
+            background: transparent;
             color: var(--text-primary);
             margin: 0;
             padding: 12px;
             padding-bottom: 130px;
             min-height: 100vh;
-            transition: color 0.25s ease, background 0.25s ease;
+            transition: color 0.25s ease;
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background: var(--bg-gradient);
+            pointer-events: none;
+            transform: translateZ(0);
+        }
+
+        .skeleton-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-height: 112px;
+        }
+        .skeleton-line {
+            height: 13px;
+            border-radius: 7px;
+            background: linear-gradient(90deg, rgba(148,163,184,0.12) 25%, rgba(148,163,184,0.28) 50%, rgba(148,163,184,0.12) 75%);
+            background-size: 200% 100%;
+            animation: mhShimmer 1.2s ease-in-out infinite;
+        }
+        .skeleton-line.short { width: 38%; height: 11px; }
+        .skeleton-line.long { width: 88%; height: 15px; }
+        .skeleton-line.mid { width: 62%; }
+        @keyframes mhShimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
         }
 
         .glass-panel {
@@ -365,9 +407,9 @@
             position: relative;
             display: flex;
             flex-direction: column;
-            transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s ease, border-color 0.22s ease;
+            transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.18s ease, border-color 0.18s ease;
             overflow: hidden;
-            animation: cardAppear 0.22s ease backwards;
+            contain: layout style;
         }
         .card:hover { transform: translateY(-3px); box-shadow: 0 10px 26px rgba(0,0,0,0.16); border-color: rgba(96, 165, 250, 0.3); }
         .card.pinned { border: 2px solid var(--accent-gold); background: rgba(245, 158, 11, 0.04); }
@@ -2325,6 +2367,34 @@
         <div class="dropdown-divider"></div>
         <button id="aiManualShotMenuBtn" type="button" style="color:#60a5fa; font-weight:700;">📸 סרוק עם תמונת מסך ידנית</button>
     </div>
+
+    <script>
+        (function () {
+            try {
+                const savedTheme = localStorage.getItem('mh_theme');
+                document.body.classList.toggle('dark-mode', savedTheme ? savedTheme === 'dark' : true);
+                if (localStorage.getItem('mh_has_session') === '1') {
+                    document.body.classList.remove('pre-login-screen');
+                    const ws = document.getElementById('welcomeScreen');
+                    if (ws) { ws.style.display = 'none'; ws.classList.remove('visible'); }
+                    const pc = document.getElementById('protectedContent');
+                    if (pc) pc.classList.remove('locked');
+                    const lov = document.getElementById('loggedOutView');
+                    const liv = document.getElementById('loggedInView');
+                    if (lov) lov.style.display = 'none';
+                    if (liv) liv.style.display = 'flex';
+                    const cnt = document.getElementById('itemCount');
+                    if (cnt) cnt.textContent = 'טוען קישורים...';
+                    const lc = document.getElementById('listContainer');
+                    if (lc) {
+                        lc.innerHTML = '<div class="items-grid">' + Array.from({ length: 8 }, () =>
+                            '<div class="skeleton-card"><div class="skeleton-line short"></div><div class="skeleton-line long"></div><div class="skeleton-line mid"></div></div>'
+                        ).join('') + '</div>';
+                    }
+                }
+            } catch (_) {}
+        })();
+    </script>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -2337,6 +2407,8 @@
             getDocsFromServer,
             deleteDoc, writeBatch, enableNetwork, disableNetwork,
             initializeFirestore, memoryLocalCache,
+            persistentLocalCache, persistentMultipleTabManager,
+            terminate, clearIndexedDbPersistence,
             waitForPendingWrites, deleteField
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
@@ -2509,10 +2581,20 @@
             auth = getAuth(app);
             try {
                 db = initializeFirestore(app, {
-                    localCache: memoryLocalCache()
+                    localCache: persistentLocalCache({
+                        tabManager: persistentMultipleTabManager()
+                    })
                 });
             } catch (err) {
-                db = getFirestore(app);
+                try {
+                    db = initializeFirestore(app, { localCache: persistentLocalCache() });
+                } catch (_) {
+                    try {
+                        db = initializeFirestore(app, { localCache: memoryLocalCache() });
+                    } catch (__) {
+                        db = getFirestore(app);
+                    }
+                }
             }
         } catch (e) { console.error('[Firebase] Init Error:', e); }
 
@@ -2565,23 +2647,68 @@
             });
         });
 
+        let itemsRevision = 0;
+        let cachedMetaRev = -1;
+        let cachedMetaResult = null;
+
+        function invalidateItemsMeta() {
+            itemsRevision++;
+        }
+
+        // מעבר יחיד על הפריטים — מחשב בבת אחת אינדקסים, כפילויות ומוני סטטוס ושומר במטמון עד לשינוי הבא
+        function getComputedItemsMeta() {
+            if (cachedMetaRev === itemsRevision && cachedMetaResult) {
+                return cachedMetaResult;
+            }
+            const chronologicalList = [...state.items].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+            const visualMetaMap = new Map();
+            const seenContents = new Map();
+            let deadCount = 0;
+            let parkedCount = 0;
+            let dupCount = 0;
+
+            for (let idx = 0; idx < chronologicalList.length; idx++) {
+                const item = chronologicalList[idx];
+                if (item.siteStatus === 'dead') deadCount++;
+                else if (item.siteStatus === 'parked') parkedCount++;
+
+                const visualIndex = idx + 1;
+                const key = normalizeContentKey(item.content);
+                if (!key) {
+                    visualMetaMap.set(item.id, { visualIndex, isDup: false, dupOfIndex: null, dupOfContent: '' });
+                    continue;
+                }
+                const firstMatch = seenContents.get(key);
+                if (firstMatch) {
+                    dupCount++;
+                    visualMetaMap.set(item.id, {
+                        visualIndex,
+                        isDup: true,
+                        dupOfIndex: firstMatch.visualIndex,
+                        dupOfContent: firstMatch.content
+                    });
+                } else {
+                    seenContents.set(key, { id: item.id, visualIndex, content: item.content || '' });
+                    visualMetaMap.set(item.id, {
+                        visualIndex,
+                        isDup: false,
+                        dupOfIndex: null,
+                        dupOfContent: ''
+                    });
+                }
+            }
+
+            cachedMetaRev = itemsRevision;
+            cachedMetaResult = { visualMetaMap, deadCount, parkedCount, dupCount };
+            return cachedMetaResult;
+        }
+
         // עדכון התגיות המספריות על כפתורי הסינון (🔴 לא זמין, 🟠 חניה, 👥 כפילויות)
         function updateStatusBadges(animate = false) {
             const deadBadge   = document.getElementById('deadCountBadge');
             const parkedBadge = document.getElementById('parkedCountBadge');
             const dupBadge    = document.getElementById('dupCountBadge');
-
-            const deadCount   = state.items.filter(i => i.siteStatus === 'dead').length;
-            const parkedCount = state.items.filter(i => i.siteStatus === 'parked').length;
-
-            const seen = new Set();
-            let dupCount = 0;
-            state.items.forEach(item => {
-                const k = normalizeContentKey(item.content);
-                if (!k) return;
-                if (seen.has(k)) dupCount++;
-                else seen.add(k);
-            });
+            const { deadCount, parkedCount, dupCount } = getComputedItemsMeta();
 
             const applyBadge = (el, count) => {
                 if (!el) return;
@@ -2778,6 +2905,47 @@
             }
         }
 
+        const authBroadcast = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('mh_auth_sync') : null;
+        if (authBroadcast) {
+            authBroadcast.onmessage = async (ev) => {
+                if (ev.data === 'logout') {
+                    stopAllCloudListeners();
+                    try { localStorage.removeItem('mh_has_session'); } catch (_) {}
+                    try { if (db) await terminate(db); } catch (_) {}
+                    window.location.reload();
+                }
+            };
+        }
+
+        async function wipeDeviceCacheAndSignOut() {
+            keepAwakeController.activeTasks = 0;
+            keepAwakeController.release();
+            scanController.isRunning = false;
+            window._mhApprovedBatchCap = null;
+            stopAllCloudListeners();
+            try { localStorage.removeItem('mh_has_session'); } catch (_) {}
+            try { authBroadcast?.postMessage('logout'); } catch (_) {}
+            try { await signOut(auth); } catch (_) {}
+            try {
+                if (db) {
+                    await terminate(db);
+                    await clearIndexedDbPersistence(db);
+                }
+            } catch (_) {
+                try {
+                    if (indexedDB?.databases) {
+                        const dbs = await indexedDB.databases();
+                        dbs.forEach(d => {
+                            if (d.name && d.name.startsWith('firestore/')) {
+                                try { indexedDB.deleteDatabase(d.name); } catch (__) {}
+                            }
+                        });
+                    }
+                } catch (__) {}
+            }
+            window.location.reload();
+        }
+
         async function switchAccount() {
             if (keepAwakeController.activeTasks > 0) {
                 showToast('⏳ מתבצעת כרגע שמירה לענן — המתן לסיום לפני החלפת חשבון.', null, 4000, null, true);
@@ -2792,14 +2960,8 @@
                         return;
                     }
                 }
-                keepAwakeController.activeTasks = 0;
-                keepAwakeController.release();
-                scanController.isRunning = false;
-                window._mhApprovedBatchCap = null;
-                stopAllCloudListeners();
-                showToast('מתנתק...', null, 1500);
-                await signOut(auth);
-                window.location.reload();
+                showToast('מתנתק ומנקה נתונים מהמכשיר...', null, 1500);
+                await wipeDeviceCacheAndSignOut();
             } catch (e) {
                 removeToast('switch-sync-toast');
                 showToast('❌ ' + e.message, null, 4000, null, true);
@@ -3183,9 +3345,20 @@
             return ADMIN_EMAILS.some(e => String(e).toLowerCase().trim() === clean);
         }
 
+        let trashLoadedPromise = null;
+        let lazyBgTimers = [];
+
+        function clearLazyBgTimers() {
+            lazyBgTimers.forEach(t => clearTimeout(t));
+            lazyBgTimers = [];
+        }
+
         function stopUserDataListeners() {
+            clearLazyBgTimers();
+            if (itemsRetryTimer) { clearTimeout(itemsRetryTimer); itemsRetryTimer = null; }
             if (state.unsubItems) { state.unsubItems(); state.unsubItems = null; }
             if (state.unsubTrash) { state.unsubTrash(); state.unsubTrash = null; }
+            trashLoadedPromise = null;
         }
 
         function stopAllCloudListeners() {
@@ -3250,68 +3423,67 @@
 
         let itemsRetryTimer = null;
 
-        async function pullServerSnapshotNow(user) {
-            if (!user || !navigator.onLine || state.user?.uid !== user.uid) return;
-            try {
-                const [itemsSnap, trashSnap] = await Promise.all([
-                    getDocsFromServer(collection(db, 'users', user.uid, 'items')),
-                    getDocsFromServer(collection(db, 'users', user.uid, 'trash')).catch(() => null)
-                ]);
-                if (state.user?.uid !== user.uid) return;
-                const normalizeSnapDoc = (d) => {
-                    const data = d.data() || {};
-                    if (data.id === undefined || data.id === null) {
-                        data.id = Number.isFinite(Number(d.id)) ? Number(d.id) : d.id;
-                    }
-                    return data;
-                };
-                state.items = itemsSnap.docs.map(normalizeSnapDoc);
-                if (trashSnap) state.trash = trashSnap.docs.map(normalizeSnapDoc);
-                isServerDataArrived = true;
-                updateStatusBadges(false);
-                scheduleFullRender(true);
-                updateSyncStatus('online', `מחובר ומסונכרן ✓ (${state.items.length})`);
-            } catch (err) {
-                console.error('[Server Pull Failed]', err?.code, err?.message);
-                if (err?.code === 'permission-denied') {
-                    updateSyncStatus('error', 'חסום בחוקי Firestore');
-                    showToast('❌ שרת Firestore חסם קריאת נתונים לחשבון זה — ודא שחוקי Firestore המעודכנים פורסמו.', null, 6000, null, true);
-                }
+        function normalizeSnapDoc(d) {
+            const data = d.data() || {};
+            if (data.id === undefined || data.id === null) {
+                data.id = Number.isFinite(Number(d.id)) ? Number(d.id) : d.id;
             }
+            return data;
+        }
+
+        function ensureTrashSubscription(user = state.user) {
+            if (!user) return Promise.resolve();
+            if (state.unsubTrash && trashLoadedPromise) return trashLoadedPromise;
+            const trashRef = collection(db, 'users', user.uid, 'trash');
+            trashLoadedPromise = new Promise((resolve) => {
+                let settled = false;
+                const finish = () => { if (!settled) { settled = true; resolve(); } };
+                state.unsubTrash = onSnapshot(trashRef, (snapshot) => {
+                    state.trash = snapshot.docs.map(normalizeSnapDoc);
+                    finish();
+                    scheduleTrashRender();
+                }, (err) => {
+                    console.warn('[Sync] onSnapshot trash error:', err.message);
+                    finish();
+                });
+                setTimeout(finish, 3000);
+            });
+            return trashLoadedPromise;
         }
 
         function startUserDataSubscriptions(user, retryAttempt = 0) {
             stopUserDataListeners();
-            if (itemsRetryTimer) { clearTimeout(itemsRetryTimer); itemsRetryTimer = null; }
             const itemsRef = collection(db, 'users', user.uid, 'items');
 
-            // משיכה ישירה מהשרת מיד בהתחברות כדי למנוע מצב של מטמון ריק אחרי יציאה
-            if (navigator.onLine && retryAttempt === 0) {
-                pullServerSnapshotNow(user);
-            }
-
+            // חיבור יחיד (Stale-While-Revalidate): מציג מיד מהמטמון המקומי ב-~30ms ומסנכרן רק הפרשים מהענן ברקע
             state.unsubItems = onSnapshot(itemsRef, { includeMetadataChanges: true }, (snapshot) => {
-                // מונע מתמונת מטמון ריקה לדרוס פריטים שכבר נמשכו ישירות מהשרת
-                if (snapshot.metadata.fromCache && navigator.onLine && snapshot.docs.length === 0 && state.items.length > 0) {
+                // מטמון קר ריק בטעינה ראשונה במכשיר חדש — משאיר את ה-Skeleton עד שתשובת השרת מגיעה
+                if (snapshot.metadata.fromCache && navigator.onLine && snapshot.docs.length === 0) {
+                    updateSyncStatus('syncing', 'טוען מהענן...');
                     return;
                 }
+
                 retryAttempt = 0;
+                const changes = snapshot.docChanges();
+
+                // אישור שרת שלא כלל שינויים מול המטמון שכבר הוצג — אפס עבודת CPU ואפס רינדור מחדש
+                if (!snapshot.metadata.fromCache && changes.length === 0 && isInitialSnapshotRendered && snapshot.docs.length === state.items.length) {
+                    isServerDataArrived = true;
+                    updateSyncStatus(snapshot.metadata.hasPendingWrites ? 'syncing' : 'online', snapshot.metadata.hasPendingWrites ? 'מסנכרן לענן...' : 'מחובר ומסונכרן ✓');
+                    return;
+                }
+
                 const prevById = new Map();
                 for (let i = 0; i < state.items.length; i++) {
                     prevById.set(String(state.items[i].id), state.items[i]);
                 }
 
-                const changes = snapshot.docChanges();
-                let structuralChanges = snapshot.docs.length !== state.items.length;
+                let structuralChanges = !isInitialSnapshotRendered || snapshot.docs.length !== state.items.length;
                 const modifiedIdsInPlace = [];
 
                 const nextItems = snapshot.docs.map((docSnap) => {
-                    const data = docSnap.data() || {};
-                    if (data.id === undefined || data.id === null) {
-                        data.id = Number.isFinite(Number(docSnap.id)) ? Number(docSnap.id) : docSnap.id;
-                    }
-                    const key = String(data.id);
-                    const prev = prevById.get(key);
+                    const data = normalizeSnapDoc(docSnap);
+                    const prev = prevById.get(String(data.id));
                     if (prev) {
                         if (prev.isScanning) data.isScanning = true;
                         if (prev._keepExpanded) data._keepExpanded = true;
@@ -3326,8 +3498,8 @@
                             structuralChanges = true;
                             break;
                         }
-                        const data = ch.doc.data() || {};
-                        const prev = prevById.get(String(data.id ?? ch.doc.id));
+                        const data = normalizeSnapDoc(ch.doc);
+                        const prev = prevById.get(String(data.id));
                         if (!prev) {
                             structuralChanges = true;
                             break;
@@ -3345,6 +3517,7 @@
                 }
 
                 state.items = nextItems;
+                invalidateItemsMeta();
 
                 if (!snapshot.metadata.fromCache || !navigator.onLine) {
                     isServerDataArrived = true;
@@ -3355,7 +3528,7 @@
                 } else if (!navigator.onLine) {
                     updateSyncStatus('offline', 'מקומי (אין רשת)');
                 } else if (snapshot.metadata.fromCache) {
-                    updateSyncStatus('syncing', 'טוען מהענן...');
+                    updateSyncStatus('syncing', 'מסנכרן עדכונים...');
                 } else {
                     updateSyncStatus('online', 'מחובר ומסונכרן ✓');
                 }
@@ -3388,13 +3561,12 @@
                 showToast('❌ שגיאה בטעינת הקישורים מהענן: ' + err.message, null, 5000, null, true);
             });
 
-            const trashRef = collection(db, 'users', user.uid, 'trash');
-            state.unsubTrash = onSnapshot(trashRef, (snapshot) => {
-                state.trash = snapshot.docs.map(d => d.data() || {});
-                scheduleTrashRender();
-            }, (err) => {
-                console.warn('[Sync] onSnapshot trash error:', err.message);
-            });
+            // טעינה עצלה של סל המחזור ברקע אחרי שהקישורים הראשיים כבר מוצגים (או מיד בפתיחת סל/ייצוא)
+            lazyBgTimers.push(setTimeout(() => {
+                if (state.user?.uid === user.uid && state.accessState === 'approved') {
+                    ensureTrashSubscription(user);
+                }
+            }, 2500));
         }
 
         function updateAdminUsersBadge() {
@@ -3556,8 +3728,6 @@
                     isServerDataArrived = false;
                     isInitialSnapshotRendered = false;
 
-                    try { if (navigator.onLine) await enableNetwork(db); } catch(e) {}
-
                     document.getElementById('userName').textContent = user.displayName || user.email || 'משתמש';
                     document.getElementById('userEmailDisplay').textContent = user.email || '';
                     const avatarEl = document.getElementById('userAvatar');
@@ -3570,10 +3740,13 @@
                     if (isAdmin) {
                         if (state.unsubAccess) { state.unsubAccess(); state.unsubAccess = null; }
                         state.accessState = 'approved';
+                        try { localStorage.setItem('mh_has_session', '1'); } catch (_) {}
                         updateAdminUsersBadge();
                         handleLockScreen(true, 'approved');
                         startUserDataSubscriptions(user);
-                        startAdminUsersSubscription();
+                        lazyBgTimers.push(setTimeout(() => {
+                            if (state.user?.uid === user.uid) startAdminUsersSubscription();
+                        }, 1500));
                         return;
                     }
 
@@ -3623,11 +3796,11 @@
                         if (data.status === 'approved') {
                             const wasApproved = state.accessState === 'approved';
                             state.accessState = 'approved';
+                            try { localStorage.setItem('mh_has_session', '1'); } catch (_) {}
                             handleLockScreen(true, 'approved');
                             if (!wasApproved) {
-                                try { if (navigator.onLine) await user.getIdToken(true); } catch (_) {}
-                                if (state.user?.uid === user.uid && state.accessState === 'approved') {
-                                    startUserDataSubscriptions(user);
+                                startUserDataSubscriptions(user);
+                                if (!snap.metadata.fromCache) {
                                     showToast('✅ החשבון מאושר! נטען המאגר האישי שלך.', null, 3500);
                                 }
                             }
@@ -3660,7 +3833,9 @@
                     });
                 } else {
                     stopAllCloudListeners();
+                    try { localStorage.removeItem('mh_has_session'); } catch (_) {}
                     state.user = null; state.items = []; state.trash = []; state.allowedUsers = [];
+                    invalidateItemsMeta();
                     state.accessState = 'guest';
                     state.selectedIds.clear(); state.isSelectionMode = false;
                     isInitialSnapshotRendered = false;
@@ -3811,13 +3986,7 @@
                     return;
                 }
             }
-            keepAwakeController.activeTasks = 0;
-            keepAwakeController.release();
-            scanController.isRunning = false;
-            window._mhApprovedBatchCap = null;
-            stopAllCloudListeners();
-            try { await signOut(auth); } catch (_) {}
-            window.location.reload();
+            await wipeDeviceCacheAndSignOut();
         }
 
         async function forceReload(silent = false) {
@@ -3838,8 +4007,10 @@
                     getDocsFromServer(collection(db, 'users', state.user.uid, 'items')),
                     getDocsFromServer(collection(db, 'users', state.user.uid, 'trash')).catch(() => null)
                 ]);
-                state.items = itemsSnap.docs.map(d => d.data() || {});
-                if (trashSnap) state.trash = trashSnap.docs.map(d => d.data() || {});
+                state.items = itemsSnap.docs.map(normalizeSnapDoc);
+                if (trashSnap) state.trash = trashSnap.docs.map(normalizeSnapDoc);
+                invalidateItemsMeta();
+                isServerDataArrived = true;
                 updateCategoryDropdowns();
                 renderList();
                 updateSyncStatus('online', `מחובר ומסונכרן ✓ (${state.items.length})`);
@@ -3853,33 +4024,13 @@
         }
 
         function getVisualMetaMap() {
-            const chronologicalList = [...state.items].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-            const visualMetaMap = new Map();
-            const seenContents = new Map();
-
-            chronologicalList.forEach((item, idx) => {
-                const visualIndex = idx + 1;
-                const key = normalizeContentKey(item.content);
-                if (!key) {
-                    visualMetaMap.set(item.id, { visualIndex, isDup: false, dupOfIndex: null, dupOfContent: '' });
-                    return;
-                }
-                const firstMatch = seenContents.get(key);
-                const isDup = Boolean(firstMatch);
-                if (!isDup) {
-                    seenContents.set(key, { id: item.id, visualIndex, content: item.content || '' });
-                }
-                visualMetaMap.set(item.id, {
-                    visualIndex,
-                    isDup,
-                    dupOfIndex: isDup ? firstMatch.visualIndex : null,
-                    dupOfContent: isDup ? firstMatch.content : ''
-                });
-            });
-            return visualMetaMap;
+            return getComputedItemsMeta().visualMetaMap;
         }
 
         function updateCardInPlace(id) {
+            invalidateItemsMeta();
+            updateStatusBadges(false);
+
             const existingCard = document.querySelector(`.card[data-id="${id}"]`);
             const item = state.items.find(i => i.id === id);
             if (!existingCard || !item) return;
@@ -3908,10 +4059,8 @@
 
             if (wasExpanded || state.expandAllCards || item.isScanning || item._keepExpanded) newCard.classList.add('is-expanded');
             if (wasActionsShown) newCard.classList.add('show-actions');
-            newCard.style.animation = 'none';
 
             existingCard.replaceWith(newCard);
-            updateStatusBadges(false);
 
             if (isTargetVisible) {
                 const drift = newCard.getBoundingClientRect().top - prevRect.top;
@@ -3926,10 +4075,91 @@
             }
         }
 
+        const RENDER_BATCH_SIZE = 40;
+        let listScrollObserver = null;
+        let progressiveRenderState = null;
+
+        function teardownProgressiveRender() {
+            if (listScrollObserver) {
+                listScrollObserver.disconnect();
+                listScrollObserver = null;
+            }
+            progressiveRenderState = null;
+        }
+
+        function appendNextRenderBatch() {
+            const st = progressiveRenderState;
+            if (!st) return;
+            const { container, sections, visualMetaMap } = st;
+            let remaining = RENDER_BATCH_SIZE;
+
+            const oldSentinel = container.querySelector('#listLoadSentinel');
+            if (oldSentinel) oldSentinel.remove();
+
+            while (remaining > 0 && st.secIdx < sections.length) {
+                const sec = sections[st.secIdx];
+                if (!st.currentGrid) {
+                    const block = document.createElement('div');
+                    block.className = 'category-block';
+                    if (sec.title) {
+                        const header = document.createElement('div');
+                        header.className = 'category-header';
+                        if (sec.isPinned) header.style.cssText = 'border-bottom: 2px solid var(--accent-gold); color: var(--accent-gold);';
+                        header.innerHTML = `<h2>${escapeHtml(sec.title)}</h2><span class="category-badge">${sec.items.length}</span>`;
+                        block.appendChild(header);
+                    }
+                    const grid = document.createElement('div');
+                    grid.className = 'items-grid';
+                    block.appendChild(grid);
+                    container.appendChild(block);
+                    st.currentGrid = grid;
+                }
+
+                const sliceEnd = Math.min(sec.items.length, st.itemIdx + remaining);
+                const frag = document.createDocumentFragment();
+                for (let i = st.itemIdx; i < sliceEnd; i++) {
+                    const item = sec.items[i];
+                    frag.appendChild(createCard(item, visualMetaMap.get(item.id) || {}));
+                }
+                st.currentGrid.appendChild(frag);
+                remaining -= (sliceEnd - st.itemIdx);
+                st.itemIdx = sliceEnd;
+
+                if (st.itemIdx >= sec.items.length) {
+                    st.secIdx++;
+                    st.itemIdx = 0;
+                    st.currentGrid = null;
+                }
+            }
+
+            if (st.secIdx < sections.length) {
+                const sentinel = document.createElement('div');
+                sentinel.id = 'listLoadSentinel';
+                sentinel.style.cssText = 'height: 1px; width: 100%;';
+                container.appendChild(sentinel);
+
+                if ('IntersectionObserver' in window) {
+                    if (!listScrollObserver) {
+                        listScrollObserver = new IntersectionObserver((entries) => {
+                            if (entries.some(e => e.isIntersecting)) {
+                                appendNextRenderBatch();
+                            }
+                        }, { rootMargin: '900px 0px' });
+                    }
+                    listScrollObserver.observe(sentinel);
+                } else {
+                    requestAnimationFrame(appendNextRenderBatch);
+                }
+            } else {
+                teardownProgressiveRender();
+            }
+        }
+
         function renderList() {
             if (!state.user) return;
             const container = document.getElementById('listContainer');
             if (!container) return;
+            teardownProgressiveRender();
             container.innerHTML = '';
 
             updateStatusBadges(false);
@@ -4056,11 +4286,17 @@
             if (state.isSelectionMode) updateBulkActionBar();
 
             const countEl = document.getElementById('itemCount');
-            if (countEl) countEl.textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
+            if (countEl) {
+                countEl.textContent = (!isServerDataArrived && state.items.length === 0 && navigator.onLine)
+                    ? 'טוען קישורים...'
+                    : `מציג ${filtered.length} מתוך ${state.items.length}`;
+            }
 
             if (filtered.length === 0) {
                 if (!isServerDataArrived && state.items.length === 0 && navigator.onLine) {
-                    container.innerHTML = `<div style="text-align:center; padding:36px 20px; color:var(--text-secondary); font-size:1.05rem;"><div class="spinner-small" style="width:22px;height:22px;border-width:3px;margin-bottom:10px;"></div><br>טוען קישורים מהענן...</div>`;
+                    container.innerHTML = '<div class="items-grid">' + Array.from({ length: 8 }, () =>
+                        '<div class="skeleton-card"><div class="skeleton-line short"></div><div class="skeleton-line long"></div><div class="skeleton-line mid"></div></div>'
+                    ).join('') + '</div>';
                     return;
                 }
                 const hasActiveFilters = Boolean(query || catFilter || state.showOnlyDead || state.showOnlyParked || !state.showDuplicates);
@@ -4094,22 +4330,17 @@
             }
 
             const isIndexSort = sort === 'index-asc' || sort === 'index-desc';
-            const mainFragment = document.createDocumentFragment();
+            const sections = [];
 
             if (isIndexSort) {
-                const section = document.createElement('div');
-                section.className = 'category-block';
-                const grid = document.createElement('div');
-                grid.className = 'items-grid';
-                filtered.forEach(item => grid.appendChild(createCard(item, visualMetaMap.get(item.id) || {})));
-                section.appendChild(grid);
-                mainFragment.appendChild(section);
+                sections.push({ title: null, isPinned: false, items: filtered });
             } else {
                 const pinnedItems  = filtered.filter(i => i.isPinned);
                 const regularItems = filtered.filter(i => !i.isPinned);
 
-                if (pinnedItems.length > 0)
-                    renderGroup(mainFragment, '📌 מוצמד', pinnedItems, true, visualMetaMap);
+                if (pinnedItems.length > 0) {
+                    sections.push({ title: '📌 מוצמד', isPinned: true, items: pinnedItems });
+                }
 
                 const groups = {};
                 regularItems.forEach(i => {
@@ -4125,30 +4356,20 @@
                     if (a.startsWith('⚠️') || a.startsWith('🔴') || a.startsWith('🟠')) return -1;
                     if (b.startsWith('⚠️') || b.startsWith('🔴') || b.startsWith('🟠')) return 1;
                     return a.localeCompare(b);
-                }).forEach(cat => renderGroup(mainFragment, cat, groups[cat], false, visualMetaMap));
+                }).forEach(cat => {
+                    sections.push({ title: cat, isPinned: false, items: groups[cat] });
+                });
             }
-            
-            container.appendChild(mainFragment);
-        }
 
-        function renderGroup(containerFragment, title, items, isPinned, visualMetaMap) {
-            const section = document.createElement('div');
-            section.className = 'category-block';
-            const header = document.createElement('div');
-            header.className = 'category-header';
-            if (isPinned) header.style.cssText = 'border-bottom: 2px solid var(--accent-gold); color: var(--accent-gold);';
-            header.innerHTML = `<h2>${escapeHtml(title)}</h2><span class="category-badge">${items.length}</span>`;
-            
-            const grid = document.createElement('div');
-            grid.className = 'items-grid';
-            
-            const gridFragment = document.createDocumentFragment();
-            items.forEach(i => gridFragment.appendChild(createCard(i, visualMetaMap.get(i.id) || {})));
-            grid.appendChild(gridFragment);
-            
-            section.appendChild(header);
-            section.appendChild(grid);
-            containerFragment.appendChild(section);
+            progressiveRenderState = {
+                container,
+                sections,
+                visualMetaMap,
+                secIdx: 0,
+                itemIdx: 0,
+                currentGrid: null
+            };
+            appendNextRenderBatch();
         }
 
         function detectPlatformBadge(content) {
@@ -6844,6 +7065,11 @@ STRICT RULES:
         function openTrashModal() {
             const modal=document.getElementById('trashModal'), list=document.getElementById('trashList'); if(!modal||!list)return;
             modal.classList.add('open'); list.innerHTML='';
+            if (!state.unsubTrash && state.user) {
+                list.textContent = 'טוען סל מחזור...';
+                ensureTrashSubscription(state.user);
+                return;
+            }
             if(!state.trash.length){list.textContent='סל המחזור ריק.';return;}
             state.trash.forEach(item=>{
                 const row=document.createElement('div');
@@ -7314,7 +7540,8 @@ STRICT RULES:
         function decodeTxtField(value) {
             return String(value ?? '').replace(/ ⏎ /g, '\n').trim();
         }
-        function exportJson(){
+        async function exportJson(){
+            if (state.user && !state.unsubTrash) await ensureTrashSubscription(state.user);
             const exclude = !!document.getElementById('excludePrivateJsonCb')?.checked;
             const rawItems = exclude
                 ? state.items.filter(x => !isPrivateCategory(x.category))
@@ -7358,7 +7585,8 @@ STRICT RULES:
                 showToast(`📤 גיבוי JSON מלא יוצא בהצלחה (${items.length} פריטים${extrasInfo})`);
             }
         }
-        function exportTxt(){
+        async function exportTxt(){
+            if (state.user && !state.unsubTrash) await ensureTrashSubscription(state.user);
             const cb = document.getElementById('excludePrivateCb');
             const exclude = cb ? cb.checked : true;
             const rawItems = exclude
@@ -7480,7 +7708,8 @@ STRICT RULES:
                 if (state.user && navigator.onLine && (importedItemsCount > 0 || importedTrashCount > 0)) {
                     try {
                         const serverSnap = await getDocsFromServer(collection(db, 'users', state.user.uid, 'items'));
-                        state.items = serverSnap.docs.map(d => d.data() || {});
+                        state.items = serverSnap.docs.map(normalizeSnapDoc);
+                        invalidateItemsMeta();
                         verifiedServerTotal = state.items.length;
                     } catch (vErr) {
                         console.warn('[Import Server Verify Failed]', vErr);
@@ -7633,7 +7862,8 @@ STRICT RULES:
                 if (state.user && navigator.onLine && (uploadedFresh > 0 || uploadedEnrich > 0 || importedTrashCount > 0)) {
                     try {
                         const serverSnap = await getDocsFromServer(collection(db, 'users', state.user.uid, 'items'));
-                        state.items = serverSnap.docs.map(d => d.data() || {});
+                        state.items = serverSnap.docs.map(normalizeSnapDoc);
+                        invalidateItemsMeta();
                         verifiedServerTotal = state.items.length;
                     } catch (vErr) {
                         console.warn('[SmartImport Server Verify Failed]', vErr);
@@ -7881,15 +8111,24 @@ STRICT RULES:
             return await writeRecordsInSafeBatches('items', prepared, true);
         }
         function openAiFloatingMenu(id,event){const menu=document.getElementById('aiFloatingMenu');if(!menu)return;menu.dataset.itemId=String(id);const check=document.getElementById('aiUrlOnlyCheckbox');if(check){const q=JSON.parse(localStorage.getItem('aiQuickSettings')||'{}');check.checked=!!q.urlOnly;}menu.style.display='block';const pt=event?.touches?.[0]||event;const x=pt?.clientX ?? 24,y=pt?.clientY ?? 120;menu.style.left=Math.max(8,Math.min(x,window.innerWidth-250))+'px';menu.style.top=Math.max(8,Math.min(y,window.innerHeight-260))+'px';}
-        function enterSelectionMode(id){state.isSelectionMode=true;document.body.classList.add('selection-mode-active');if(id!=null)state.selectedIds.add(id);updateBulkActionBar();renderList();}
+        function syncRenderedSelectionUI() {
+            document.querySelectorAll('#listContainer .card').forEach(card => {
+                const cid = Number(card.getAttribute('data-id'));
+                const isSel = state.selectedIds.has(cid);
+                card.classList.toggle('selected', isSel);
+                const cb = card.querySelector('.card-checkbox');
+                if (cb) cb.checked = isSel;
+            });
+        }
+        function enterSelectionMode(id){state.isSelectionMode=true;document.body.classList.add('selection-mode-active');if(id!=null)state.selectedIds.add(id);updateBulkActionBar();syncRenderedSelectionUI();}
         function toggleSelection(id){if(state.selectedIds.has(id))state.selectedIds.delete(id);else state.selectedIds.add(id);state.isSelectionMode=state.selectedIds.size>0;document.body.classList.toggle('selection-mode-active',state.isSelectionMode);updateBulkActionBar();const card=document.querySelector(`.card[data-id="${id}"]`);card?.classList.toggle('selected',state.selectedIds.has(id));const cb=card?.querySelector('.card-checkbox');if(cb)cb.checked=state.selectedIds.has(id);}
         function updateBulkActionBar(){const bar=document.getElementById('bulkActionBar');if(!bar)return;bar.classList.toggle('visible',state.isSelectionMode);document.getElementById('selectedCount').textContent=`${state.selectedIds.size} נבחרו`;const all=document.getElementById('selectAllCheckbox');if(all)all.checked=state.filteredItems.length>0&&state.filteredItems.every(x=>state.selectedIds.has(x.id));}
-        function exitSelectionMode(skipRender = false){
+        function exitSelectionMode(){
             state.selectedIds.clear();
             state.isSelectionMode=false;
             document.body.classList.remove('selection-mode-active');
             updateBulkActionBar();
-            if (!skipRender) renderList();
+            syncRenderedSelectionUI();
         }
         async function bulkMove(){
             if (!state.user || !state.selectedIds.size) return;
@@ -7996,7 +8235,7 @@ STRICT RULES:
             document.getElementById('fastStatusScanBtn')?.addEventListener('click',()=>{closeAllMenus();runBatchScan(state.items.filter(i=>i.type==='link'||URL_REGEX.test(i.content)),'fast-status');});
             document.getElementById('rescanDeadBtn')?.addEventListener('click',()=>{closeAllMenus();runBatchScan(state.items.filter(i=>i.siteStatus==='dead'),'ai');});
             document.getElementById('rescanParkedBtn')?.addEventListener('click',()=>{closeAllMenus();runBatchScan(state.items.filter(i=>i.siteStatus==='parked'),'ai');});
-            document.getElementById('selectAllCheckbox')?.addEventListener('change',e=>{if(e.target.checked)state.filteredItems.forEach(i=>state.selectedIds.add(i.id));else state.filteredItems.forEach(i=>state.selectedIds.delete(i.id));state.isSelectionMode=state.selectedIds.size>0;document.body.classList.toggle('selection-mode-active',state.isSelectionMode);updateBulkActionBar();renderList();});
+            document.getElementById('selectAllCheckbox')?.addEventListener('change',e=>{if(e.target.checked)state.filteredItems.forEach(i=>state.selectedIds.add(i.id));else state.filteredItems.forEach(i=>state.selectedIds.delete(i.id));state.isSelectionMode=state.selectedIds.size>0;document.body.classList.toggle('selection-mode-active',state.isSelectionMode);updateBulkActionBar();syncRenderedSelectionUI();});
             document.getElementById('cancelBulkBtn')?.addEventListener('click',exitSelectionMode);
             document.getElementById('bulkAiBtn')?.addEventListener('click', () => {
                 const selected = state.items.filter(i => state.selectedIds.has(i.id));
