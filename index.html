@@ -2205,7 +2205,7 @@
 
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <span class="edit-modal-label" style="margin:0;">מפתחות Gemini:</span>
-                    <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--primary-color); font-size:12px;">🔗 קבל מפתח</a>
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="color:var(--primary-color); font-size:12px;">🔗 קבל מפתח</a>
                 </div>
                 <input type="password" id="keyGemini1" placeholder="מפתח Gemini ראשי..." class="edit-modal-input" style="margin-bottom:4px;">
                 <input type="password" id="keyGemini2" placeholder="מפתח Gemini גיבוי 2..." class="edit-modal-input" style="margin-bottom:4px;">
@@ -2213,7 +2213,7 @@
                 
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
                     <span class="edit-modal-label" style="margin:0;">מפתחות Groq:</span>
-                    <a href="https://console.groq.com/keys" target="_blank" style="color:var(--primary-color); font-size:12px;">🔗 קבל מפתח</a>
+                    <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" style="color:var(--primary-color); font-size:12px;">🔗 קבל מפתח</a>
                 </div>
                 <input type="password" id="keyGroq1" placeholder="מפתח Groq ראשי..." class="edit-modal-input" style="margin-bottom:4px;">
                 <input type="password" id="keyGroq2" placeholder="מפתח Groq גיבוי 2..." class="edit-modal-input" style="margin-bottom:4px;">
@@ -2221,7 +2221,7 @@
 
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
                     <span class="edit-modal-label" style="margin:0;">מפתחות OpenRouter:</span>
-                    <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--primary-color); font-size:12px;">🔗 קבל מפתח</a>
+                    <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" style="color:var(--primary-color); font-size:12px;">🔗 קבל מפתח</a>
                 </div>
                 <input type="password" id="keyOpenRouter1" placeholder="מפתח OpenRouter ראשי..." class="edit-modal-input" style="margin-bottom:4px;">
                 <input type="password" id="keyOpenRouter2" placeholder="מפתח OpenRouter גיבוי 2..." class="edit-modal-input" style="margin-bottom:4px;">
@@ -2920,20 +2920,25 @@
             element.addEventListener('touchend', onEnd);
             element.addEventListener('touchcancel', onEnd);
 
-            // תמיכה בעכבר (מחשב)
+            // תמיכה בעכבר (מחשב) — מאזיני window מחוברים רק בזמן גרירה פעילה ומוסרים מיד בסיום למניעת דליפת זיכרון
+            const handleMouseMove = (e) => {
+                if (!isPointerDown) return;
+                onMove(e.clientX, e.clientY, e);
+            };
+            const handleMouseUp = () => {
+                window.removeEventListener('mousemove', handleMouseMove);
+                window.removeEventListener('mouseup', handleMouseUp);
+                if (!isPointerDown) return;
+                onEnd();
+            };
+
             element.addEventListener('mousedown', (e) => {
                 if (e.button !== 0) return;
                 onStart(e.clientX, e.clientY, e.target);
-            });
-
-            window.addEventListener('mousemove', (e) => {
-                if (!isPointerDown) return;
-                onMove(e.clientX, e.clientY, e);
-            });
-
-            window.addEventListener('mouseup', () => {
-                if (!isPointerDown) return;
-                onEnd();
+                if (isPointerDown) {
+                    window.addEventListener('mousemove', handleMouseMove);
+                    window.addEventListener('mouseup', handleMouseUp);
+                }
             });
         }
         function setupEventListeners() {
@@ -3253,8 +3258,15 @@
                     getDocsFromServer(collection(db, 'users', user.uid, 'trash')).catch(() => null)
                 ]);
                 if (state.user?.uid !== user.uid) return;
-                state.items = itemsSnap.docs.map(d => d.data() || {});
-                if (trashSnap) state.trash = trashSnap.docs.map(d => d.data() || {});
+                const normalizeSnapDoc = (d) => {
+                    const data = d.data() || {};
+                    if (data.id === undefined || data.id === null) {
+                        data.id = Number.isFinite(Number(d.id)) ? Number(d.id) : d.id;
+                    }
+                    return data;
+                };
+                state.items = itemsSnap.docs.map(normalizeSnapDoc);
+                if (trashSnap) state.trash = trashSnap.docs.map(normalizeSnapDoc);
                 isServerDataArrived = true;
                 updateStatusBadges(false);
                 scheduleFullRender(true);
@@ -3295,7 +3307,10 @@
 
                 const nextItems = snapshot.docs.map((docSnap) => {
                     const data = docSnap.data() || {};
-                    const key = String(data.id ?? docSnap.id);
+                    if (data.id === undefined || data.id === null) {
+                        data.id = Number.isFinite(Number(docSnap.id)) ? Number(docSnap.id) : docSnap.id;
+                    }
+                    const key = String(data.id);
                     const prev = prevById.get(key);
                     if (prev) {
                         if (prev.isScanning) data.isScanning = true;
@@ -3741,7 +3756,6 @@
                     welcomeScreen.classList.remove('visible');
                 }
                 if (protectedContent) protectedContent.classList.remove('locked');
-                isServerDataArrived = true;
                 renderList();
                 return;
             }
@@ -4045,6 +4059,11 @@
             if (countEl) countEl.textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
 
             if (filtered.length === 0) {
+                if (!isServerDataArrived && state.items.length === 0 && navigator.onLine) {
+                    container.innerHTML = `<div style="text-align:center; padding:36px 20px; color:var(--text-secondary); font-size:1.05rem;"><div class="spinner-small" style="width:22px;height:22px;border-width:3px;margin-bottom:10px;"></div><br>טוען קישורים מהענן...</div>`;
+                    return;
+                }
+                const hasActiveFilters = Boolean(query || catFilter || state.showOnlyDead || state.showOnlyParked || !state.showDuplicates);
                 let extraHint = '';
                 if (state.items.length === 0) {
                     extraHint = '<br><br><small style="opacity:0.7;">אם הרשימה ריקה, לחץ על לחצן הענן (☁️) למעלה לטעינה מחדש.</small>';
@@ -4053,7 +4072,24 @@
                 } else if (state.showOnlyParked) {
                     extraHint = '<br><br><small style="opacity:0.85; color:var(--accent-green);">🎉 לא נמצאו דומיינים בחניה.</small>';
                 }
-                container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--text-secondary); font-size:1.1rem;">לא נמצאו תוצאות 🔍${extraHint}</div>`;
+                const resetBtnHtml = hasActiveFilters
+                    ? `<div style="margin-top:14px;"><button type="button" id="resetFiltersEmptyBtn" class="btn-action-sm" style="margin:0 auto; padding:8px 16px; font-size:0.88rem;">🔄 נקה חיפוש וסינונים</button></div>`
+                    : '';
+                container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--text-secondary); font-size:1.1rem;">לא נמצאו תוצאות 🔍${extraHint}${resetBtnHtml}</div>`;
+                container.querySelector('#resetFiltersEmptyBtn')?.addEventListener('click', () => {
+                    const sEl = document.getElementById('searchInput');
+                    const cEl = document.getElementById('categoryFilter');
+                    if (sEl) sEl.value = '';
+                    if (cEl) cEl.value = '';
+                    state.showOnlyDead = false;
+                    state.showOnlyParked = false;
+                    state.showDuplicates = true;
+                    document.getElementById('toggleDeadBtn')?.classList.remove('dead-active');
+                    document.getElementById('toggleParkedBtn')?.classList.remove('parked-active');
+                    document.getElementById('toggleDuplicatesBtn')?.classList.remove('dup-active');
+                    saveUiSettings();
+                    renderList();
+                });
                 return;
             }
 
@@ -4332,7 +4368,8 @@
             btnAi.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (!isLongPress) {
-                    const qs = JSON.parse(localStorage.getItem('aiQuickSettings') || '{}');
+                    let qs = {};
+                    try { qs = JSON.parse(localStorage.getItem('aiQuickSettings') || '{}'); } catch (_) {}
                     scanSingleItem(item.id, qs.provider || null, false);
                 }
             });
@@ -4354,8 +4391,10 @@
             }
 
             const now = nowIso();
+            let newId = Date.now();
+            while (state.items.some(i => String(i.id) === String(newId))) newId++;
             const newItem = {
-                id: Date.now(),
+                id: newId,
                 content,
                 description: document.getElementById('itemDescription').value.trim(),
                 category: document.getElementById('itemCategory').value.trim() || 'כללי',
@@ -4400,6 +4439,10 @@
           
             // Provider keys are secrets: keep them in this browser only, never in Firestore.
             localStorage.setItem('aiSettingsPro', JSON.stringify(settings));
+            try {
+                const prevQuick = JSON.parse(localStorage.getItem('aiQuickSettings') || '{}');
+                localStorage.setItem('aiQuickSettings', JSON.stringify({ ...prevQuick, provider: settings.provider }));
+            } catch (_) {}
             state.aiSettings = settings;
             document.getElementById('aiSettingsModal').style.display = 'none';
             showToast('✅ הגדרות AI נשמרו בדפדפן הנוכחי בלבד.');
@@ -4438,54 +4481,56 @@
             closeAllMenus();
         });
 
-        document.getElementById('testAiKeysBtn')?.addEventListener('click', async () => {
+        document.getElementById('testAiKeysBtn')?.addEventListener('click', async (e) => {
+            const btn = e.currentTarget;
             const statusBox = document.getElementById('keyTestStatusBox');
             if (!statusBox) return;
+            if (btn) btn.disabled = true;
             statusBox.style.display = 'block';
             statusBox.innerHTML = '⏳ בודק מפתחות מול השרתים...';
 
-            const cleanKey = (id) => (document.getElementById(id)?.value || '').replace(/\s+/g, '');
-            const gemKeys = [cleanKey('keyGemini1'), cleanKey('keyGemini2'), cleanKey('keyGemini3')].filter(Boolean);
-            const groqKeys = [cleanKey('keyGroq1'), cleanKey('keyGroq2'), cleanKey('keyGroq3')].filter(Boolean);
-            const orKeys = [cleanKey('keyOpenRouter1'), cleanKey('keyOpenRouter2'), cleanKey('keyOpenRouter3')].filter(Boolean);
+            const timedFetch = async (url, opts = {}) => {
+                const ctrl = new AbortController();
+                const tid = setTimeout(() => ctrl.abort(), 8000);
+                try { return await fetch(url, { ...opts, signal: ctrl.signal }); }
+                finally { clearTimeout(tid); }
+            };
 
-            const results = [];
+            try {
+                const cleanKey = (id) => (document.getElementById(id)?.value || '').replace(/\s+/g, '');
+                const gemKeys = [cleanKey('keyGemini1'), cleanKey('keyGemini2'), cleanKey('keyGemini3')].filter(Boolean);
+                const groqKeys = [cleanKey('keyGroq1'), cleanKey('keyGroq2'), cleanKey('keyGroq3')].filter(Boolean);
+                const orKeys = [cleanKey('keyOpenRouter1'), cleanKey('keyOpenRouter2'), cleanKey('keyOpenRouter3')].filter(Boolean);
 
-            if (gemKeys.length > 0) {
-                let okCount = 0;
-                for (const k of gemKeys) {
-                    try {
-                        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${k}`);
-                        if (r.ok) okCount++;
-                    } catch (_) {}
-                }
-                results.push(`🔹 <b>Gemini:</b> ${okCount}/${gemKeys.length} מפתחות תקינים`);
-            }
-            if (groqKeys.length > 0) {
-                let okCount = 0;
-                for (const k of groqKeys) {
-                    try {
-                        const r = await fetch('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': `Bearer ${k}` } });
-                        if (r.ok) okCount++;
-                    } catch (_) {}
-                }
-                results.push(`⚡ <b>Groq:</b> ${okCount}/${groqKeys.length} מפתחות תקינים`);
-            }
-            if (orKeys.length > 0) {
-                let okCount = 0;
-                for (const k of orKeys) {
-                    try {
-                        const r = await fetch('https://openrouter.ai/api/v1/auth/key', { headers: { 'Authorization': `Bearer ${k}` } });
-                        if (r.ok) okCount++;
-                    } catch (_) {}
-                }
-                results.push(`🌐 <b>OpenRouter:</b> ${okCount}/${orKeys.length} מפתחות תקינים`);
-            }
+                const results = [];
 
-            statusBox.innerHTML = results.length === 0
-                ? '⚠️ לא הוזנו מפתחות לבדיקה.'
-                : results.join('<br>');
+                if (gemKeys.length > 0) {
+                    const checks = await Promise.all(gemKeys.map(k => timedFetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${k}`).then(r => r.ok).catch(() => false)));
+                    results.push(`🔹 <b>Gemini:</b> ${checks.filter(Boolean).length}/${gemKeys.length} מפתחות תקינים`);
+                }
+                if (groqKeys.length > 0) {
+                    const checks = await Promise.all(groqKeys.map(k => timedFetch('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': `Bearer ${k}` } }).then(r => r.ok).catch(() => false)));
+                    results.push(`⚡ <b>Groq:</b> ${checks.filter(Boolean).length}/${groqKeys.length} מפתחות תקינים`);
+                }
+                if (orKeys.length > 0) {
+                    const checks = await Promise.all(orKeys.map(k => timedFetch('https://openrouter.ai/api/v1/auth/key', { headers: { 'Authorization': `Bearer ${k}` } }).then(r => r.ok).catch(() => false)));
+                    results.push(`🌐 <b>OpenRouter:</b> ${checks.filter(Boolean).length}/${orKeys.length} מפתחות תקינים`);
+                }
+
+                statusBox.innerHTML = results.length === 0
+                    ? '⚠️ לא הוזנו מפתחות לבדיקה.'
+                    : results.join('<br>');
+            } finally {
+                if (btn) btn.disabled = false;
+            }
         });
+
+        function isAuthKeyError(msg) {
+            const l = (msg || '').toLowerCase();
+            return l.includes('api key not valid') || l.includes('invalid_api_key') ||
+                l.includes('invalid api key') || l.includes('unauthorized') ||
+                l.includes('http 401') || l.includes('http 403') || l.includes('permission denied');
+        }
 
         function isRecoverableError(msg) {
             const l = (msg || '').toLowerCase();
@@ -4496,6 +4541,19 @@
                 l.includes('invalid') || l.includes('unauthorized') || 
                 l.includes('no endpoints') || l.includes('overloaded') ||
                 l.includes('failed to fetch') || l.includes('networkerror');
+        }
+
+        async function safeReadJsonResponse(res) {
+            const txt = await res.text();
+            try {
+                const parsed = JSON.parse(txt);
+                if (!res.ok && !parsed.error) {
+                    return { error: { message: `HTTP ${res.status}` } };
+                }
+                return parsed;
+            } catch (_) {
+                return { error: { message: `HTTP ${res.status}: ${txt.slice(0, 120) || 'Empty non-JSON response'}` } };
+            }
         }
 
                 const fetchWithScanSignal = async (url, options = {}, time = 14000) => {
@@ -6016,6 +6074,7 @@
 
             let scanSuccessToast = '✅ סריקת הפריט הושלמה בהצלחה';
             let scanToastIsError = false;
+            let shouldSave = false;
 
             try {
                 let cleanContent = (item.content || '').trim().replace(/^[\/\\]+/, '').replace(/\s+/g, '');
@@ -6109,6 +6168,7 @@
                             ci.aiModel = '📡 אימות שרת ורשת';
                         }
                         ci.updatedAt = nowIso();
+                        shouldSave = true;
                         scanLog.step('Fast Exit', `הוחלט סטטוס סופי=${newStatus} (HTTP ${ci.httpCode ?? 'N/A'}) ללא צורך ב-AI`, newStatus === 'active' ? 'ok' : 'warn');
                         scanLog.finish(newStatus, ci.aiModel, ci.aiSummary);
                     }
@@ -6162,6 +6222,7 @@
                         if (netDiag.tags?.length) ci.aiTags = netDiag.tags;
                         ci.aiModel = '📡 אבחון רשת מאומת';
                         ci.updatedAt = nowIso();
+                        shouldSave = true;
                         scanLog.finish(ci.siteStatus, ci.aiModel, ci.aiSummary);
                     }
                     if (isSingleManualScan) {
@@ -6287,15 +6348,17 @@ STRICT RULES:
                                             },
                                             26000
                                         );
-                                        const searchData = await searchRes.json();
+                                        const searchData = await safeReadJsonResponse(searchRes);
                                         if (!searchData.error && searchData.candidates?.[0]?.content?.parts) {
                                             rd = searchData;
                                             usedSearchGrounding = true;
                                         } else if (searchData.error) {
                                             scanLog.step('Gemini Search', `חיפוש חי נכשל (${model}): ${searchData.error.message}`, 'warn');
+                                            if (isAuthKeyError(searchData.error.message)) throw new Error(searchData.error.message);
                                         }
                                     } catch (sErr) {
                                         scanLog.step('Gemini Search', `חריגת חיפוש חי (${model}): ${sErr.message}`, 'warn');
+                                        if (isAuthKeyError(sErr.message)) throw sErr;
                                     }
                                 }
 
@@ -6313,7 +6376,7 @@ STRICT RULES:
                                         },
                                         22000
                                     );
-                                    rd = await res.json();
+                                    rd = await safeReadJsonResponse(res);
                                 }
 
                                 if (rd.error) throw new Error(rd.error.message);
@@ -6333,7 +6396,7 @@ STRICT RULES:
                                 break;
                             } catch (err) {
                                 scanLog.step('Gemini', `נכשל (${model}, מפתח #${keyIndex}): ${err.message}`, 'warn');
-                                if (isRecoverableError(err.message)) continue;
+                                if ((err.name === 'AbortError' && scanController.isAborted) || isAuthKeyError(err.message)) break;
                             }
                         }
                     } else if (currentProvider === 'groq') {
@@ -6365,7 +6428,7 @@ STRICT RULES:
                                         response_format: { type: 'json_object' }
                                     })
                                 }, 18000);
-                                const rd = await res.json();
+                                const rd = await safeReadJsonResponse(res);
                                 if (rd.error) throw new Error(rd.error.message);
                                 const rawText = rd.choices?.[0]?.message?.content || '';
                                 const candidate = parseAiResponsePayload(rawText, false);
@@ -6382,7 +6445,7 @@ STRICT RULES:
                                 break;
                             } catch (err) {
                                 scanLog.step('Groq', `נכשל (${model.split('/').pop()}, מפתח #${keyIndex}): ${err.message}`, 'warn');
-                                if (isRecoverableError(err.message)) continue;
+                                if ((err.name === 'AbortError' && scanController.isAborted) || isAuthKeyError(err.message)) break;
                             }
                         }
                     } else if (currentProvider === 'openrouter') {
@@ -6425,7 +6488,7 @@ STRICT RULES:
                                         messages: [{ role: 'user', content: userContent }]
                                     })
                                 }, 20000);
-                                const rd = await res.json();
+                                const rd = await safeReadJsonResponse(res);
                                 if (rd.error) throw new Error(rd.error.message);
                                 const rawText = rd.choices?.[0]?.message?.content || '';
                                 const candidate = parseAiResponsePayload(rawText, false);
@@ -6445,7 +6508,7 @@ STRICT RULES:
                                 break;
                             } catch (err) {
                                 scanLog.step('OpenRouter', `נכשל (${model.split('/').pop()}, מפתח #${keyIndex}): ${err.message}`, 'warn');
-                                if (isRecoverableError(err.message)) continue;
+                                if ((err.name === 'AbortError' && scanController.isAborted) || isAuthKeyError(err.message)) break;
                             }
                         }
                     }
@@ -6476,6 +6539,7 @@ STRICT RULES:
                         : [];
                     ci.aiTags = aiTagsClean.length > 0 ? aiTagsClean : (netDiag.tags || []);
                     ci.aiModel = `${usedModelName} ✓`;
+                    shouldSave = true;
                     scanLog.finish(ci.siteStatus, ci.aiModel, ci.aiSummary);
                 } else if (isManualScreenshot) {
                     scanSuccessToast = '⚠️ אף מודל Vision לא הצליח להפיק תיאור מהתמונה — בדוק בלוג האבחון את סיבת השגיאה.';
@@ -6486,6 +6550,7 @@ STRICT RULES:
                     ci.aiSummary = netDiag.fallbackSummary || ci.description || `הקישור ${domain} פעיל וזמין ברשת.`;
                     if (netDiag.tags && netDiag.tags.length > 0) ci.aiTags = netDiag.tags;
                     ci.aiModel = '🛡️ אימות עובדתי ישיר';
+                    shouldSave = true;
                     scanLog.step('Fallback', `לא התקבל פלט AI מאומת (${verification.reason}) — נשמר תיאור גיבוי`, 'warn');
                     scanLog.finish(ci.siteStatus, ci.aiModel, ci.aiSummary);
                 }
@@ -6501,7 +6566,9 @@ STRICT RULES:
                     ci.isScanning = false;
                     if (isSingleManualScan) ci._keepExpanded = true;
                     updateCardInPlace(id);
-                    await saveItemToCloud(ci);
+                    if (shouldSave && !scanController.isAborted) {
+                        await saveItemToCloud(ci);
+                    }
                     if (isSingleManualScan && !scanController.isAborted) {
                         showToast(scanSuccessToast, null, scanToastIsError ? 4500 : 2800, 'single-scan-toast', scanToastIsError);
                     }
@@ -6711,12 +6778,28 @@ STRICT RULES:
             });
 
             if (contentChanged) {
-                // הניתוח הישן שייך לקישור הקודם
+                // הניתוח הישן שייך לקישור הקודם — מתעדכן בפעולת כתיבה אחת אטומית ללא מרוץ
                 delete item.aiSummary; delete item.aiTags; delete item.aiModel; delete item.siteStatus; delete item.httpCode;
-                setDoc(doc(db, 'users', state.user.uid, 'items', String(item.id)), aiClearPatch(), { merge: true }).catch(err => console.error(err));
+                if (state.user) {
+                    try {
+                        const itemRef = doc(db, 'users', state.user.uid, 'items', String(item.id));
+                        const cleanItem = JSON.parse(JSON.stringify(item));
+                        delete cleanItem.isScanning;
+                        delete cleanItem._keepExpanded;
+                        const writePromise = setDoc(itemRef, { ...cleanItem, ...aiClearPatch() }, { merge: true });
+                        if (!navigator.onLine || state.isOffline) {
+                            writePromise.catch(err => console.error('Offline edit save error:', err));
+                        } else {
+                            await writePromise;
+                        }
+                    } catch (err) {
+                        console.error('Error saving edited item:', err);
+                        showToast('❌ השמירה לענן נכשלה: ' + err.message, null, 4000, null, true);
+                    }
+                }
+            } else {
+                await saveItemToCloud(item);
             }
-
-            await saveItemToCloud(item);
             document.getElementById('editModal').style.display = 'none';
 
             if (categoryChanged || contentChanged) {
@@ -6786,8 +6869,34 @@ STRICT RULES:
             });
         }
         function closeTrashModal(){document.getElementById('trashModal')?.classList.remove('open');}
-        async function restoreTrashItem(item){if(!state.user)return;try{const clean={...item};delete clean.deletedAt;await setDoc(doc(db,'users',state.user.uid,'items',String(item.id)),clean);await deleteDoc(doc(db,'users',state.user.uid,'trash',String(item.id)));showToast('♻️ הפריט שוחזר');}catch(e){showToast('❌ השחזור נכשל',null,3000,null,true);}}
-        async function permanentlyDeleteTrashItem(item){if(!state.user||!confirm('למחוק את הפריט לצמיתות?'))return;try{await deleteDoc(doc(db,'users',state.user.uid,'trash',String(item.id)));showToast('הפריט נמחק לצמיתות');}catch(e){showToast('❌ המחיקה נכשלה',null,3000,null,true);}}
+        async function restoreTrashItem(item){
+            if (!state.user) return;
+            if (!navigator.onLine) { showToast('❌ אין חיבור לאינטרנט — לא ניתן לשחזר כעת.', null, 3500, null, true); return; }
+            try {
+                const clean = JSON.parse(JSON.stringify(item));
+                delete clean.deletedAt;
+                delete clean.isScanning;
+                delete clean._keepExpanded;
+                const batch = writeBatch(db);
+                batch.set(doc(db, 'users', state.user.uid, 'items', String(item.id)), clean, { merge: true });
+                batch.delete(doc(db, 'users', state.user.uid, 'trash', String(item.id)));
+                await commitBatch(batch);
+                showToast('♻️ הפריט שוחזר');
+            } catch (e) {
+                showToast('❌ השחזור נכשל: ' + e.message, null, 3500, null, true);
+            }
+        }
+        async function permanentlyDeleteTrashItem(item){
+            if (!state.user) return;
+            if (!navigator.onLine) { showToast('❌ אין חיבור לאינטרנט — לא ניתן למחוק כעת.', null, 3500, null, true); return; }
+            if (!confirm('למחוק את הפריט לצמיתות?')) return;
+            try {
+                await deleteDoc(doc(db, 'users', state.user.uid, 'trash', String(item.id)));
+                showToast('הפריט נמחק לצמיתות');
+            } catch (e) {
+                showToast('❌ המחיקה נכשלה: ' + e.message, null, 3500, null, true);
+            }
+        }
         function isCurrentUserAdmin() {
             return typeof isAdminEmail === 'function'
                 ? isAdminEmail(state.user?.email)
@@ -7889,8 +7998,16 @@ STRICT RULES:
             document.getElementById('rescanParkedBtn')?.addEventListener('click',()=>{closeAllMenus();runBatchScan(state.items.filter(i=>i.siteStatus==='parked'),'ai');});
             document.getElementById('selectAllCheckbox')?.addEventListener('change',e=>{if(e.target.checked)state.filteredItems.forEach(i=>state.selectedIds.add(i.id));else state.filteredItems.forEach(i=>state.selectedIds.delete(i.id));state.isSelectionMode=state.selectedIds.size>0;document.body.classList.toggle('selection-mode-active',state.isSelectionMode);updateBulkActionBar();renderList();});
             document.getElementById('cancelBulkBtn')?.addEventListener('click',exitSelectionMode);
-            document.getElementById('bulkAiBtn')?.addEventListener('click',()=>runBatchScan(state.items.filter(i=>state.selectedIds.has(i.id)),'ai'));
-            document.getElementById('bulkQuickCheckBtn')?.addEventListener('click',()=>runBatchScan(state.items.filter(i=>state.selectedIds.has(i.id)),'fast-status'));
+            document.getElementById('bulkAiBtn')?.addEventListener('click', () => {
+                const selected = state.items.filter(i => state.selectedIds.has(i.id));
+                exitSelectionMode();
+                runBatchScan(selected, 'ai');
+            });
+            document.getElementById('bulkQuickCheckBtn')?.addEventListener('click', () => {
+                const selected = state.items.filter(i => state.selectedIds.has(i.id));
+                exitSelectionMode();
+                runBatchScan(selected, 'fast-status');
+            });
             document.getElementById('bulkClearAiBtn')?.addEventListener('click',bulkClearAi);document.getElementById('bulkMoveBtn')?.addEventListener('click',bulkMove);document.getElementById('bulkDeleteBtn')?.addEventListener('click',bulkDelete);
             document.querySelectorAll('.ai-provider-btn').forEach(btn=>btn.addEventListener('click',()=>{const id=Number(document.getElementById('aiFloatingMenu')?.dataset.itemId);const provider=btn.dataset.provider;const urlOnly=!!document.getElementById('aiUrlOnlyCheckbox')?.checked;if(provider!=='fast-status')localStorage.setItem('aiQuickSettings',JSON.stringify({provider,urlOnly}));closeAllMenus();scanSingleItem(id,provider,urlOnly);}));
             document.getElementById('trashModal')?.addEventListener('click',e=>{if(e.target.id==='trashModal')closeTrashModal();});
@@ -7905,33 +8022,67 @@ STRICT RULES:
             const unique = [...new Map((itemsToScan || []).map(x => [x.id, x])).values()];
             if (!unique.length) { showToast('✅ לא נמצאו פריטים לסריקה.', null, 3000); return; }
             if (scanController.isRunning) { showToast('⚠️ סריקה אחרת כבר מתבצעת.', null, 3000, null, true); return; }
-            scanController.isRunning=true; scanController.isPaused=false; scanController.isAborted=false;
-            scanController.current=0; scanController.total=unique.length; scanController.stats={active:0,parked:0,dead:0};
-            const dock=document.getElementById('scanDock');dock?.classList.add('active');dock?.classList.remove('minimized');scanController.isMinimized=false;
+            if (scanController.hideDockTimer) { clearTimeout(scanController.hideDockTimer); scanController.hideDockTimer = null; }
+            scanController.isRunning = true; scanController.isPaused = false; scanController.isAborted = false;
+            scanController.current = 0; scanController.total = unique.length; scanController.stats = { active: 0, parked: 0, dead: 0 };
+            const dock = document.getElementById('scanDock');
+            dock?.classList.add('active'); dock?.classList.remove('minimized'); scanController.isMinimized = false;
             updateScanDockUI();
             keepAwakeController.enter();
             try {
-                for (const item of unique) {
-                    if (scanController.isAborted) break;
-                    await waitIfPaused(); if (scanController.isAborted) break;
-                    const live=state.items.find(x=>x.id===item.id); if(!live){scanController.current++;updateScanDockUI();continue;}
-                    const urlEl=document.getElementById('scanDockUrl');if(urlEl)urlEl.textContent=live.content||'';
-                    try { await window.scanSingleItem(live.id, mode==='fast-status'?'fast-status':null, false); }
-                    catch(err){console.warn('[Batch scan]',err);}
-                    const refreshed=state.items.find(x=>x.id===live.id);
-                    if(refreshed?.siteStatus==='dead')scanController.stats.dead++;
-                    else if(refreshed?.siteStatus==='parked')scanController.stats.parked++;
-                    else if(refreshed?.siteStatus==='active')scanController.stats.active++;
-                    scanController.current++;updateScanDockUI();
-                }
+                // בבדיקת סטטוס מהירה מריץ 4 קישורים במקביל (מהיר פי 4); בסריקת AI רץ אחד-אחד למניעת חסימות Rate Limit
+                const concurrency = mode === 'fast-status' ? Math.min(4, unique.length) : 1;
+                let nextIdx = 0;
+
+                const worker = async () => {
+                    while (true) {
+                        if (scanController.isAborted) break;
+                        await waitIfPaused();
+                        if (scanController.isAborted) break;
+                        const idx = nextIdx++;
+                        if (idx >= unique.length) break;
+                        const item = unique[idx];
+                        const live = state.items.find(x => x.id === item.id);
+                        if (!live) {
+                            scanController.current++;
+                            updateScanDockUI();
+                            continue;
+                        }
+                        const urlEl = document.getElementById('scanDockUrl');
+                        if (urlEl) urlEl.textContent = live.content || '';
+                        try {
+                            await window.scanSingleItem(live.id, mode === 'fast-status' ? 'fast-status' : null, false);
+                        } catch (err) {
+                            console.warn('[Batch scan]', err);
+                        }
+                        if (!scanController.isAborted) {
+                            const refreshed = state.items.find(x => x.id === live.id);
+                            if (refreshed?.siteStatus === 'dead') scanController.stats.dead++;
+                            else if (refreshed?.siteStatus === 'parked') scanController.stats.parked++;
+                            else if (refreshed?.siteStatus === 'active') scanController.stats.active++;
+                            scanController.current++;
+                            updateScanDockUI();
+                        }
+                    }
+                };
+
+                await Promise.all(Array.from({ length: concurrency }, worker));
             } finally {
                 keepAwakeController.leave();
-                scanController.isRunning=false;scanController.isPaused=false;
-                scanController.activeAbortControllers.forEach(c=>{try{c.abort();}catch(_){}});scanController.activeAbortControllers.clear();
+                scanController.isRunning = false; scanController.isPaused = false;
+                scanController.activeAbortControllers.forEach(c => { try { c.abort(); } catch (_) {} });
+                scanController.activeAbortControllers.clear();
                 updateScanDockUI();
-                if(scanController.isAborted)showToast('⏹️ הסריקה הופסקה');
+                if (scanController.isAborted) showToast('⏹️ הסריקה הופסקה');
                 else showToast(`✅ הסריקה הושלמה: ${scanController.current}/${scanController.total}`);
-                if(!scanController.isMinimized)window.setTimeout(()=>dock?.classList.remove('active'),4500);
+                if (!scanController.isMinimized) {
+                    scanController.hideDockTimer = window.setTimeout(() => {
+                        if (!scanController.isRunning && !scanController.isMinimized) {
+                            dock?.classList.remove('active');
+                        }
+                        scanController.hideDockTimer = null;
+                    }, 4500);
+                }
             }
         }
 
