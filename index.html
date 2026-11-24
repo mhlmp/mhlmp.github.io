@@ -2583,21 +2583,14 @@
                 db = initializeFirestore(app, {
                     localCache: persistentLocalCache({
                         tabManager: persistentMultipleTabManager()
-                    }),
-                    experimentalAutoDetectLongPolling: true
+                    })
                 });
             } catch (err) {
                 try {
-                    db = initializeFirestore(app, {
-                        localCache: persistentLocalCache(),
-                        experimentalAutoDetectLongPolling: true
-                    });
+                    db = initializeFirestore(app, { localCache: persistentLocalCache() });
                 } catch (_) {
                     try {
-                        db = initializeFirestore(app, {
-                            localCache: memoryLocalCache(),
-                            experimentalAutoDetectLongPolling: true
-                        });
+                        db = initializeFirestore(app, { localCache: memoryLocalCache() });
                     } catch (__) {
                         db = getFirestore(app);
                     }
@@ -2914,12 +2907,101 @@
             }
         }
 
+        // מטמון Snapshot מהיר במפתח יחיד (Single-Blob IndexedDB):
+        // טוען את כל 731+ הקישורים תוך ~15ms ברענון, ונמחק פיזית לחלוטין ביציאה / החלפת חשבון / שלילת הרשאה
+        const mhFastCache = {
+            dbName: 'mh_fast_snapshot_v1',
+            storeName: 'snapshots',
+            saveTimer: null,
+            open() {
+                return new Promise((resolve) => {
+                    if (typeof indexedDB === 'undefined') return resolve(null);
+                    try {
+                        const req = indexedDB.open(this.dbName, 1);
+                        req.onupgradeneeded = () => {
+                            const idb = req.result;
+                            if (!idb.objectStoreNames.contains(this.storeName)) {
+                                idb.createObjectStore(this.storeName);
+                            }
+                        };
+                        req.onsuccess = () => resolve(req.result);
+                        req.onerror = () => resolve(null);
+                    } catch (_) {
+                        resolve(null);
+                    }
+                });
+            },
+            async get(uid) {
+                if (!uid) return null;
+                const idb = await this.open();
+                if (!idb) return null;
+                return new Promise((resolve) => {
+                    try {
+                        const tx = idb.transaction(this.storeName, 'readonly');
+                        const req = tx.objectStore(this.storeName).get(String(uid));
+                        req.onsuccess = () => {
+                            idb.close();
+                            resolve(Array.isArray(req.result?.items) ? req.result.items : null);
+                        };
+                        req.onerror = () => { idb.close(); resolve(null); };
+                    } catch (_) {
+                        try { idb.close(); } catch (__) {}
+                        resolve(null);
+                    }
+                });
+            },
+            scheduleSave(uid, items) {
+                if (!uid || !Array.isArray(items)) return;
+                if (this.saveTimer) clearTimeout(this.saveTimer);
+                this.saveTimer = setTimeout(() => {
+                    this.saveTimer = null;
+                    this.set(uid, items);
+                }, 400);
+            },
+            async set(uid, items) {
+                if (!uid || !Array.isArray(items)) return;
+                const idb = await this.open();
+                if (!idb) return;
+                const clean = items.map(it => {
+                    const c = { ...it };
+                    delete c.isScanning;
+                    delete c._keepExpanded;
+                    return c;
+                });
+                return new Promise((resolve) => {
+                    try {
+                        const tx = idb.transaction(this.storeName, 'readwrite');
+                        tx.objectStore(this.storeName).put({ items: clean, savedAt: Date.now() }, String(uid));
+                        tx.oncomplete = () => { idb.close(); resolve(); };
+                        tx.onerror = () => { idb.close(); resolve(); };
+                    } catch (_) {
+                        try { idb.close(); } catch (__) {}
+                        resolve();
+                    }
+                });
+            },
+            async wipeAll() {
+                if (this.saveTimer) { clearTimeout(this.saveTimer); this.saveTimer = null; }
+                return new Promise((resolve) => {
+                    if (typeof indexedDB === 'undefined') return resolve();
+                    try {
+                        const req = indexedDB.deleteDatabase(this.dbName);
+                        req.onsuccess = () => resolve();
+                        req.onerror = () => resolve();
+                        req.onblocked = () => resolve();
+                        setTimeout(resolve, 400);
+                    } catch (_) { resolve(); }
+                });
+            }
+        };
+
         const authBroadcast = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('mh_auth_sync') : null;
         if (authBroadcast) {
             authBroadcast.onmessage = async (ev) => {
                 if (ev.data === 'logout') {
                     stopAllCloudListeners();
                     try { localStorage.removeItem('mh_has_session'); } catch (_) {}
+                    try { await mhFastCache.wipeAll(); } catch (_) {}
                     try { if (db) await terminate(db); } catch (_) {}
                     window.location.reload();
                 }
@@ -2934,6 +3016,7 @@
             stopAllCloudListeners();
             try { localStorage.removeItem('mh_has_session'); } catch (_) {}
             try { authBroadcast?.postMessage('logout'); } catch (_) {}
+            try { await mhFastCache.wipeAll(); } catch (_) {}
             try { await signOut(auth); } catch (_) {}
             try {
                 if (db) {
@@ -3449,9 +3532,13 @@
             trashLoadedPromise = null;
         }
 
+        function resetPrefetchState() {
+            prefetchBundle = { uid: null, cachePromise: null, firstPagePromise: null, fullServerPromise: null };
+        }
+
         function stopAllCloudListeners() {
             stopUserDataListeners();
-            firstPagePrefetch = { uid: null, promise: null };
+            resetPrefetchState();
             markFullSyncComplete();
             if (state.unsubAccess) { state.unsubAccess(); state.unsubAccess = null; }
             if (state.unsubAdminUsers) { state.unsubAdminUsers(); state.unsubAdminUsers = null; }
@@ -3515,7 +3602,8 @@
         let isPartialHydration = false;
         let fullSyncPromise = null;
         let resolveFullSync = null;
-        let firstPagePrefetch = { uid: null, promise: null };
+        let prefetchBundle = { uid: null, cachePromise: null, firstPagePromise: null, fullServerPromise: null };
+        const FIRST_PAGE_LIMIT = 40;
 
         function resetFullSyncGate() {
             isPartialHydration = false;
@@ -3539,40 +3627,58 @@
             return data;
         }
 
-        // משיכה מקדימה מהירה של 40 הקישורים האחרונים בלבד (לפתיחה מיידית גם למשתמש חדש במטמון קר)
-        // אבטחה מלאה בצד השרת: Firestore Rules דוחים בשקט משתמשים לא מאושרים בלי לחשוף מידע
-        function startFirstPagePrefetch(user) {
-            if (!user || !db) return Promise.resolve(null);
-            if (firstPagePrefetch.uid === user.uid && firstPagePrefetch.promise) {
-                return firstPagePrefetch.promise;
+        function areItemListsEquivalent(a, b) {
+            if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+            const mapA = new Map();
+            for (let i = 0; i < a.length; i++) mapA.set(String(a[i].id), a[i]);
+            for (let i = 0; i < b.length; i++) {
+                const cur = b[i];
+                const prev = mapA.get(String(cur.id));
+                if (!prev) return false;
+                if ((prev.updatedAt || '') !== (cur.updatedAt || '')) return false;
+                if ((prev.content || '') !== (cur.content || '')) return false;
+                if ((prev.category || '') !== (cur.category || '')) return false;
+                if ((prev.siteStatus || '') !== (cur.siteStatus || '')) return false;
+                if (Boolean(prev.isPinned) !== Boolean(cur.isPinned)) return false;
+            }
+            return true;
+        }
+
+        // משיכה מקבילית חכמה:
+        // 1. במטמון חם (רענון/כניסה חוזרת): שולף את כל 731 הפריטים תוך ~15ms ממפתח יחיד (בלי קפיצת 40 -> 731).
+        // 2. במטמון קר (מכשיר חדש / אחרי יציאה): מריץ במקביל גם 40 ראשונים (~300ms) וגם משיכה מלאה מהשרת (HTTP/2 מהיר, ללא חסימת IndexedDB).
+        // אבטחה בצד השרת: חוקי Firestore חוסמים אוטומטית חשבונות לא מאושרים בלי לחשוף מידע.
+        function startParallelUserPrefetch(user) {
+            if (!user || !db) return prefetchBundle;
+            if (prefetchBundle.uid === user.uid && prefetchBundle.cachePromise) {
+                return prefetchBundle;
             }
             const uid = user.uid;
-            const fastQuery = query(
-                collection(db, 'users', uid, 'items'),
-                orderBy('date', 'desc'),
-                limit(RENDER_BATCH_SIZE)
-            );
-            const promise = (async () => {
-                // 1. מטמון חם (משתמש חוזר): תוצאה תוך ~15ms
+            const itemsRef = collection(db, 'users', uid, 'items');
+            const fastQuery = query(itemsRef, orderBy('date', 'desc'), limit(FIRST_PAGE_LIMIT));
+
+            const cachePromise = (async () => {
+                const fastBlob = await mhFastCache.get(uid);
+                if (fastBlob && fastBlob.length > 0) return fastBlob;
                 try {
-                    const cacheSnap = await getDocsFromCache(fastQuery);
-                    if (cacheSnap && cacheSnap.docs.length > 0) {
-                        return { docs: cacheSnap.docs.map(normalizeSnapDoc), fromCache: true };
+                    const fsCacheSnap = await getDocsFromCache(itemsRef);
+                    if (fsCacheSnap && fsCacheSnap.docs.length > 0) {
+                        return fsCacheSnap.docs.map(normalizeSnapDoc);
                     }
                 } catch (_) {}
-
-                // 2. מטמון קר (משתמש חדש / מכשיר חדש / אחרי יציאה): משיכת 40 פריטים בלבד מהשרת (~250ms)
-                if (!navigator.onLine) return null;
-                try {
-                    const serverSnap = await getDocs(fastQuery);
-                    return { docs: serverSnap.docs.map(normalizeSnapDoc), fromCache: false };
-                } catch (_) {
-                    return null;
-                }
+                return null;
             })();
 
-            firstPagePrefetch = { uid, promise };
-            return promise;
+            const firstPagePromise = navigator.onLine
+                ? getDocsFromServer(fastQuery).then(s => s.docs.map(normalizeSnapDoc)).catch(() => null)
+                : Promise.resolve(null);
+
+            const fullServerPromise = navigator.onLine
+                ? getDocsFromServer(itemsRef).then(s => s.docs.map(normalizeSnapDoc)).catch(() => null)
+                : Promise.resolve(null);
+
+            prefetchBundle = { uid, cachePromise, firstPagePromise, fullServerPromise };
+            return prefetchBundle;
         }
 
         function ensureTrashSubscription(user = state.user) {
@@ -3601,24 +3707,76 @@
             const uid = user.uid;
             const itemsRef = collection(db, 'users', uid, 'items');
 
+            const applyFullItems = (nextItems, { fromServer = false, preserveScroll = false } = {}) => {
+                if (state.user?.uid !== uid || state.accessState !== 'approved') return;
+                const prevById = new Map();
+                for (let i = 0; i < state.items.length; i++) {
+                    prevById.set(String(state.items[i].id), state.items[i]);
+                }
+                const merged = nextItems.map(d => {
+                    const prev = prevById.get(String(d.id));
+                    if (prev) {
+                        if (prev.isScanning) d.isScanning = true;
+                        if (prev._keepExpanded) d._keepExpanded = true;
+                    }
+                    return d;
+                });
+                const wasPartial = isPartialHydration;
+                const unchanged = !wasPartial && isInitialSnapshotRendered && areItemListsEquivalent(state.items, merged);
+
+                if (fromServer || !navigator.onLine) {
+                    isServerDataArrived = true;
+                    markFullSyncComplete();
+                } else {
+                    isPartialHydration = false;
+                }
+
+                if (fromServer) {
+                    mhFastCache.scheduleSave(uid, merged);
+                }
+
+                if (unchanged) {
+                    updateSyncStatus(navigator.onLine ? 'online' : 'offline', navigator.onLine ? 'מחובר ומסונכרן ✓' : 'מקומי (אין רשת)');
+                    return;
+                }
+
+                const savedY = preserveScroll ? window.scrollY : 0;
+                state.items = merged;
+                invalidateItemsMeta();
+                updateStatusBadges(false);
+                scheduleFullRender(true);
+                if (preserveScroll && savedY > 0) {
+                    requestAnimationFrame(() => window.scrollTo({ top: savedY, behavior: 'instant' }));
+                }
+            };
+
             const attachFullItemsListener = () => {
                 if (state.user?.uid !== uid || state.accessState !== 'approved') return;
 
                 state.unsubItems = onSnapshot(itemsRef, { includeMetadataChanges: true }, (snapshot) => {
-                    // מטמון קר ריק בטעינה ראשונה — שומר את התצוגה המקדימה/Skeleton עד שתשובת השרת מגיעה
-                    if (snapshot.metadata.fromCache && navigator.onLine && snapshot.docs.length === 0) {
-                        updateSyncStatus('syncing', state.items.length > 0 ? 'טוען את שאר הקישורים...' : 'טוען מהענן...');
-                        return;
+                    // מונע ממטמון חלקי או ריק של Firestore לדרוס רשימה מלאה שכבר מוצגת על המסך
+                    if (snapshot.metadata.fromCache && navigator.onLine) {
+                        if (snapshot.docs.length === 0 || snapshot.docs.length < state.items.length) {
+                            if (!isServerDataArrived) {
+                                updateSyncStatus('syncing', state.items.length > 0 ? 'טוען את שאר הקישורים...' : 'טוען מהענן...');
+                            }
+                            return;
+                        }
+                        if (isPartialHydration && snapshot.docs.length <= FIRST_PAGE_LIMIT) {
+                            return;
+                        }
                     }
 
                     retryAttempt = 0;
                     const changes = snapshot.docChanges();
                     const wasPartial = isPartialHydration;
+                    const nextItems = snapshot.docs.map((docSnap) => normalizeSnapDoc(docSnap));
 
-                    // אישור שרת ללא שינויים מול המטמון המלא שכבר הוצג — אפס עבודת CPU ואפס רינדור מחדש
-                    if (!snapshot.metadata.fromCache && !wasPartial && changes.length === 0 && isInitialSnapshotRendered && snapshot.docs.length === state.items.length) {
+                    // אם השרת מאשר את אותה רשימה שכבר הוצגה (מהמטמון המהיר או מ-getDocsFromServer) — אפס רינדור מחדש
+                    if (!snapshot.metadata.fromCache && !wasPartial && isInitialSnapshotRendered && areItemListsEquivalent(state.items, nextItems)) {
                         isServerDataArrived = true;
                         markFullSyncComplete();
+                        mhFastCache.scheduleSave(uid, nextItems);
                         updateSyncStatus(snapshot.metadata.hasPendingWrites ? 'syncing' : 'online', snapshot.metadata.hasPendingWrites ? 'מסנכרן לענן...' : 'מחובר ומסונכרן ✓');
                         return;
                     }
@@ -3628,18 +3786,16 @@
                         prevById.set(String(state.items[i].id), state.items[i]);
                     }
 
-                    let structuralChanges = wasPartial || !isInitialSnapshotRendered || snapshot.docs.length !== state.items.length;
-                    const modifiedIdsInPlace = [];
-
-                    const nextItems = snapshot.docs.map((docSnap) => {
-                        const data = normalizeSnapDoc(docSnap);
-                        const prev = prevById.get(String(data.id));
+                    for (let i = 0; i < nextItems.length; i++) {
+                        const prev = prevById.get(String(nextItems[i].id));
                         if (prev) {
-                            if (prev.isScanning) data.isScanning = true;
-                            if (prev._keepExpanded) data._keepExpanded = true;
+                            if (prev.isScanning) nextItems[i].isScanning = true;
+                            if (prev._keepExpanded) nextItems[i]._keepExpanded = true;
                         }
-                        return data;
-                    });
+                    }
+
+                    let structuralChanges = wasPartial || !isInitialSnapshotRendered || nextItems.length !== state.items.length;
+                    const modifiedIdsInPlace = [];
 
                     if (!structuralChanges && changes.length > 0) {
                         for (let c = 0; c < changes.length; c++) {
@@ -3672,8 +3828,7 @@
                     if (!snapshot.metadata.fromCache || !navigator.onLine) {
                         isServerDataArrived = true;
                         markFullSyncComplete();
-                    } else if (nextItems.length >= RENDER_BATCH_SIZE) {
-                        isPartialHydration = false;
+                        mhFastCache.scheduleSave(uid, nextItems);
                     }
 
                     if (snapshot.metadata.hasPendingWrites) {
@@ -3719,7 +3874,6 @@
                     showToast('❌ שגיאה בטעינת הקישורים מהענן: ' + err.message, null, 5000, null, true);
                 });
 
-                // טעינה עצלה של סל המחזור ברקע אחרי שהקישורים הראשיים כבר מוצגים
                 lazyBgTimers.push(setTimeout(() => {
                     if (state.user?.uid === uid && state.accessState === 'approved') {
                         ensureTrashSubscription(user);
@@ -3727,31 +3881,63 @@
                 }, 2500));
             };
 
-            // שלב 1 (מיידי): מצייר 40 קישורים ראשונים מהמטמון או משאילתת עמוד ראשון קטנה (בלי תחרות רוחב פס)
             if (retryAttempt === 0) {
-                const fastRes = await Promise.race([
-                    startFirstPagePrefetch(user),
-                    new Promise(r => setTimeout(() => r(null), 2500))
-                ]);
+                const bundle = startParallelUserPrefetch(user);
+
+                // מסלול א' (מטמון חם — ~15ms): מציג את כל 731 הפריטים מיד ומסנכרן הפרשים ברקע
+                const cachedAll = await bundle.cachePromise;
                 if (state.user?.uid !== uid || state.accessState !== 'approved') return;
 
-                if (fastRes && fastRes.docs.length > 0) {
-                    state.items = fastRes.docs;
-                    invalidateItemsMeta();
-                    isPartialHydration = true;
-                    updateStatusBadges(false);
-                    scheduleFullRender(true);
-                    updateSyncStatus('syncing', fastRes.fromCache ? 'מסנכרן עדכונים...' : 'טוען את שאר הקישורים...');
+                if (cachedAll && cachedAll.length > 0) {
+                    applyFullItems(cachedAll, { fromServer: !navigator.onLine, preserveScroll: false });
+                    updateSyncStatus(navigator.onLine ? 'syncing' : 'offline', navigator.onLine ? 'מסנכרן עדכונים...' : 'מקומי (אין רשת)');
+                    attachFullItemsListener();
+                    return;
+                }
 
-                    // שלב 2: רק אחרי שהעמוד הראשון כבר צויר על המסך, מפעיל סנכרון מלא ברקע
-                    requestAnimationFrame(() => attachFullItemsListener());
+                // מסלול ב' (כניסה קרה — מכשיר חדש / אחרי יציאה):
+                // 40 הראשונים + כל 731 הפריטים כבר רצים במקביל מאותה אלפית שנייה!
+                if (navigator.onLine) {
+                    let fullDone = false;
+
+                    const fullTask = bundle.fullServerPromise.then((allDocs) => {
+                        fullDone = true;
+                        if (state.user?.uid !== uid || state.accessState !== 'approved') return false;
+                        if (Array.isArray(allDocs)) {
+                            applyFullItems(allDocs, { fromServer: true, preserveScroll: state.items.length > 0 });
+                            updateSyncStatus('online', 'מחובר ומסונכרן ✓');
+                            attachFullItemsListener();
+                            return true;
+                        }
+                        return false;
+                    });
+
+                    // מציג את 40 הראשונים ברגע שמגיעים, כל עוד הרשימה המלאה טרם הגיעה
+                    const firstPageDocs = await Promise.race([
+                        bundle.firstPagePromise,
+                        fullTask.then(() => null)
+                    ]);
+                    if (state.user?.uid !== uid || state.accessState !== 'approved') return;
+
+                    if (!fullDone && Array.isArray(firstPageDocs) && firstPageDocs.length > 0) {
+                        state.items = firstPageDocs;
+                        invalidateItemsMeta();
+                        isPartialHydration = firstPageDocs.length >= FIRST_PAGE_LIMIT;
+                        updateStatusBadges(false);
+                        scheduleFullRender(true);
+                        updateSyncStatus('syncing', isPartialHydration ? 'טוען את כל הקישורים...' : 'מסנכרן...');
+                    }
+
+                    const fullOk = await fullTask;
+                    if (!fullOk && state.user?.uid === uid && state.accessState === 'approved') {
+                        attachFullItemsListener();
+                    }
                     return;
                 }
             }
 
             attachFullItemsListener();
         }
-
         function updateAdminUsersBadge() {
             const btn = document.getElementById('manageUsersBtn');
             const badge = document.getElementById('pendingUsersBadge');
@@ -3946,8 +4132,8 @@
                         handleLockScreen(true, 'checking');
                     }
 
-                    // רץ במקביל ל-allowedUsers: אם המשתמש מאושר, 40 הקישורים כבר יחכו בזיכרון ברגע האישור; אם לא — Firestore חוסם בשקט
-                    startFirstPagePrefetch(user);
+                    // רץ במקביל ל-allowedUsers: אם המשתמש מאושר, גם 40 הראשונים וגם כל המאגר כבר בדרך בבת אחת; אם לא — Firestore חוסם בשקט
+                    startParallelUserPrefetch(user);
 
                     const accessDocRef = doc(db, 'allowedUsers', email);
                     let requestSentOnce = false;
@@ -3958,7 +4144,8 @@
                             if (snap.metadata.fromCache && navigator.onLine) return;
 
                             stopUserDataListeners();
-                            firstPagePrefetch = { uid: null, promise: null };
+                            resetPrefetchState();
+                            mhFastCache.wipeAll();
                             try { localStorage.removeItem('mh_has_session'); } catch (_) {}
                             state.items = []; state.trash = [];
                             state.accessState = 'pending';
@@ -3994,7 +4181,7 @@
                             if (!wasApproved) {
                                 // אם החשבון אושר זה עתה בזמן אמת מתוך מצב pending, מנקה prefetch ישן כדי לבצע משיכה טרייה
                                 if (prevAccess === 'pending' || prevAccess === 'rejected') {
-                                    firstPagePrefetch = { uid: null, promise: null };
+                                    resetPrefetchState();
                                 }
                                 handleLockScreen(true, 'approved');
                                 startUserDataSubscriptions(user);
@@ -4013,7 +4200,8 @@
                             }
                         } else if (data.status === 'rejected') {
                             stopUserDataListeners();
-                            firstPagePrefetch = { uid: null, promise: null };
+                            resetPrefetchState();
+                            mhFastCache.wipeAll();
                             try { localStorage.removeItem('mh_has_session'); } catch (_) {}
                             state.items = []; state.trash = [];
                             state.accessState = 'rejected';
@@ -4021,7 +4209,8 @@
                             showToast('❌ הגישה לחשבון זה נדחתה על ידי מנהל המערכת.', null, 5000, null, true);
                         } else {
                             stopUserDataListeners();
-                            firstPagePrefetch = { uid: null, promise: null };
+                            resetPrefetchState();
+                            mhFastCache.wipeAll();
                             try { localStorage.removeItem('mh_has_session'); } catch (_) {}
                             state.items = []; state.trash = [];
                             state.accessState = 'pending';
@@ -4035,6 +4224,7 @@
                     });
                 } else {
                     stopAllCloudListeners();
+                    mhFastCache.wipeAll();
                     try { localStorage.removeItem('mh_has_session'); } catch (_) {}
                     state.user = null; state.items = []; state.trash = []; state.allowedUsers = [];
                     invalidateItemsMeta();
@@ -4213,6 +4403,8 @@
                 if (trashSnap) state.trash = trashSnap.docs.map(normalizeSnapDoc);
                 invalidateItemsMeta();
                 isServerDataArrived = true;
+                markFullSyncComplete();
+                mhFastCache.set(state.user.uid, state.items);
                 updateCategoryDropdowns();
                 renderList();
                 updateSyncStatus('online', `מחובר ומסונכרן ✓ (${state.items.length})`);
@@ -7885,6 +8077,7 @@ STRICT RULES:
                         const serverSnap = await getDocsFromServer(collection(db, 'users', state.user.uid, 'items'));
                         state.items = serverSnap.docs.map(normalizeSnapDoc);
                         invalidateItemsMeta();
+                        mhFastCache.set(state.user.uid, state.items);
                         verifiedServerTotal = state.items.length;
                     } catch (vErr) {
                         console.warn('[Import Server Verify Failed]', vErr);
@@ -8039,6 +8232,7 @@ STRICT RULES:
                         const serverSnap = await getDocsFromServer(collection(db, 'users', state.user.uid, 'items'));
                         state.items = serverSnap.docs.map(normalizeSnapDoc);
                         invalidateItemsMeta();
+                        mhFastCache.set(state.user.uid, state.items);
                         verifiedServerTotal = state.items.length;
                     } catch (vErr) {
                         console.warn('[SmartImport Server Verify Failed]', vErr);
