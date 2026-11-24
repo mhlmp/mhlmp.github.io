@@ -3,37 +3,36 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // =======================================================
-    // 🧠 פונקציות עזר - זהות, אימות והרשאות
+    // 🧠 פונקציות עזר - הגדרות זהות והרשאות
     // =======================================================
 
     function isLoggedIn() {
       return request.auth != null
-        && 'email' in request.auth.token
+        && "email" in request.auth.token
         && request.auth.token.email is string
         && request.auth.token.email.size() > 0;
     }
 
     function userEmail() {
-      return isLoggedIn() ? request.auth.token.email.lower() : '';
+      return isLoggedIn() ? request.auth.token.email.lower() : "";
     }
 
     function isAdmin() {
       return userEmail() in [
-        'meirhadad74@gmail.com',
-        'meirhadad75@gmail.com'
+        "meirhadad74@gmail.com",
+        "meirhadad75@gmail.com"
       ];
     }
 
-    // קריאת get יחידה בלבד (ללא exists כפול) — מקטינה ב-50% את קריאות החוקים ונחסמת אוטומטית אם המסמך לא קיים
+    // בדיקת אישור בקריאת get יחידה (ללא exists כפול) — מהיר וחסכוני בקריאות
     function isApprovedUser() {
       let email = userEmail();
-      return isAdmin() || (
-        email != '' &&
-        get(/databases/$(database)/documents/allowedUsers/$(email)).data.status == 'approved'
-      );
+      let accessDoc = get(/databases/$(database)/documents/allowedUsers/$(email));
+      return email != "" && accessDoc != null && accessDoc.data.status == "approved";
     }
 
-    function isApprovedOwner(userId) {
+    // בעל החשבון: חייב להיות מחובר, תואם ל-UID של התיקייה, ומאושר בטבלת allowedUsers
+    function isOwner(userId) {
       return isLoggedIn() && request.auth.uid == userId && isApprovedUser();
     }
 
@@ -41,72 +40,78 @@ service cloud.firestore {
     // 🛡️ פונקציות הגנה מתקדמות (Validation & Schema)
     // =======================================================
 
+    // 1. הגנה מפני ניפוח כמות השדות (מרווח בטוח לגיבויים ולשדות AI)
     function isPayloadSafe() {
-      return request.resource.data.keys().size() <= 35;
+      return request.resource.data.keys().size() <= 45;
     }
 
+    // 2. הגנה מפני מפלצות טקסט והזרקות (מותאם ל-UTF-8 בעברית ואימוג'ים, ותומך גם ב-null)
     function isContentSizeSafe() {
       let data = request.resource.data;
-      return (!("content" in data) || (data.content is string && data.content.size() < 15000)) &&
-             (!("aiSummary" in data) || data.aiSummary == null || (data.aiSummary is string && data.aiSummary.size() < 15000)) &&
-             (!("description" in data) || data.description == null || (data.description is string && data.description.size() < 5000)) &&
-             (!("note" in data) || data.note == null || (data.note is string && data.note.size() < 10000)) &&
-             (!("category" in data) || data.category == null || (data.category is string && data.category.size() < 300)) &&
-             (!("aiModel" in data) || data.aiModel == null || (data.aiModel is string && data.aiModel.size() < 500)) &&
-             (!("aiTags" in data) || data.aiTags == null || (data.aiTags is list && data.aiTags.size() <= 50)) &&
-             (!("type" in data) || data.type == null || data.type in ['link', 'text']) &&
-             (!("siteStatus" in data) || data.siteStatus == null || data.siteStatus in ['active', 'parked', 'dead', 'unknown', 'text', '']) &&
-             (!("httpCode" in data) || data.httpCode == null || data.httpCode is int || data.httpCode is float) &&
-             (!("isPinned" in data) || data.isPinned == null || data.isPinned is bool);
+      return (!("content" in data) || (data.content is string && data.content.size() <= 50000)) &&
+             (!("aiSummary" in data) || data.aiSummary == null || (data.aiSummary is string && data.aiSummary.size() <= 50000)) &&
+             (!("description" in data) || data.description == null || (data.description is string && data.description.size() <= 20000)) &&
+             (!("note" in data) || data.note == null || (data.note is string && data.note.size() <= 20000)) &&
+             (!("category" in data) || data.category == null || (data.category is string && data.category.size() <= 1000)) &&
+             (!("aiModel" in data) || data.aiModel == null || (data.aiModel is string && data.aiModel.size() <= 1000)) &&
+             (!("aiTags" in data) || data.aiTags == null || (data.aiTags is list && data.aiTags.size() <= 100));
     }
 
+    // 3. הגנה על היסטוריה (Immutable Fields):
+    // שומר על ID ו-createdAt קיימים מבלי לקרוס על פריטים ישנים שהיו חסרים בהם השדות או בהבדל מספר/טקסט
     function isNotChangingImmutableFields() {
       let data = request.resource.data;
       let oldData = resource.data;
-      return (!("id" in oldData) || !("id" in data) || data.id == oldData.id);
+      return (!("id" in oldData) || oldData.id == null || !("id" in data) || (data.id != null && string(data.id) == string(oldData.id))) &&
+             (!("createdAt" in oldData) || oldData.createdAt == null || oldData.createdAt == "" || !("createdAt" in data) || data.createdAt == oldData.createdAt);
     }
 
+    // 4. הגנה מבנית על מסמכי בקשות ואישורי משתמשים
     function isAccessDocSafe(emailId) {
       let data = request.resource.data;
       return emailId == emailId.lower() &&
-             data.keys().size() <= 10 &&
+             data.keys().size() <= 12 &&
              (!("email" in data) || data.email == emailId) &&
-             (!("displayName" in data) || (data.displayName is string && data.displayName.size() <= 200)) &&
-             (!("photoURL" in data) || (data.photoURL is string && data.photoURL.size() <= 1000)) &&
-             (!("reviewedBy" in data) || (data.reviewedBy is string && data.reviewedBy.size() <= 200)) &&
-             (!("status" in data) || data.status in ['pending', 'approved', 'rejected']);
+             (!("displayName" in data) || data.displayName == null || (data.displayName is string && data.displayName.size() <= 300)) &&
+             (!("photoURL" in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 1500)) &&
+             (!("reviewedBy" in data) || data.reviewedBy == null || (data.reviewedBy is string && data.reviewedBy.size() <= 300)) &&
+             (!("status" in data) || data.status in ["pending", "approved", "rejected"]);
     }
 
     // =======================================================
     // 🔒 חוקי הגישה
     // =======================================================
 
+    // חסימת ברירת מחדל לכל נתיב אחר
     match /{document=**} {
       allow read, write: if false;
     }
 
+    // טבלת בקשות ואישור חשבונות (לניהול מנהל בלבד + בקשה עצמית למשתמש חדש)
     match /allowedUsers/{emailId} {
       allow list: if isAdmin();
       allow get: if isAdmin() || (isLoggedIn() && userEmail() == emailId);
 
+      // משתמש חדש יכול לפתוח לעצמו בקשת pending בלבד
       allow create: if (isAdmin() && isAccessDocSafe(emailId)) || (
         isLoggedIn() &&
         userEmail() == emailId &&
         request.resource.data.keys().hasOnly([
-          'email', 'uid', 'displayName', 'photoURL', 'status', 'requestedAt', 'updatedAt'
+          "email", "uid", "displayName", "photoURL", "status", "requestedAt", "updatedAt"
         ]) &&
-        request.resource.data.status == 'pending' &&
+        request.resource.data.status == "pending" &&
         request.resource.data.uid == request.auth.uid &&
         isAccessDocSafe(emailId)
       );
 
+      // משתמש מאושר יכול לעדכן רק פרטי פרופיל בסיסיים (ללא יכולת לשנות status)
       allow update: if (isAdmin() && isAccessDocSafe(emailId)) || (
         isLoggedIn() &&
         userEmail() == emailId &&
-        resource.data.status == 'approved' &&
-        request.resource.data.status == 'approved' &&
+        resource.data.status == "approved" &&
+        request.resource.data.status == "approved" &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'uid', 'displayName', 'photoURL', 'updatedAt'
+          "uid", "displayName", "photoURL", "updatedAt"
         ]) &&
         (!("uid" in request.resource.data) || request.resource.data.uid == request.auth.uid) &&
         isAccessDocSafe(emailId)
@@ -115,29 +120,31 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // המאגר הפרטי והמבודד של כל משתמש
     match /users/{userId} {
-      allow read: if isAdmin() || isApprovedOwner(userId);
-      allow create, update: if (isAdmin() || isApprovedOwner(userId))
-                            && request.resource.data.keys().size() <= 20;
+      allow read, create, update: if isAdmin() || isOwner(userId);
       allow delete: if isAdmin();
 
       match /items/{itemId} {
-        allow read, delete: if isAdmin() || isApprovedOwner(userId);
+        allow read, delete: if isAdmin() || isOwner(userId);
 
-        allow create: if (isAdmin() || isApprovedOwner(userId))
+        // יצירה חדשה: בודק הרשאה, כמות שדות, ואורך טקסט תקין
+        allow create: if (isAdmin() || isOwner(userId))
                       && isPayloadSafe()
                       && isContentSizeSafe();
 
-        allow update: if (isAdmin() || isApprovedOwner(userId))
+        // עדכון פריט קיים: הכל כמו ביצירה + הגנת שדות נעולים (ID / createdAt)
+        allow update: if (isAdmin() || isOwner(userId))
                       && isPayloadSafe()
                       && isContentSizeSafe()
                       && isNotChangingImmutableFields();
       }
 
       match /trash/{trashId} {
-        allow read, delete: if isAdmin() || isApprovedOwner(userId);
+        allow read, delete: if isAdmin() || isOwner(userId);
 
-        allow create, update: if (isAdmin() || isApprovedOwner(userId))
+        // סל המחזור מקבל את אותן הגנות מבניות כמו הרשימה הראשית
+        allow create, update: if (isAdmin() || isOwner(userId))
                               && isPayloadSafe()
                               && isContentSizeSafe();
       }
