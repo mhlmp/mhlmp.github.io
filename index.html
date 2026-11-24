@@ -2049,8 +2049,9 @@
                 <input type="search" id="searchInput" placeholder="🔍 חפש קישור, תיאור, #תגית או #מספר...">
             </div>
             <div class="filters-container">
-                <select id="categoryFilter"><option value="">📂 כל הקטגוריות</option></select>
-                <select id="sortOrder">
+               <div class="filters-container">
+                <select id="categoryFilter" autocomplete="off"><option value="">📂 כל הקטגוריות</option></select>
+                <select id="sortOrder" autocomplete="off">
                     <option value="date-new" selected>📅 חדש לישן</option>
                     <option value="name">🔤 שם (א-ת)</option>
                     <option value="index-asc">🔢 מספר (עולה)</option>
@@ -2600,22 +2601,8 @@
 
         function bootApp() {
             try {
-                const savedUi = JSON.parse(localStorage.getItem('mh_ui_settings') || '{}');
-                if (savedUi.showDuplicates !== undefined) state.showDuplicates = savedUi.showDuplicates;
-                if (savedUi.showOnlyDead !== undefined) state.showOnlyDead = savedUi.showOnlyDead;
-                if (savedUi.showOnlyParked !== undefined) state.showOnlyParked = savedUi.showOnlyParked;
-                if (savedUi.expandAllCards !== undefined) state.expandAllCards = savedUi.expandAllCards;
-                
-                const so = document.getElementById('sortOrder');
-                if (so && savedUi.sortOrder) so.value = savedUi.sortOrder;
-                
-                const cf = document.getElementById('categoryFilter');
-                if (cf && savedUi.categoryFilter) cf.value = savedUi.categoryFilter;
-
-                if (!state.showDuplicates) document.getElementById('toggleDuplicatesBtn')?.classList.add('dup-active');
-                if (state.showOnlyDead) document.getElementById('toggleDeadBtn')?.classList.add('dead-active');
-                if (state.showOnlyParked) document.getElementById('toggleParkedBtn')?.classList.add('parked-active');
-                if (state.expandAllCards) document.getElementById('expandAllBtn')?.classList.add('expand-all-active');
+                const lastUid = localStorage.getItem('mh_last_uid');
+                if (lastUid) loadUiSettingsForUser(lastUid);
             } catch(e) {}
 
             initServiceWorker();
@@ -3000,7 +2987,7 @@
             authBroadcast.onmessage = async (ev) => {
                 if (ev.data === 'logout') {
                     stopAllCloudListeners();
-                    try { localStorage.removeItem('mh_has_session'); } catch (_) {}
+                    try { localStorage.removeItem('mh_has_session'); localStorage.removeItem('mh_last_uid'); } catch (_) {}
                     try { await mhFastCache.wipeAll(); } catch (_) {}
                     try { if (db) await terminate(db); } catch (_) {}
                     window.location.reload();
@@ -3014,7 +3001,7 @@
             scanController.isRunning = false;
             window._mhApprovedBatchCap = null;
             stopAllCloudListeners();
-            try { localStorage.removeItem('mh_has_session'); } catch (_) {}
+            try { localStorage.removeItem('mh_has_session'); localStorage.removeItem('mh_last_uid'); } catch (_) {}
             try { authBroadcast?.postMessage('logout'); } catch (_) {}
             try { await mhFastCache.wipeAll(); } catch (_) {}
             try { await signOut(auth); } catch (_) {}
@@ -3223,7 +3210,8 @@
                 searchTimeout = setTimeout(() => window.requestAnimationFrame(renderList), 120);
             });
             
-            document.getElementById('categoryFilter')?.addEventListener('change', () => {
+            document.getElementById('categoryFilter')?.addEventListener('change', (e) => {
+                pendingCategoryFilter = e.target?.value || '';
                 saveUiSettings();
                 renderList();
             });
@@ -3272,8 +3260,8 @@
             });
 
             document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible' && state.user && navigator.onLine) {
-                    updateSyncStatus('online', 'מחובר ✓'); 
+                if (document.visibilityState === 'visible' && state.user && navigator.onLine && isServerDataArrived) {
+                    updateSyncStatus('online', formatSyncedLabel());
                 }
             });
 
@@ -3562,8 +3550,8 @@
             const run = () => {
                 pendingFullRender = false;
                 isInitialSnapshotRendered = true;
-                renderList();
                 updateCategoryDropdowns();
+                renderList();
             };
             if (immediate) run();
             else renderDebounceTimer = setTimeout(run, 120);
@@ -3736,7 +3724,7 @@
                 }
 
                 if (unchanged) {
-                    updateSyncStatus(navigator.onLine ? 'online' : 'offline', navigator.onLine ? 'מחובר ומסונכרן ✓' : 'מקומי (אין רשת)');
+                    updateSyncStatus(navigator.onLine ? 'online' : 'offline', navigator.onLine ? formatSyncedLabel() : `מקומי (${merged.length})`);
                     return;
                 }
 
@@ -3777,7 +3765,7 @@
                         isServerDataArrived = true;
                         markFullSyncComplete();
                         mhFastCache.scheduleSave(uid, nextItems);
-                        updateSyncStatus(snapshot.metadata.hasPendingWrites ? 'syncing' : 'online', snapshot.metadata.hasPendingWrites ? 'מסנכרן לענן...' : 'מחובר ומסונכרן ✓');
+                        updateSyncStatus(snapshot.metadata.hasPendingWrites ? 'syncing' : 'online', snapshot.metadata.hasPendingWrites ? 'מסנכרן לענן...' : formatSyncedLabel());
                         return;
                     }
 
@@ -3834,11 +3822,11 @@
                     if (snapshot.metadata.hasPendingWrites) {
                         updateSyncStatus('syncing', 'מסנכרן לענן...');
                     } else if (!navigator.onLine) {
-                        updateSyncStatus('offline', 'מקומי (אין רשת)');
+                        updateSyncStatus('offline', `מקומי (${state.items.length})`);
                     } else if (snapshot.metadata.fromCache) {
                         updateSyncStatus('syncing', 'מסנכרן עדכונים...');
                     } else {
-                        updateSyncStatus('online', 'מחובר ומסונכרן ✓');
+                        updateSyncStatus('online', formatSyncedLabel());
                     }
 
                     if (bulkUiHoldCount > 0) {
@@ -3905,7 +3893,7 @@
                         if (state.user?.uid !== uid || state.accessState !== 'approved') return false;
                         if (Array.isArray(allDocs)) {
                             applyFullItems(allDocs, { fromServer: true, preserveScroll: state.items.length > 0 });
-                            updateSyncStatus('online', 'מחובר ומסונכרן ✓');
+                            updateSyncStatus('online', formatSyncedLabel());
                             attachFullItemsListener();
                             return true;
                         }
@@ -4096,6 +4084,7 @@
                     state.user = user;
                     isServerDataArrived = false;
                     isInitialSnapshotRendered = false;
+                    loadUiSettingsForUser(user.uid);
 
                     document.getElementById('userName').textContent = user.displayName || user.email || 'משתמש';
                     document.getElementById('userEmailDisplay').textContent = user.email || '';
@@ -4276,15 +4265,74 @@
             }
         }
 
+        let pendingCategoryFilter = '';
+
+        function formatSyncedLabel() {
+            return `מחובר ומסונכרן ✓ (${state.items.length})`;
+        }
+
+        function getUiSettingsKey(uid = state.user?.uid) {
+            return uid ? `mh_ui_settings_${uid}` : 'mh_ui_settings';
+        }
+
+        function applyUiSettingsObject(savedUi = {}) {
+            state.showDuplicates = savedUi.showDuplicates !== undefined ? Boolean(savedUi.showDuplicates) : true;
+            state.showOnlyDead = Boolean(savedUi.showOnlyDead);
+            state.showOnlyParked = Boolean(savedUi.showOnlyParked);
+            state.expandAllCards = Boolean(savedUi.expandAllCards);
+
+            const so = document.getElementById('sortOrder');
+            if (so) {
+                const validSort = savedUi.sortOrder && [...so.options].some(o => o.value === savedUi.sortOrder)
+                    ? savedUi.sortOrder
+                    : 'date-new';
+                so.value = validSort;
+            }
+
+            pendingCategoryFilter = String(savedUi.categoryFilter || '');
+            const cf = document.getElementById('categoryFilter');
+            if (cf) {
+                cf.value = [...cf.options].some(o => o.value === pendingCategoryFilter) ? pendingCategoryFilter : '';
+            }
+
+            document.getElementById('toggleDuplicatesBtn')?.classList.toggle('dup-active', !state.showDuplicates);
+            document.getElementById('toggleDeadBtn')?.classList.toggle('dead-active', state.showOnlyDead);
+            document.getElementById('toggleParkedBtn')?.classList.toggle('parked-active', state.showOnlyParked);
+            document.getElementById('expandAllBtn')?.classList.toggle('expand-all-active', state.expandAllCards);
+        }
+
+        function loadUiSettingsForUser(uid) {
+            if (!uid) return;
+            try {
+                const perUserKey = getUiSettingsKey(uid);
+                let raw = localStorage.getItem(perUserKey);
+                if (!raw && localStorage.getItem('mh_last_uid') === uid) {
+                    raw = localStorage.getItem('mh_ui_settings');
+                }
+                const savedUi = raw ? JSON.parse(raw) : {};
+                applyUiSettingsObject(savedUi);
+                localStorage.setItem('mh_last_uid', String(uid));
+            } catch (_) {
+                applyUiSettingsObject({});
+            }
+        }
+
         function saveUiSettings() {
-            localStorage.setItem('mh_ui_settings', JSON.stringify({
+            const uid = state.user?.uid;
+            const cfEl = document.getElementById('categoryFilter');
+            const activeCat = cfEl?.value || (!isInitialSnapshotRendered ? pendingCategoryFilter : '');
+            const payload = {
                 showDuplicates: state.showDuplicates,
                 showOnlyDead: state.showOnlyDead,
                 showOnlyParked: state.showOnlyParked,
                 expandAllCards: state.expandAllCards,
                 sortOrder: document.getElementById('sortOrder')?.value || 'date-new',
-                categoryFilter: document.getElementById('categoryFilter')?.value || ''
-            }));
+                categoryFilter: activeCat
+            };
+            try {
+                localStorage.setItem(getUiSettingsKey(uid), JSON.stringify(payload));
+                if (uid) localStorage.setItem('mh_last_uid', String(uid));
+            } catch (_) {}
         }
 
       function handleLockScreen(isLoggedIn, accessMode = null) {
@@ -7267,10 +7315,16 @@ STRICT RULES:
             const values = [...new Set(state.items.map(x => String(x.category || 'כללי').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'he'));
             const filter = document.getElementById('categoryFilter');
             const data = document.getElementById('categoriesDatalist');
-            const old = filter?.value || '';
+            const desired = filter?.value || pendingCategoryFilter || '';
             if (filter) {
                 filter.innerHTML = '<option value="">📂 כל הקטגוריות</option>' + values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
-                filter.value = values.includes(old) ? old : '';
+                if (desired && values.includes(desired)) {
+                    filter.value = desired;
+                    pendingCategoryFilter = '';
+                } else {
+                    filter.value = '';
+                    if (isServerDataArrived) pendingCategoryFilter = '';
+                }
             }
             if (data) data.innerHTML = values.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
         }
@@ -7795,7 +7849,7 @@ STRICT RULES:
             const aiSettings = getAiSettings();
             let uiSettings = {};
             try {
-                uiSettings = JSON.parse(localStorage.getItem('mh_ui_settings') || '{}');
+                uiSettings = JSON.parse(localStorage.getItem(getUiSettingsKey()) || '{}');
             } catch (_) {}
             uiSettings = {
                 ...uiSettings,
@@ -7879,10 +7933,12 @@ STRICT RULES:
                 document.getElementById('toggleParkedBtn')?.classList.remove('parked-active');
                 document.getElementById('expandAllBtn')?.classList.toggle('expand-all-active', state.expandAllCards);
 
+                const hasExistingUserPrefs = Boolean(state.user?.uid && localStorage.getItem(getUiSettingsKey(state.user.uid)));
                 const so = document.getElementById('sortOrder');
-                if (so && ui.sortOrder && [...so.options].some(o => o.value === ui.sortOrder)) {
+                if (!hasExistingUserPrefs && so && ui.sortOrder && [...so.options].some(o => o.value === ui.sortOrder)) {
                     so.value = ui.sortOrder;
                 }
+                pendingCategoryFilter = '';
                 const cf = document.getElementById('categoryFilter');
                 if (cf) cf.value = '';
                 saveUiSettings();
