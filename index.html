@@ -2404,14 +2404,14 @@
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import {
             getFirestore, doc, setDoc, collection, onSnapshot,
-            getDocsFromServer,
+            getDocsFromServer, getDocs, getDocsFromCache,
+            query, orderBy, limit,
             deleteDoc, writeBatch, enableNetwork, disableNetwork,
             initializeFirestore, memoryLocalCache,
             persistentLocalCache, persistentMultipleTabManager,
             terminate, clearIndexedDbPersistence,
             waitForPendingWrites, deleteField
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
         const firebaseConfig = {
             apiKey: "AIzaSyDwofGCJUWkdLGWyXK7_UBAbbC39FXnAmI",
             authDomain: "linkmeir-dada4.firebaseapp.com",
@@ -2583,14 +2583,21 @@
                 db = initializeFirestore(app, {
                     localCache: persistentLocalCache({
                         tabManager: persistentMultipleTabManager()
-                    })
+                    }),
+                    experimentalAutoDetectLongPolling: true
                 });
             } catch (err) {
                 try {
-                    db = initializeFirestore(app, { localCache: persistentLocalCache() });
+                    db = initializeFirestore(app, {
+                        localCache: persistentLocalCache(),
+                        experimentalAutoDetectLongPolling: true
+                    });
                 } catch (_) {
                     try {
-                        db = initializeFirestore(app, { localCache: memoryLocalCache() });
+                        db = initializeFirestore(app, {
+                            localCache: memoryLocalCache(),
+                            experimentalAutoDetectLongPolling: true
+                        });
                     } catch (__) {
                         db = getFirestore(app);
                     }
@@ -2598,7 +2605,7 @@
             }
         } catch (e) { console.error('[Firebase] Init Error:', e); }
 
-        document.addEventListener('DOMContentLoaded', () => {
+        function bootApp() {
             try {
                 const savedUi = JSON.parse(localStorage.getItem('mh_ui_settings') || '{}');
                 if (savedUi.showDuplicates !== undefined) state.showDuplicates = savedUi.showDuplicates;
@@ -2645,7 +2652,9 @@
                     });
                 }
             });
-        });
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootApp, { once: true });
+        else bootApp();
 
         let itemsRevision = 0;
         let cachedMetaRev = -1;
@@ -3442,6 +3451,8 @@
 
         function stopAllCloudListeners() {
             stopUserDataListeners();
+            firstPagePrefetch = { uid: null, promise: null };
+            markFullSyncComplete();
             if (state.unsubAccess) { state.unsubAccess(); state.unsubAccess = null; }
             if (state.unsubAdminUsers) { state.unsubAdminUsers(); state.unsubAdminUsers = null; }
         }
@@ -3501,6 +3512,24 @@
         }
 
         let itemsRetryTimer = null;
+        let isPartialHydration = false;
+        let fullSyncPromise = null;
+        let resolveFullSync = null;
+        let firstPagePrefetch = { uid: null, promise: null };
+
+        function resetFullSyncGate() {
+            isPartialHydration = false;
+            fullSyncPromise = new Promise((resolve) => { resolveFullSync = resolve; });
+        }
+
+        function markFullSyncComplete() {
+            isPartialHydration = false;
+            if (typeof resolveFullSync === 'function') {
+                const fn = resolveFullSync;
+                resolveFullSync = null;
+                fn();
+            }
+        }
 
         function normalizeSnapDoc(d) {
             const data = d.data() || {};
@@ -3508,6 +3537,42 @@
                 data.id = Number.isFinite(Number(d.id)) ? Number(d.id) : d.id;
             }
             return data;
+        }
+
+        // משיכה מקדימה מהירה של 40 הקישורים האחרונים בלבד (לפתיחה מיידית גם למשתמש חדש במטמון קר)
+        // אבטחה מלאה בצד השרת: Firestore Rules דוחים בשקט משתמשים לא מאושרים בלי לחשוף מידע
+        function startFirstPagePrefetch(user) {
+            if (!user || !db) return Promise.resolve(null);
+            if (firstPagePrefetch.uid === user.uid && firstPagePrefetch.promise) {
+                return firstPagePrefetch.promise;
+            }
+            const uid = user.uid;
+            const fastQuery = query(
+                collection(db, 'users', uid, 'items'),
+                orderBy('date', 'desc'),
+                limit(RENDER_BATCH_SIZE)
+            );
+            const promise = (async () => {
+                // 1. מטמון חם (משתמש חוזר): תוצאה תוך ~15ms
+                try {
+                    const cacheSnap = await getDocsFromCache(fastQuery);
+                    if (cacheSnap && cacheSnap.docs.length > 0) {
+                        return { docs: cacheSnap.docs.map(normalizeSnapDoc), fromCache: true };
+                    }
+                } catch (_) {}
+
+                // 2. מטמון קר (משתמש חדש / מכשיר חדש / אחרי יציאה): משיכת 40 פריטים בלבד מהשרת (~250ms)
+                if (!navigator.onLine) return null;
+                try {
+                    const serverSnap = await getDocs(fastQuery);
+                    return { docs: serverSnap.docs.map(normalizeSnapDoc), fromCache: false };
+                } catch (_) {
+                    return null;
+                }
+            })();
+
+            firstPagePrefetch = { uid, promise };
+            return promise;
         }
 
         function ensureTrashSubscription(user = state.user) {
@@ -3530,122 +3595,161 @@
             return trashLoadedPromise;
         }
 
-        function startUserDataSubscriptions(user, retryAttempt = 0) {
+        async function startUserDataSubscriptions(user, retryAttempt = 0) {
             stopUserDataListeners();
-            const itemsRef = collection(db, 'users', user.uid, 'items');
+            resetFullSyncGate();
+            const uid = user.uid;
+            const itemsRef = collection(db, 'users', uid, 'items');
 
-            // חיבור יחיד (Stale-While-Revalidate): מציג מיד מהמטמון המקומי ב-~30ms ומסנכרן רק הפרשים מהענן ברקע
-            state.unsubItems = onSnapshot(itemsRef, { includeMetadataChanges: true }, (snapshot) => {
-                // מטמון קר ריק בטעינה ראשונה במכשיר חדש — משאיר את ה-Skeleton עד שתשובת השרת מגיעה
-                if (snapshot.metadata.fromCache && navigator.onLine && snapshot.docs.length === 0) {
-                    updateSyncStatus('syncing', 'טוען מהענן...');
-                    return;
-                }
+            const attachFullItemsListener = () => {
+                if (state.user?.uid !== uid || state.accessState !== 'approved') return;
 
-                retryAttempt = 0;
-                const changes = snapshot.docChanges();
-
-                // אישור שרת שלא כלל שינויים מול המטמון שכבר הוצג — אפס עבודת CPU ואפס רינדור מחדש
-                if (!snapshot.metadata.fromCache && changes.length === 0 && isInitialSnapshotRendered && snapshot.docs.length === state.items.length) {
-                    isServerDataArrived = true;
-                    updateSyncStatus(snapshot.metadata.hasPendingWrites ? 'syncing' : 'online', snapshot.metadata.hasPendingWrites ? 'מסנכרן לענן...' : 'מחובר ומסונכרן ✓');
-                    return;
-                }
-
-                const prevById = new Map();
-                for (let i = 0; i < state.items.length; i++) {
-                    prevById.set(String(state.items[i].id), state.items[i]);
-                }
-
-                let structuralChanges = !isInitialSnapshotRendered || snapshot.docs.length !== state.items.length;
-                const modifiedIdsInPlace = [];
-
-                const nextItems = snapshot.docs.map((docSnap) => {
-                    const data = normalizeSnapDoc(docSnap);
-                    const prev = prevById.get(String(data.id));
-                    if (prev) {
-                        if (prev.isScanning) data.isScanning = true;
-                        if (prev._keepExpanded) data._keepExpanded = true;
+                state.unsubItems = onSnapshot(itemsRef, { includeMetadataChanges: true }, (snapshot) => {
+                    // מטמון קר ריק בטעינה ראשונה — שומר את התצוגה המקדימה/Skeleton עד שתשובת השרת מגיעה
+                    if (snapshot.metadata.fromCache && navigator.onLine && snapshot.docs.length === 0) {
+                        updateSyncStatus('syncing', state.items.length > 0 ? 'טוען את שאר הקישורים...' : 'טוען מהענן...');
+                        return;
                     }
-                    return data;
+
+                    retryAttempt = 0;
+                    const changes = snapshot.docChanges();
+                    const wasPartial = isPartialHydration;
+
+                    // אישור שרת ללא שינויים מול המטמון המלא שכבר הוצג — אפס עבודת CPU ואפס רינדור מחדש
+                    if (!snapshot.metadata.fromCache && !wasPartial && changes.length === 0 && isInitialSnapshotRendered && snapshot.docs.length === state.items.length) {
+                        isServerDataArrived = true;
+                        markFullSyncComplete();
+                        updateSyncStatus(snapshot.metadata.hasPendingWrites ? 'syncing' : 'online', snapshot.metadata.hasPendingWrites ? 'מסנכרן לענן...' : 'מחובר ומסונכרן ✓');
+                        return;
+                    }
+
+                    const prevById = new Map();
+                    for (let i = 0; i < state.items.length; i++) {
+                        prevById.set(String(state.items[i].id), state.items[i]);
+                    }
+
+                    let structuralChanges = wasPartial || !isInitialSnapshotRendered || snapshot.docs.length !== state.items.length;
+                    const modifiedIdsInPlace = [];
+
+                    const nextItems = snapshot.docs.map((docSnap) => {
+                        const data = normalizeSnapDoc(docSnap);
+                        const prev = prevById.get(String(data.id));
+                        if (prev) {
+                            if (prev.isScanning) data.isScanning = true;
+                            if (prev._keepExpanded) data._keepExpanded = true;
+                        }
+                        return data;
+                    });
+
+                    if (!structuralChanges && changes.length > 0) {
+                        for (let c = 0; c < changes.length; c++) {
+                            const ch = changes[c];
+                            if (ch.type !== 'modified') {
+                                structuralChanges = true;
+                                break;
+                            }
+                            const data = normalizeSnapDoc(ch.doc);
+                            const prev = prevById.get(String(data.id));
+                            if (!prev) {
+                                structuralChanges = true;
+                                break;
+                            }
+                            const layoutChanged =
+                                (prev.category || 'כללי') !== (data.category || 'כללי') ||
+                                Boolean(prev.isPinned) !== Boolean(data.isPinned) ||
+                                (prev.content || '') !== (data.content || '') ||
+                                (prev.date || '') !== (data.date || '') ||
+                                ((state.showOnlyDead || state.showOnlyParked) && prev.siteStatus !== data.siteStatus);
+
+                            if (layoutChanged) structuralChanges = true;
+                            else modifiedIdsInPlace.push(data.id);
+                        }
+                    }
+
+                    state.items = nextItems;
+                    invalidateItemsMeta();
+
+                    if (!snapshot.metadata.fromCache || !navigator.onLine) {
+                        isServerDataArrived = true;
+                        markFullSyncComplete();
+                    } else if (nextItems.length >= RENDER_BATCH_SIZE) {
+                        isPartialHydration = false;
+                    }
+
+                    if (snapshot.metadata.hasPendingWrites) {
+                        updateSyncStatus('syncing', 'מסנכרן לענן...');
+                    } else if (!navigator.onLine) {
+                        updateSyncStatus('offline', 'מקומי (אין רשת)');
+                    } else if (snapshot.metadata.fromCache) {
+                        updateSyncStatus('syncing', 'מסנכרן עדכונים...');
+                    } else {
+                        updateSyncStatus('online', 'מחובר ומסונכרן ✓');
+                    }
+
+                    if (bulkUiHoldCount > 0) {
+                        if (structuralChanges || modifiedIdsInPlace.length > 0) pendingFullRender = true;
+                        return;
+                    }
+
+                    updateStatusBadges(false);
+
+                    if (structuralChanges || !isInitialSnapshotRendered) {
+                        const savedY = wasPartial ? window.scrollY : 0;
+                        scheduleFullRender(!isInitialSnapshotRendered || wasPartial);
+                        if (wasPartial && savedY > 0) {
+                            requestAnimationFrame(() => window.scrollTo({ top: savedY, behavior: 'instant' }));
+                        }
+                    } else if (modifiedIdsInPlace.length > 0) {
+                        modifiedIdsInPlace.forEach(id => updateCardInPlace(id));
+                    }
+                }, async (err) => {
+                    console.error('[Sync] onSnapshot items error:', err);
+                    if (state.user?.uid === uid && retryAttempt < 3) {
+                        updateSyncStatus('syncing', `מתחבר מחדש לענן (${retryAttempt + 1}/3)...`);
+                        try { await user.getIdToken(true); } catch (_) {}
+                        itemsRetryTimer = setTimeout(() => {
+                            if (state.user?.uid === uid && state.accessState === 'approved') {
+                                startUserDataSubscriptions(user, retryAttempt + 1);
+                            }
+                        }, 900 * (retryAttempt + 1));
+                        return;
+                    }
+                    markFullSyncComplete();
+                    updateSyncStatus('error', err.code === 'permission-denied' ? 'נדרש עדכון חוקי Firestore' : 'שגיאת חיבור');
+                    showToast('❌ שגיאה בטעינת הקישורים מהענן: ' + err.message, null, 5000, null, true);
                 });
 
-                if (!structuralChanges && changes.length > 0) {
-                    for (let c = 0; c < changes.length; c++) {
-                        const ch = changes[c];
-                        if (ch.type !== 'modified') {
-                            structuralChanges = true;
-                            break;
-                        }
-                        const data = normalizeSnapDoc(ch.doc);
-                        const prev = prevById.get(String(data.id));
-                        if (!prev) {
-                            structuralChanges = true;
-                            break;
-                        }
-                        const layoutChanged =
-                            (prev.category || 'כללי') !== (data.category || 'כללי') ||
-                            Boolean(prev.isPinned) !== Boolean(data.isPinned) ||
-                            (prev.content || '') !== (data.content || '') ||
-                            (prev.date || '') !== (data.date || '') ||
-                            ((state.showOnlyDead || state.showOnlyParked) && prev.siteStatus !== data.siteStatus);
-
-                        if (layoutChanged) structuralChanges = true;
-                        else modifiedIdsInPlace.push(data.id);
+                // טעינה עצלה של סל המחזור ברקע אחרי שהקישורים הראשיים כבר מוצגים
+                lazyBgTimers.push(setTimeout(() => {
+                    if (state.user?.uid === uid && state.accessState === 'approved') {
+                        ensureTrashSubscription(user);
                     }
-                }
+                }, 2500));
+            };
 
-                state.items = nextItems;
-                invalidateItemsMeta();
+            // שלב 1 (מיידי): מצייר 40 קישורים ראשונים מהמטמון או משאילתת עמוד ראשון קטנה (בלי תחרות רוחב פס)
+            if (retryAttempt === 0) {
+                const fastRes = await Promise.race([
+                    startFirstPagePrefetch(user),
+                    new Promise(r => setTimeout(() => r(null), 2500))
+                ]);
+                if (state.user?.uid !== uid || state.accessState !== 'approved') return;
 
-                if (!snapshot.metadata.fromCache || !navigator.onLine) {
-                    isServerDataArrived = true;
-                }
+                if (fastRes && fastRes.docs.length > 0) {
+                    state.items = fastRes.docs;
+                    invalidateItemsMeta();
+                    isPartialHydration = true;
+                    updateStatusBadges(false);
+                    scheduleFullRender(true);
+                    updateSyncStatus('syncing', fastRes.fromCache ? 'מסנכרן עדכונים...' : 'טוען את שאר הקישורים...');
 
-                if (snapshot.metadata.hasPendingWrites) {
-                    updateSyncStatus('syncing', 'מסנכרן לענן...');
-                } else if (!navigator.onLine) {
-                    updateSyncStatus('offline', 'מקומי (אין רשת)');
-                } else if (snapshot.metadata.fromCache) {
-                    updateSyncStatus('syncing', 'מסנכרן עדכונים...');
-                } else {
-                    updateSyncStatus('online', 'מחובר ומסונכרן ✓');
-                }
-
-                if (bulkUiHoldCount > 0) {
-                    if (structuralChanges || modifiedIdsInPlace.length > 0) pendingFullRender = true;
+                    // שלב 2: רק אחרי שהעמוד הראשון כבר צויר על המסך, מפעיל סנכרון מלא ברקע
+                    requestAnimationFrame(() => attachFullItemsListener());
                     return;
                 }
+            }
 
-                updateStatusBadges(false);
-
-                if (structuralChanges || !isInitialSnapshotRendered) {
-                    scheduleFullRender(!isInitialSnapshotRendered);
-                } else if (modifiedIdsInPlace.length > 0) {
-                    modifiedIdsInPlace.forEach(id => updateCardInPlace(id));
-                }
-            }, async (err) => {
-                console.error('[Sync] onSnapshot items error:', err);
-                if (state.user?.uid === user.uid && retryAttempt < 3) {
-                    updateSyncStatus('syncing', `מתחבר מחדש לענן (${retryAttempt + 1}/3)...`);
-                    try { await user.getIdToken(true); } catch (_) {}
-                    itemsRetryTimer = setTimeout(() => {
-                        if (state.user?.uid === user.uid && state.accessState === 'approved') {
-                            startUserDataSubscriptions(user, retryAttempt + 1);
-                        }
-                    }, 900 * (retryAttempt + 1));
-                    return;
-                }
-                updateSyncStatus('error', err.code === 'permission-denied' ? 'נדרש עדכון חוקי Firestore' : 'שגיאת חיבור');
-                showToast('❌ שגיאה בטעינת הקישורים מהענן: ' + err.message, null, 5000, null, true);
-            });
-
-            // טעינה עצלה של סל המחזור ברקע אחרי שהקישורים הראשיים כבר מוצגים (או מיד בפתיחת סל/ייצוא)
-            lazyBgTimers.push(setTimeout(() => {
-                if (state.user?.uid === user.uid && state.accessState === 'approved') {
-                    ensureTrashSubscription(user);
-                }
-            }, 2500));
+            attachFullItemsListener();
         }
 
         function updateAdminUsersBadge() {
@@ -3829,13 +3933,21 @@
                         return;
                     }
 
-                    // משתמש שאינו מנהל — בדיקת אישור בזמן אמת מול Firestore
+                   // משתמש שאינו מנהל — בדיקת אישור + משיכה מקדימה של עמוד ראשון במקביל (סבב רשת אחד בלבד!)
                     updateAdminUsersBadge();
                     stopUserDataListeners();
                     if (state.unsubAccess) { state.unsubAccess(); state.unsubAccess = null; }
                     state.items = []; state.trash = [];
                     state.accessState = 'checking';
-                    handleLockScreen(true, 'checking');
+
+                    // אם למשתמש כבר היה סשן פעיל בדפדפן, לא מהבהבים חזרה למסך הנעילה בזמן הבדיקה מהמטמון
+                    const hadSession = localStorage.getItem('mh_has_session') === '1';
+                    if (!hadSession) {
+                        handleLockScreen(true, 'checking');
+                    }
+
+                    // רץ במקביל ל-allowedUsers: אם המשתמש מאושר, 40 הקישורים כבר יחכו בזיכרון ברגע האישור; אם לא — Firestore חוסם בשקט
+                    startFirstPagePrefetch(user);
 
                     const accessDocRef = doc(db, 'allowedUsers', email);
                     let requestSentOnce = false;
@@ -3846,6 +3958,8 @@
                             if (snap.metadata.fromCache && navigator.onLine) return;
 
                             stopUserDataListeners();
+                            firstPagePrefetch = { uid: null, promise: null };
+                            try { localStorage.removeItem('mh_has_session'); } catch (_) {}
                             state.items = []; state.trash = [];
                             state.accessState = 'pending';
                             handleLockScreen(true, 'pending');
@@ -3873,13 +3987,18 @@
 
                         const data = snap.data() || {};
                         if (data.status === 'approved') {
-                            const wasApproved = state.accessState === 'approved';
+                            const prevAccess = state.accessState;
+                            const wasApproved = prevAccess === 'approved';
                             state.accessState = 'approved';
                             try { localStorage.setItem('mh_has_session', '1'); } catch (_) {}
-                            handleLockScreen(true, 'approved');
                             if (!wasApproved) {
+                                // אם החשבון אושר זה עתה בזמן אמת מתוך מצב pending, מנקה prefetch ישן כדי לבצע משיכה טרייה
+                                if (prevAccess === 'pending' || prevAccess === 'rejected') {
+                                    firstPagePrefetch = { uid: null, promise: null };
+                                }
+                                handleLockScreen(true, 'approved');
                                 startUserDataSubscriptions(user);
-                                if (!snap.metadata.fromCache) {
+                                if (!snap.metadata.fromCache && !hadSession) {
                                     showToast('✅ החשבון מאושר! נטען המאגר האישי שלך.', null, 3500);
                                 }
                             }
@@ -3894,12 +4013,16 @@
                             }
                         } else if (data.status === 'rejected') {
                             stopUserDataListeners();
+                            firstPagePrefetch = { uid: null, promise: null };
+                            try { localStorage.removeItem('mh_has_session'); } catch (_) {}
                             state.items = []; state.trash = [];
                             state.accessState = 'rejected';
                             handleLockScreen(true, 'rejected');
                             showToast('❌ הגישה לחשבון זה נדחתה על ידי מנהל המערכת.', null, 5000, null, true);
                         } else {
                             stopUserDataListeners();
+                            firstPagePrefetch = { uid: null, promise: null };
+                            try { localStorage.removeItem('mh_has_session'); } catch (_) {}
                             state.items = []; state.trash = [];
                             state.accessState = 'pending';
                             handleLockScreen(true, 'pending');
@@ -4366,9 +4489,13 @@
 
             const countEl = document.getElementById('itemCount');
             if (countEl) {
-                countEl.textContent = (!isServerDataArrived && state.items.length === 0 && navigator.onLine)
-                    ? 'טוען קישורים...'
-                    : `מציג ${filtered.length} מתוך ${state.items.length}`;
+                if (!isServerDataArrived && state.items.length === 0 && navigator.onLine) {
+                    countEl.textContent = 'טוען קישורים...';
+                } else if (isPartialHydration) {
+                    countEl.textContent = `מציג ${filtered.length} (טוען את שאר המאגר...)`;
+                } else {
+                    countEl.textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
+                }
             }
 
             if (filtered.length === 0) {
@@ -7579,6 +7706,11 @@ STRICT RULES:
             return String(value ?? '').replace(/ ⏎ /g, '\n').trim();
         }
         async function exportJson(){
+            if (state.user && isPartialHydration && fullSyncPromise) {
+                showToast('☁️ מסיים לטעון את כל הפריטים לפני ייצוא...', null, 0, 'export-wait-toast');
+                await Promise.race([fullSyncPromise, new Promise(r => setTimeout(r, 8000))]);
+                removeToast('export-wait-toast');
+            }
             if (state.user && !state.unsubTrash) await ensureTrashSubscription(state.user);
             const exclude = !!document.getElementById('excludePrivateJsonCb')?.checked;
             const rawItems = exclude
@@ -7624,6 +7756,11 @@ STRICT RULES:
             }
         }
         async function exportTxt(){
+            if (state.user && isPartialHydration && fullSyncPromise) {
+                showToast('☁️ מסיים לטעון את כל הפריטים לפני ייצוא...', null, 0, 'export-wait-toast');
+                await Promise.race([fullSyncPromise, new Promise(r => setTimeout(r, 8000))]);
+                removeToast('export-wait-toast');
+            }
             if (state.user && !state.unsubTrash) await ensureTrashSubscription(state.user);
             const cb = document.getElementById('excludePrivateCb');
             const exclude = cb ? cb.checked : true;
