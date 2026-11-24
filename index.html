@@ -2000,10 +2000,10 @@
         <div id="loggedInView" style="display:none; flex-direction:column; width:100%; gap: 8px;">
             <div class="user-top-row">
                 <div class="user-info">
-                    <img id="userAvatar" src="" class="user-avatar" alt="Avatar">
+                    <img id="userAvatar" class="user-avatar" alt="Avatar" style="visibility:hidden;">
                     <div style="display: flex; flex-direction: column; justify-content: center;">
-                        <div id="userName" class="user-name">שם משתמש</div>
-                        <div id="userEmailDisplay" class="user-email">email@gmail.com</div>
+                        <div id="userName" class="user-name">טוען חשבון...</div>
+                        <div id="userEmailDisplay" class="user-email"></div>
                         <div class="cloud-status" style="margin-top: 2px;">
                             <span class="status-dot online" id="syncDot"></span>
                             <span id="syncLabel">מחובר</span>
@@ -3238,71 +3238,150 @@
                 }
             });
             
-            document.getElementById('listContainer')?.addEventListener('click', (e) => {
-                const card = e.target.closest('.card');
-                if (!card) return;
-                
-                const id = parseInt(card.getAttribute('data-id'));
-                const item = state.items.find(i => i.id === id);
-                if (!item) return;
+            const listHost = document.getElementById('listContainer');
+            if (listHost) {
+                let aiPressTimer = null;
+                let aiLongPressTriggered = false;
 
-                const filterChip = e.target.closest('.card-filter-chip, .ai-tag-chip');
-                if (filterChip) {
-                    e.stopPropagation();
-                    if (state.isSelectionMode) return;
-                    const filterValue = (
-                        filterChip.getAttribute('data-filter-query') ||
-                        filterChip.getAttribute('data-tag') ||
-                        filterChip.textContent ||
-                        ''
-                    ).trim();
-                    const searchEl = document.getElementById('searchInput');
-                    if (searchEl && filterValue) {
-                        const catFilterEl = document.getElementById('categoryFilter');
-                        if (catFilterEl && catFilterEl.value) catFilterEl.value = '';
-                        if (state.showOnlyDead) {
-                            state.showOnlyDead = false;
-                            document.getElementById('toggleDeadBtn')?.classList.remove('dead-active');
-                        }
-                        if (state.showOnlyParked) {
-                            state.showOnlyParked = false;
-                            document.getElementById('toggleParkedBtn')?.classList.remove('parked-active');
-                        }
-                        if (!state.showDuplicates) {
-                            state.showDuplicates = true;
-                            document.getElementById('toggleDuplicatesBtn')?.classList.remove('dup-active');
-                        }
-                        searchEl.value = (searchEl.value.trim() === filterValue) ? '' : filterValue;
-                        saveUiSettings();
-                        renderList();
-                        if (searchEl.value) {
-                            showToast(`🔎 מסנן לפי: ${filterValue}`, () => {
-                                searchEl.value = '';
-                                renderList();
-                            }, 3500, 'filter-chip-toast');
-                        }
+                const startAiLongPress = (e) => {
+                    const aiBtn = e.target.closest('.btn-ai-scan');
+                    if (!aiBtn) return;
+                    if (e.button !== undefined && e.button !== 0) return;
+                    const card = aiBtn.closest('.card');
+                    const rawId = card?.getAttribute('data-id');
+                    const item = rawId ? state.items.find(i => String(i.id) === rawId) : null;
+                    if (!item) return;
+                    aiLongPressTriggered = false;
+                    clearTimeout(aiPressTimer);
+                    aiPressTimer = setTimeout(() => {
+                        aiLongPressTriggered = true;
+                        openAiFloatingMenu(item.id, e);
+                    }, 500);
+                };
+                const cancelAiLongPress = () => {
+                    if (aiPressTimer) {
+                        clearTimeout(aiPressTimer);
+                        aiPressTimer = null;
                     }
-                    return;
-                }
-                if (e.target.closest('.btn-share')) { e.stopPropagation(); shareItem(item); return; }
-                if (e.target.closest('.btn-copy')) { e.stopPropagation(); copyText(item.content); return; }
-                if (e.target.closest('.btn-edit')) { e.stopPropagation(); editItem(item); return; }
-                if (e.target.closest('.pin-btn')) { e.stopPropagation(); togglePin(id); return; }
-                if (e.target.closest('.trash-btn')) { e.stopPropagation(); moveToTrash(id); return; }
-                if (e.target.closest('.ai-edit-btn')) { e.stopPropagation(); window.openEditAiModal(item); return; }
-                if (e.target.closest('.ai-rescan-inline-btn')) { e.stopPropagation(); window.scanSingleItem(id, null, false); return; }
-                if (e.target.closest('.ai-manual-shot-inline-btn')) { e.stopPropagation(); window.openManualShotModal(item); return; }
-                
-                const linkEl = e.target.closest('.card-link');
-                if (linkEl && !e.target.closest('.card-actions')) {
+                };
+
+                listHost.addEventListener('mousedown', startAiLongPress);
+                listHost.addEventListener('touchstart', startAiLongPress, { passive: true });
+                listHost.addEventListener('mouseup', cancelAiLongPress);
+                listHost.addEventListener('mouseleave', cancelAiLongPress);
+                listHost.addEventListener('touchend', cancelAiLongPress);
+                listHost.addEventListener('touchmove', cancelAiLongPress, { passive: true });
+                listHost.addEventListener('touchcancel', cancelAiLongPress);
+
+                listHost.addEventListener('contextmenu', (e) => {
+                    const card = e.target.closest('.card');
+                    if (!card) return;
+                    const rawId = card.getAttribute('data-id');
+                    const item = state.items.find(i => String(i.id) === rawId);
+                    if (!item) return;
+                    if (e.target.closest('.btn-ai-scan')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openAiFloatingMenu(item.id, e);
+                        return;
+                    }
+                    if (e.target.closest('.card-actions')) return;
                     e.preventDefault();
-                    if (!state.isSelectionMode) {
+                    if (!state.isSelectionMode) enterSelectionMode(item.id);
+                });
+
+                listHost.addEventListener('click', (e) => {
+                    const card = e.target.closest('.card');
+                    if (!card) return;
+
+                    const rawId = card.getAttribute('data-id');
+                    const item = state.items.find(i => String(i.id) === rawId);
+                    if (!item) return;
+                    const id = item.id;
+
+                    if (state.isSelectionMode) {
+                        e.preventDefault();
+                        toggleSelection(id);
+                        return;
+                    }
+
+                    if (e.target.closest('.actions-trigger-btn')) {
+                        e.stopPropagation();
+                        card.classList.toggle('show-actions');
+                        return;
+                    }
+                    if (e.target.closest('.expand-btn')) {
+                        e.stopPropagation();
+                        card.classList.toggle('is-expanded');
+                        item._keepExpanded = card.classList.contains('is-expanded');
+                        return;
+                    }
+                    if (e.target.closest('.btn-ai-scan')) {
+                        e.stopPropagation();
+                        if (!aiLongPressTriggered) {
+                            let qs = {};
+                            try { qs = JSON.parse(localStorage.getItem('aiQuickSettings') || '{}'); } catch (_) {}
+                            scanSingleItem(id, qs.provider || null, false);
+                        }
+                        aiLongPressTriggered = false;
+                        return;
+                    }
+
+                    const filterChip = e.target.closest('.card-filter-chip, .ai-tag-chip');
+                    if (filterChip) {
+                        e.stopPropagation();
+                        const filterValue = (
+                            filterChip.getAttribute('data-filter-query') ||
+                            filterChip.getAttribute('data-tag') ||
+                            filterChip.textContent ||
+                            ''
+                        ).trim();
+                        const searchEl = document.getElementById('searchInput');
+                        if (searchEl && filterValue) {
+                            const catFilterEl = document.getElementById('categoryFilter');
+                            if (catFilterEl && catFilterEl.value) catFilterEl.value = '';
+                            if (state.showOnlyDead) {
+                                state.showOnlyDead = false;
+                                document.getElementById('toggleDeadBtn')?.classList.remove('dead-active');
+                            }
+                            if (state.showOnlyParked) {
+                                state.showOnlyParked = false;
+                                document.getElementById('toggleParkedBtn')?.classList.remove('parked-active');
+                            }
+                            if (!state.showDuplicates) {
+                                state.showDuplicates = true;
+                                document.getElementById('toggleDuplicatesBtn')?.classList.remove('dup-active');
+                            }
+                            searchEl.value = (searchEl.value.trim() === filterValue) ? '' : filterValue;
+                            saveUiSettings();
+                            renderList();
+                            if (searchEl.value) {
+                                showToast(`🔎 מסנן לפי: ${filterValue}`, () => {
+                                    searchEl.value = '';
+                                    renderList();
+                                }, 3500, 'filter-chip-toast');
+                            }
+                        }
+                        return;
+                    }
+                    if (e.target.closest('.btn-share')) { e.stopPropagation(); shareItem(item); return; }
+                    if (e.target.closest('.btn-copy')) { e.stopPropagation(); copyText(item.content); return; }
+                    if (e.target.closest('.btn-edit')) { e.stopPropagation(); editItem(item); return; }
+                    if (e.target.closest('.pin-btn')) { e.stopPropagation(); togglePin(id); return; }
+                    if (e.target.closest('.trash-btn')) { e.stopPropagation(); moveToTrash(id); return; }
+                    if (e.target.closest('.ai-edit-btn')) { e.stopPropagation(); window.openEditAiModal(item); return; }
+                    if (e.target.closest('.ai-rescan-inline-btn')) { e.stopPropagation(); window.scanSingleItem(id, null, false); return; }
+                    if (e.target.closest('.ai-manual-shot-inline-btn')) { e.stopPropagation(); window.openManualShotModal(item); return; }
+
+                    const linkEl = e.target.closest('.card-link');
+                    if (linkEl && !e.target.closest('.card-actions')) {
+                        e.preventDefault();
                         let targetUrl = item.content.trim();
                         if (!/^https?:\/\//i.test(targetUrl)) targetUrl = 'https://' + targetUrl;
                         window.open(targetUrl, '_blank', 'noopener,noreferrer');
                     }
-                }
-            });
+                });
+            }
         }
 
         function toggleExpandAllCards() {
@@ -4552,48 +4631,6 @@
                     </div>
                 </div>
             `;
-            
-            div.onclick = (e) => { if (state.isSelectionMode) { e.preventDefault(); toggleSelection(item.id); } };
-            div.addEventListener('contextmenu', (e) => {
-                if (e.target.closest('.card-actions')) return;
-                e.preventDefault();
-                if (!state.isSelectionMode) enterSelectionMode(item.id);
-            });
-
-            div.querySelector('.actions-trigger-btn')?.addEventListener('click', (e) => {
-                e.stopPropagation();
-                div.classList.toggle('show-actions');
-            });
-
-            div.querySelector('.expand-btn')?.addEventListener('click', (e) => {
-                e.stopPropagation();
-                div.classList.toggle('is-expanded');
-                item._keepExpanded = div.classList.contains('is-expanded');
-            });
-
-            const btnAi = div.querySelector('.btn-ai-scan');
-            let pressTimer, isLongPress = false;
-            const startPress = (e) => {
-                if (e.button !== undefined && e.button !== 0) return;
-                isLongPress = false;
-                pressTimer = setTimeout(() => { isLongPress = true; openAiFloatingMenu(item.id, e); }, 500);
-            };
-            const cancelPress = () => clearTimeout(pressTimer);
-            btnAi.addEventListener('mousedown', startPress);
-            btnAi.addEventListener('touchstart', startPress, { passive: true });
-            btnAi.addEventListener('mouseup', cancelPress);
-            btnAi.addEventListener('mouseleave', cancelPress);
-            btnAi.addEventListener('touchend', cancelPress);
-            btnAi.addEventListener('touchmove', cancelPress, { passive: true });
-            btnAi.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); openAiFloatingMenu(item.id, e); });
-            btnAi.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (!isLongPress) {
-                    let qs = {};
-                    try { qs = JSON.parse(localStorage.getItem('aiQuickSettings') || '{}'); } catch (_) {}
-                    scanSingleItem(item.id, qs.provider || null, false);
-                }
-            });
             
             return div;
         }
@@ -7022,6 +7059,7 @@ STRICT RULES:
                 await saveItemToCloud(item);
             }
             document.getElementById('editModal').style.display = 'none';
+            invalidateItemsMeta();
 
             if (categoryChanged || contentChanged) {
                 updateCategoryDropdowns();
