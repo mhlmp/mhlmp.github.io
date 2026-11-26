@@ -178,43 +178,24 @@
             display: flex; flex-direction: column; gap: 10px;
             overflow: visible; position: relative; z-index: 100;
         }
-        .search-container { position: relative; display: flex; align-items: center; }
+        .search-container { position: relative; }
         .search-container input {
-            width: 100%; padding: 11px 14px 11px 38px; font-size: 15.5px;
+            width: 100%; padding: 11px 14px; font-size: 15.5px;
             border: 1px solid var(--glass-border); border-radius: var(--radius);
             background: rgba(127,127,127,0.1); color: var(--text-primary);
             transition: border-color 0.2s, box-shadow 0.2s;
         }
-        .search-container input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
         .search-container input:focus {
             border-color: var(--primary-color);
             box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18);
         }
-        .search-clear-btn {
-            position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
-            width: 26px; height: 26px; border-radius: 50%; border: none;
-            background: rgba(148, 163, 184, 0.22); color: var(--text-primary);
-            cursor: pointer; display: none; align-items: center; justify-content: center;
-            font-size: 0.78rem; font-weight: 800; transition: background 0.15s, transform 0.15s;
-        }
-        .search-clear-btn.visible { display: inline-flex; }
-        .search-clear-btn:hover { background: rgba(239, 68, 68, 0.28); color: #fca5a5; }
-        .filters-container { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .filters-container { display: flex; gap: 10px; flex-wrap: wrap; }
         .filters-container select {
             flex: 1; min-width: 130px; height: 42px; padding: 0 10px;
             background: rgba(127,127,127,0.1); color: var(--text-primary);
             border: 1px solid var(--glass-border); border-radius: var(--radius); font-size: 0.9rem;
             cursor: pointer;
         }
-        .filter-icon-btn {
-            height: 42px; min-width: 42px; padding: 0 10px; flex: 0 0 auto;
-            background: rgba(127,127,127,0.1); color: var(--text-primary);
-            border: 1px solid var(--glass-border); border-radius: var(--radius);
-            cursor: pointer; font-size: 1rem; display: inline-flex; align-items: center; justify-content: center;
-            transition: background 0.15s, border-color 0.15s, transform 0.15s;
-        }
-        .filter-icon-btn:hover { background: rgba(96, 165, 250, 0.18); border-color: rgba(96, 165, 250, 0.45); }
-        .filter-icon-btn:active { transform: scale(0.93); }
         .filters-container select option { background: #1e293b; color: white; }
 
         .actions-container { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; align-items: center; margin-top: 4px; }
@@ -306,70 +287,7 @@
             background: rgba(96, 165, 250, 0.22) !important;
             border-color: var(--primary-color) !important;
         }
-        .status-count-badge.unscanned-badge {
-            background: #8b5cf6;
-            box-shadow: 0 2px 6px rgba(139, 92, 246, 0.45);
-        }
-        .btn-toggle.unscanned-active {
-            background: rgba(139, 92, 246, 0.22) !important;
-            border-color: #8b5cf6 !important;
-            box-shadow: 0 0 12px rgba(139, 92, 246, 0.4);
-        }
-        .btn-toggle.select-mode-active {
-            background: rgba(96, 165, 250, 0.25) !important;
-            border-color: var(--primary-color) !important;
-            box-shadow: 0 0 12px rgba(96, 165, 250, 0.4);
-        }
-        .active-filters-bar {
-            display: none; flex-wrap: wrap; align-items: center; gap: 6px;
-            padding-top: 6px; border-top: 1px solid rgba(127,127,127,0.14);
-        }
-        .active-filters-bar.visible { display: flex; }
-        .active-filter-pill {
-            display: inline-flex; align-items: center; gap: 5px;
-            background: rgba(96, 165, 250, 0.16); color: var(--text-primary);
-            border: 1px solid rgba(96, 165, 250, 0.35); border-radius: 999px;
-            padding: 3px 10px; font-size: 0.78rem; font-weight: 600; cursor: pointer;
-            transition: background 0.15s, transform 0.15s;
-        }
-        .active-filter-pill:hover { background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.45); }
-        .active-filters-clear-all {
-            margin-right: auto; background: rgba(239, 68, 68, 0.14); color: #fca5a5;
-            border: 1px solid rgba(239, 68, 68, 0.38); border-radius: 999px;
-            padding: 3px 10px; font-size: 0.76rem; font-weight: 700; cursor: pointer;
-            transition: background 0.15s, transform 0.15s;
-        }
-        .active-filters-clear-all:hover { background: rgba(239, 68, 68, 0.28); }
-        body:not(.dark-mode) .active-filters-clear-all { color: #b91c1c; }
-        .card-link-wrap { display: flex; align-items: flex-start; gap: 7px; min-width: 0; }
-        .card-link-wrap .card-link { flex: 1; min-width: 0; }
-        .card-favicon {
-            width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0;
-            margin-top: 3px; object-fit: contain; background: rgba(255,255,255,0.08);
-        }
-        .add-content-tools {
-            display: flex; align-items: center; justify-content: space-between;
-            gap: 8px; flex-wrap: wrap;
-        }
-        .multi-add-notice {
-            display: none; align-items: center; gap: 8px; flex: 1;
-            padding: 6px 10px; border-radius: 8px;
-            background: rgba(96, 165, 250, 0.12); border: 1px solid rgba(96, 165, 250, 0.35);
-            font-size: 0.8rem; color: var(--text-primary);
-        }
-        .multi-add-notice.visible { display: flex; }
-        .multi-add-notice label { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
-        .cat-mgr-row {
-            display: flex; align-items: center; justify-content: space-between; gap: 10px;
-            padding: 10px 12px; border-radius: 10px; background: rgba(127,127,127,0.06);
-            border: 1px solid var(--glass-border);
-        }
-        .cat-mgr-name-btn {
-            background: none; border: none; color: var(--text-primary); cursor: pointer;
-            text-align: right; font-weight: 700; font-size: 0.9rem; padding: 0;
-            display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
-        }
-        .cat-mgr-name-btn:hover { color: var(--primary-color); }
+
        .dropdown-content {
             display: none; position: absolute;
             background: var(--glass-bg); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
@@ -920,7 +838,213 @@
         .scan-log-step.lvl-warn { border-right: 3px solid var(--accent-gold); }
         .scan-log-step.lvl-error { border-right: 3px solid var(--accent-red); }
         .scan-log-step.lvl-info { border-right: 3px solid var(--primary-color); }
-       
+        /* =====================================================
+           מסך פתיחה לפני התחברות – התאמה חכמה למסך המכשיר
+           ===================================================== */
+
+        @media (max-width: 700px) {
+
+            body.pre-login-screen {
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: stretch;
+                gap: clamp(5px, 1.1dvh, 10px);
+
+                min-height: 100vh;
+                min-height: 100svh;
+                min-height: 100dvh;
+
+                /* ביטול המרווח התחתון המיותר של האתר */
+                padding:
+                    max(6px, env(safe-area-inset-top))
+                    8px
+                    max(6px, env(safe-area-inset-bottom));
+
+                overflow-x: hidden;
+                overscroll-behavior-y: contain;
+            }
+
+            /* אזור הכותרת והלוגו */
+            body.pre-login-screen > header {
+                flex: 0 0 auto;
+                margin: 0;
+            }
+
+            body.pre-login-screen > header h1 {
+                gap: clamp(5px, 1.7vw, 10px) !important;
+                margin: 0 0 5px !important;
+                font-size: clamp(1rem, 4.3vw, 1.3rem) !important;
+                line-height: 1.12;
+            }
+
+            body.pre-login-screen .header-logo {
+                width: clamp(23px, 6.5vw, 30px);
+                height: clamp(23px, 6.5vw, 30px);
+            }
+
+            body.pre-login-screen #installAppBtn {
+                margin: 5px auto;
+                padding: 6px 16px;
+                font-size: 0.85rem;
+            }
+
+            body.pre-login-screen #itemCount {
+                padding: 3px 12px;
+                font-size: 0.78rem;
+            }
+
+            /* אזור התחברות Google */
+            body.pre-login-screen #userSection {
+                flex: 0 0 auto;
+                width: 100%;
+                max-width: 480px;
+                margin: 0 auto;
+                padding: 7px 10px;
+                gap: 0;
+            }
+
+            body.pre-login-screen #googleLoginBtn {
+                padding: 9px 18px;
+                font-size: 0.95rem;
+                gap: 9px;
+            }
+
+            /* כרטיס הפתיחה – ממלא את כל השטח שנותר */
+            body.pre-login-screen #welcomeScreen {
+                flex: 1 1 auto;
+                min-height: 0;
+                width: 100%;
+                max-width: 560px;
+                margin: 0 auto;
+                padding:
+                    clamp(7px, 1.4dvh, 12px)
+                    clamp(9px, 3vw, 14px);
+                gap: clamp(3px, 0.8dvh, 8px);
+                justify-content: space-evenly;
+            }
+
+            /* סמל המנעול */
+            body.pre-login-screen #welcomeScreen .timer-ring {
+                flex: 0 0 auto;
+                width: clamp(28px, 5dvh, 40px);
+                height: clamp(28px, 5dvh, 40px);
+            }
+
+            /* הודעת האזהרה המשפטית */
+            body.pre-login-screen #welcomeScreen > div:nth-child(2) {
+                margin: 0 !important;
+                padding:
+                    clamp(7px, 1.4dvh, 11px)
+                    clamp(9px, 3vw, 14px) !important;
+                width: 100% !important;
+                max-width: 450px !important;
+                font-size: clamp(0.72rem, 2.7vw, 0.84rem) !important;
+                line-height: 1.32 !important;
+            }
+
+            body.pre-login-screen #welcomeScreen > div:nth-child(2) > div:first-child {
+                font-size: clamp(0.82rem, 3vw, 0.95rem) !important;
+                margin-bottom: 4px !important;
+            }
+
+            /* כותרת ברוכים הבאים */
+            body.pre-login-screen #welcomeScreen h2 {
+                font-size: clamp(1rem, 4vw, 1.22rem) !important;
+                line-height: 1.18;
+                margin: 0 0 2px !important;
+            }
+
+            /* הודעות הפרטיות והמידע */
+            body.pre-login-screen #welcomeScreen p {
+                font-size: clamp(0.73rem, 2.7vw, 0.84rem) !important;
+                line-height: 1.3;
+                margin: 0 0 2px !important;
+            }
+        }
+
+        /* התאמה נוספת לטלפונים עם מסך נמוך */
+        @media (max-width: 700px) and (max-height: 650px) {
+
+            body.pre-login-screen {
+                gap: 4px;
+            }
+
+            body.pre-login-screen > header h1 {
+                margin-bottom: 3px !important;
+            }
+
+            body.pre-login-screen #userSection {
+                padding: 5px 8px;
+            }
+
+            body.pre-login-screen #googleLoginBtn {
+                padding: 7px 14px;
+                font-size: 0.88rem;
+            }
+
+            body.pre-login-screen #welcomeScreen {
+                padding: 6px 9px;
+                gap: 2px;
+            }
+
+            body.pre-login-screen #welcomeScreen .timer-ring {
+                width: 28px;
+                height: 28px;
+            }
+
+            body.pre-login-screen #welcomeScreen > div:nth-child(2) {
+                padding: 6px 9px !important;
+                font-size: 0.72rem !important;
+                line-height: 1.24 !important;
+            }
+
+            body.pre-login-screen #welcomeScreen > div:nth-child(2) > div:first-child {
+                font-size: 0.82rem !important;
+                margin-bottom: 3px !important;
+            }
+
+            body.pre-login-screen #welcomeScreen h2 {
+                font-size: 0.98rem !important;
+                line-height: 1.12 !important;
+                margin-bottom: 1px !important;
+            }
+
+            body.pre-login-screen #welcomeScreen p {
+                font-size: 0.72rem !important;
+                line-height: 1.22 !important;
+                margin-bottom: 1px !important;
+            }
+        }
+
+        /* התאמה למסכים קצרים במיוחד או למצב לרוחב */
+        @media (max-width: 700px) and (max-height: 500px) {
+
+            body.pre-login-screen #welcomeScreen {
+                gap: 1px;
+                padding: 4px 8px;
+            }
+
+            body.pre-login-screen #welcomeScreen .timer-ring {
+                width: 24px;
+                height: 24px;
+            }
+
+            body.pre-login-screen #welcomeScreen > div:nth-child(2) {
+                padding: 5px 8px !important;
+                font-size: 0.68rem !important;
+                line-height: 1.18 !important;
+            }
+
+            body.pre-login-screen #welcomeScreen h2 {
+                font-size: 0.9rem !important;
+            }
+
+            body.pre-login-screen #welcomeScreen p {
+                font-size: 0.68rem !important;
+            }
+        }
+
             /* =====================================================
            מסך פתיחה – פריסת מסך מלאה וחכמה לסמארטפונים
            CSS GRID: כותרת | התחברות | תוכן ואזהרה
@@ -1922,15 +2046,12 @@
     <div id="protectedContent" class="auth-required locked">
         <div id="controlsArea" class="glass-panel">
             <div class="search-container">
-                <input type="search" id="searchInput" placeholder="🔍 חפש קישור, תיאור, #תגית או #מספר... (Ctrl+K)">
-                <button type="button" id="clearSearchBtn" class="search-clear-btn" title="נקה חיפוש (Esc)" aria-label="נקה חיפוש">✖</button>
+                <input type="search" id="searchInput" placeholder="🔍 חפש קישור, תיאור, #תגית או #מספר...">
             </div>
             <div class="filters-container">
                 <select id="categoryFilter" autocomplete="off"><option value="">📂 כל הקטגוריות</option></select>
-                <button type="button" id="openCategoryManagerBtn" class="filter-icon-btn" title="ניהול, שינוי שם ואיחוד קטגוריות">🏷️</button>
                 <select id="sortOrder" autocomplete="off">
                     <option value="date-new" selected>📅 חדש לישן</option>
-                    <option value="date-old">📅 ישן לחדש</option>
                     <option value="name">🔤 שם (א-ת)</option>
                     <option value="index-asc">🔢 מספר (עולה)</option>
                     <option value="index-desc">🔢 מספר (יורד)</option>
@@ -2000,6 +2121,28 @@
                     <span id="parkedCountBadge" class="status-count-badge parked-badge zero-items">0</span>
                 </button>
                 <button id="toggleDuplicatesBtn" class="action-btn btn-toggle" title="הצג כפילויות בלבד">
+                    <span>👥</span>
+                    <span id="dupCountBadge" class="status-count-badge dup-badge zero-items">0</span>
+                </button>
+                <button id="expandAllBtn" class="action-btn btn-toggle" title="פתח / סגור את כל הכרטיסים">↕️</button>
+                <button id="toggleDarkModeBtn" class="action-btn btn-toggle" title="מצב לילה / יום">☀️</button>
+            </div>
+        </div>
+
+        <details class="glass-panel">
+            <summary>▼ הוספת פריט חדש ידנית ▼</summary>
+            <form id="addItemForm">
+                <textarea id="itemContent" rows="2" required placeholder="הדבק כאן קישור או פקודה..."></textarea>
+                <input type="text" id="itemDescription" placeholder="תיאור הפריט (מומלץ להוסיף מידע קצר)">
+                <input type="text" id="itemCategory" list="categoriesDatalist" placeholder="קטגוריה">
+                <datalist id="categoriesDatalist"></datalist>
+                <input type="text" id="itemNote" placeholder="הערה אישית (אופציונלי)">
+                <button type="submit">הוסף למאגר</button>
+            </form>
+        </details>
+
+        <div id="listContainer"></div>
+    </div>
 
     <!-- חלון סריקה צף (Scan Dock) עם מזעור, השהייה וביטול -->
     <div id="scanDock">
@@ -2157,19 +2300,6 @@
                 </form>
                 <div id="usersAdminList" style="max-height:55vh; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div>
             </div>
-        </div>
-    </div>
-
-    <div id="categoryManagerModal" class="edit-modal-wrap">
-        <div class="edit-modal-box" style="max-width:480px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:12px;">
-                <h3 style="margin:0;">🏷️ ניהול, שינוי שם ואיחוד קטגוריות</h3>
-                <button type="button" onclick="document.getElementById('categoryManagerModal').style.display='none'" class="modal-close-pill" title="סגור">✖</button>
-            </div>
-            <div style="font-size:12px; color:var(--text-secondary); margin-bottom:10px;">
-                לחץ על שם קטגוריה לסינון מיידי, או על <b>✏️ שנה שם / אחד</b> כדי לשנות שם או לאחד לתוך קטגוריה קיימת.
-            </div>
-            <div id="categoryManagerList" style="max-height:58vh; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div>
         </div>
     </div>
 
@@ -2349,10 +2479,6 @@
             return hasForbiddenSummaryPattern(clean);
         }
 
-        function isItemUnscanned(item) {
-            return !item.aiSummary || isBadOrGuessedSummary(item.aiSummary) || item.siteStatus === 'unknown';
-        }
-
         function normalizeContentKey(raw) {
             const s = String(raw || '')
                 .replace(/[\u200B-\u200F\u202A-\u202E\uFEFF]/g, '')
@@ -2426,7 +2552,7 @@
         let state = {
             items: [], trash: [], user: null, unsubItems: null, unsubTrash: null,
             unsubAccess: null, unsubAdminUsers: null, allowedUsers: [], accessState: 'guest',
-            showDuplicates: true, showOnlyDead: false, showOnlyParked: false, showOnlyUnscanned: false,
+            showDuplicates: true, showOnlyDead: false, showOnlyParked: false,
             expandAllCards: false,
             isOffline: false,
             selectedIds: new Set(), isSelectionMode: false,
@@ -2516,6 +2642,18 @@
             }
             const chronologicalList = [...state.items].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
             const visualMetaMap = new Map();
+            const seenContents = new Map();
+            let deadCount = 0;
+            let parkedCount = 0;
+            let dupCount = 0;
+
+            for (let idx = 0; idx < chronologicalList.length; idx++) {
+                const item = chronologicalList[idx];
+                if (item.siteStatus === 'dead') deadCount++;
+                else if (item.siteStatus === 'parked') parkedCount++;
+
+                const visualIndex = idx + 1;
+                const key = normalizeContentKey(item.content);
                 if (!key) {
                     visualMetaMap.set(item.id, { visualIndex, isDup: false, dupOfIndex: null, dupOfContent: '' });
                     continue;
@@ -2541,17 +2679,16 @@
             }
 
             cachedMetaRev = itemsRevision;
-            cachedMetaResult = { visualMetaMap, deadCount, parkedCount, dupCount, unscannedCount };
+            cachedMetaResult = { visualMetaMap, deadCount, parkedCount, dupCount };
             return cachedMetaResult;
         }
 
-        // עדכון התגיות המספריות על כפתורי הסינון (🔴 לא זמין, 🟠 חניה, 👥 כפילויות, ❔ לא נסרקו)
+        // עדכון התגיות המספריות על כפתורי הסינון (🔴 לא זמין, 🟠 חניה, 👥 כפילויות)
         function updateStatusBadges(animate = false) {
-            const deadBadge      = document.getElementById('deadCountBadge');
-            const parkedBadge    = document.getElementById('parkedCountBadge');
-            const dupBadge       = document.getElementById('dupCountBadge');
-            const unscannedBadge = document.getElementById('unscannedCountBadge');
-            const { deadCount, parkedCount, dupCount, unscannedCount } = getComputedItemsMeta();
+            const deadBadge   = document.getElementById('deadCountBadge');
+            const parkedBadge = document.getElementById('parkedCountBadge');
+            const dupBadge    = document.getElementById('dupCountBadge');
+            const { deadCount, parkedCount, dupCount } = getComputedItemsMeta();
 
             const applyBadge = (el, count) => {
                 if (!el) return;
@@ -2569,7 +2706,6 @@
             applyBadge(deadBadge, deadCount);
             applyBadge(parkedBadge, parkedCount);
             applyBadge(dupBadge, dupCount);
-            applyBadge(unscannedBadge, unscannedCount);
         }
 
         function setupScanDockControls() {
@@ -3259,16 +3395,8 @@
             window.addEventListener('resize', closeAllMenus);
             let searchTimeout;
             document.getElementById('searchInput')?.addEventListener('input', () => {
-                syncSearchClearBtn();
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(() => window.requestAnimationFrame(renderList), 120);
-            });
-
-            document.getElementById('clearSearchBtn')?.addEventListener('click', () => {
-                const sEl = document.getElementById('searchInput');
-                if (sEl) { sEl.value = ''; sEl.focus(); }
-                syncSearchClearBtn();
-                renderList();
             });
             
             document.getElementById('categoryFilter')?.addEventListener('change', (e) => {
@@ -3277,47 +3405,16 @@
                 renderList();
             });
 
-            document.getElementById('openCategoryManagerBtn')?.addEventListener('click', openCategoryManagerModal);
-
             document.getElementById('sortOrder')?.addEventListener('change', () => {
                 saveUiSettings();
                 renderList();
             });
 
             document.getElementById('addItemForm')?.addEventListener('submit', handleAdd);
-            document.getElementById('itemContent')?.addEventListener('input', () => updateMultiAddDetector(false));
-            document.getElementById('addMultiLineCb')?.addEventListener('change', () => {
-                multiAddManualChoice = true;
-                updateMultiAddDetector(true);
-            });
-            document.getElementById('pasteFromClipboardBtn')?.addEventListener('click', async () => {
-                const area = document.getElementById('itemContent');
-                if (!area) return;
-                try {
-                    const clipText = await navigator.clipboard.readText();
-                    if (!clipText || !clipText.trim()) {
-                        showToast('ℹ️ לוח ההעתקה ריק', null, 2200);
-                        return;
-                    }
-                    area.value = area.value.trim() ? `${area.value.trim()}\n${clipText.trim()}` : clipText.trim();
-                    area.focus();
-                    multiAddManualChoice = false;
-                    updateMultiAddDetector(false);
-                } catch (_) {
-                    area.focus();
-                    showToast('⚠️ הדפדפן חסם גישה אוטומטית — הדבק ידנית (Ctrl+V)', null, 3200, null, true);
-                }
-            });
-
             document.getElementById('toggleDarkModeBtn')?.addEventListener('click', toggleTheme);
             document.getElementById('toggleDuplicatesBtn')?.addEventListener('click', toggleDuplicates);
             document.getElementById('toggleDeadBtn')?.addEventListener('click', toggleDeadFilter);
             document.getElementById('toggleParkedBtn')?.addEventListener('click', toggleParkedFilter);
-            document.getElementById('toggleUnscannedBtn')?.addEventListener('click', toggleUnscannedFilter);
-            document.getElementById('toggleSelectionModeBtn')?.addEventListener('click', () => {
-                if (state.isSelectionMode) exitSelectionMode();
-                else enterSelectionMode(null);
-            });
             document.getElementById('expandAllBtn')?.addEventListener('click', toggleExpandAllCards);
             
             document.getElementById('googleLoginBtn')?.addEventListener('click', cloudLogin);
@@ -3407,26 +3504,8 @@
                 });
             });
 
-            // קיצורי מקלדת (Ctrl+K / / לחיפוש) + סגירה מדורגת במקש Escape
+            // סגירה מדורגת במקש Escape: מודלים -> תפריטים -> מצב בחירה מרובה
             window.addEventListener('keydown', (e) => {
-                const isModK = (e.ctrlKey || e.metaKey) && String(e.key || '').toLowerCase() === 'k';
-                const tag = document.activeElement?.tagName;
-                const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable;
-                const anyModalOpen = Boolean(
-                    document.getElementById('trashModal')?.classList.contains('open') ||
-                    [...document.querySelectorAll('.edit-modal-wrap')].some(m => getComputedStyle(m).display !== 'none')
-                );
-
-                if ((isModK || (e.key === '/' && !isTyping && !e.ctrlKey && !e.metaKey && !e.altKey)) && !anyModalOpen && state.accessState === 'approved') {
-                    const sEl = document.getElementById('searchInput');
-                    if (sEl) {
-                        e.preventDefault();
-                        sEl.focus();
-                        sEl.select();
-                    }
-                    return;
-                }
-
                 if (e.key !== 'Escape') return;
                 const openEditModals = [...document.querySelectorAll('.edit-modal-wrap')]
                     .filter(m => getComputedStyle(m).display !== 'none');
@@ -3446,13 +3525,6 @@
                 );
                 if (hasOpenMenu) {
                     closeAllMenus();
-                    return;
-                }
-                const sEl = document.getElementById('searchInput');
-                if (document.activeElement === sEl && sEl?.value) {
-                    sEl.value = '';
-                    syncSearchClearBtn();
-                    renderList();
                     return;
                 }
                 if (state.isSelectionMode) {
@@ -3570,22 +3642,16 @@
                                 state.showOnlyParked = false;
                                 document.getElementById('toggleParkedBtn')?.classList.remove('parked-active');
                             }
-                            if (state.showOnlyUnscanned) {
-                                state.showOnlyUnscanned = false;
-                                document.getElementById('toggleUnscannedBtn')?.classList.remove('unscanned-active');
-                            }
                             if (!state.showDuplicates) {
                                 state.showDuplicates = true;
                                 document.getElementById('toggleDuplicatesBtn')?.classList.remove('dup-active');
                             }
                             searchEl.value = (searchEl.value.trim() === filterValue) ? '' : filterValue;
-                            syncSearchClearBtn();
                             saveUiSettings();
                             renderList();
                             if (searchEl.value) {
                                 showToast(`🔎 מסנן לפי: ${filterValue}`, () => {
                                     searchEl.value = '';
-                                    syncSearchClearBtn();
                                     renderList();
                                 }, 3500, 'filter-chip-toast');
                             }
@@ -3653,7 +3719,6 @@
         }
 
         let trashLoadedPromise = null;
-        let isTrashLoaded = false;
         let lazyBgTimers = [];
 
         function clearLazyBgTimers() {
@@ -3672,7 +3737,6 @@
             if (state.unsubItems) { state.unsubItems(); state.unsubItems = null; }
             if (state.unsubTrash) { state.unsubTrash(); state.unsubTrash = null; }
             trashLoadedPromise = null;
-            isTrashLoaded = false;
         }
 
         function resetPrefetchState() {
@@ -3941,30 +4005,11 @@
         function ensureTrashSubscription(user = state.user) {
             if (!user) return Promise.resolve();
             if (state.unsubTrash && trashLoadedPromise) return trashLoadedPromise;
-            const uid = user.uid;
-            const trashRef = collection(db, 'users', uid, 'trash');
+            const trashRef = collection(db, 'users', user.uid, 'trash');
             trashLoadedPromise = new Promise((resolve) => {
                 let settled = false;
-                const finish = () => {
-                    isTrashLoaded = true;
-                    if (!settled) { settled = true; resolve(); }
-                };
-
-                // משיכה מיידית ב-HTTP/2 REST API (~200ms) בלי לחכות ל-WebChannel
-                if (navigator.onLine) {
-                    fetchAllCollectionViaRest(user, 'trash').then((restTrash) => {
-                        if (state.user?.uid !== uid) return;
-                        if (Array.isArray(restTrash)) {
-                            state.trash = restTrash;
-                            finish();
-                            scheduleTrashRender();
-                        }
-                    }).catch(() => {});
-                }
-
+                const finish = () => { if (!settled) { settled = true; resolve(); } };
                 state.unsubTrash = onSnapshot(trashRef, (snapshot) => {
-                    if (state.user?.uid !== uid) return;
-                    if (snapshot.metadata.fromCache && navigator.onLine && snapshot.docs.length === 0 && !isTrashLoaded) return;
                     state.trash = snapshot.docs.map(normalizeSnapDoc);
                     finish();
                     scheduleTrashRender();
@@ -3972,7 +4017,7 @@
                     console.warn('[Sync] onSnapshot trash error:', err.message);
                     finish();
                 });
-                setTimeout(finish, 3500);
+                setTimeout(finish, 3000);
             });
             return trashLoadedPromise;
         }
@@ -4707,7 +4752,6 @@
             state.showDuplicates = sessionUi.showDuplicates !== undefined ? Boolean(sessionUi.showDuplicates) : true;
             state.showOnlyDead = Boolean(sessionUi.showOnlyDead);
             state.showOnlyParked = Boolean(sessionUi.showOnlyParked);
-            state.showOnlyUnscanned = Boolean(sessionUi.showOnlyUnscanned);
             state.expandAllCards = Boolean(persistentUi.expandAllCards);
 
             const so = document.getElementById('sortOrder');
@@ -4727,7 +4771,6 @@
             document.getElementById('toggleDuplicatesBtn')?.classList.toggle('dup-active', !state.showDuplicates);
             document.getElementById('toggleDeadBtn')?.classList.toggle('dead-active', state.showOnlyDead);
             document.getElementById('toggleParkedBtn')?.classList.toggle('parked-active', state.showOnlyParked);
-            document.getElementById('toggleUnscannedBtn')?.classList.toggle('unscanned-active', state.showOnlyUnscanned);
             document.getElementById('expandAllBtn')?.classList.toggle('expand-all-active', state.expandAllCards);
         }
 
@@ -4772,7 +4815,6 @@
                 showDuplicates: state.showDuplicates,
                 showOnlyDead: state.showOnlyDead,
                 showOnlyParked: state.showOnlyParked,
-                showOnlyUnscanned: state.showOnlyUnscanned,
                 categoryFilter: activeCat
             };
             try {
@@ -4896,7 +4938,7 @@
                     if (trashSnap) restTrash = trashSnap.docs.map(normalizeSnapDoc);
                 }
                 state.items = restItems;
-                if (Array.isArray(restTrash)) { state.trash = restTrash; isTrashLoaded = true; }
+                if (Array.isArray(restTrash)) state.trash = restTrash;
                 invalidateItemsMeta();
                 isServerDataArrived = true;
                 markFullSyncComplete();
@@ -5060,13 +5102,9 @@
 
             const visualMetaMap = getVisualMetaMap();
 
-            syncSearchClearBtn();
-            renderActiveFiltersBar();
-
             let sortedList = [...state.items];
             sortedList.sort((a, b) => {
                 if (sort === 'name') return (a.content||'').localeCompare(b.content||'');
-                if (sort === 'date-old') return (a.date || '').localeCompare(b.date || '');
                 if (sort === 'index-asc')
                     return (visualMetaMap.get(a.id)?.visualIndex || 0) - (visualMetaMap.get(b.id)?.visualIndex || 0);
                 if (sort === 'index-desc')
@@ -5167,12 +5205,11 @@
 
             let filtered = sortedList.filter(item => {
                 const meta = visualMetaMap.get(item.id) || {};
-                const matchesCat = !catFilter || (item.category || 'כללי') === catFilter;
+                const matchesCat = !catFilter || item.category === catFilter;
                 if (!matchesCat) return false;
                 if (!matchesSearchText(item, meta)) return false;
                 if (state.showOnlyDead) return item.siteStatus === 'dead';
                 if (state.showOnlyParked) return item.siteStatus === 'parked';
-                if (state.showOnlyUnscanned) return isItemUnscanned(item);
                 if (isolateDuplicatesMode) return !!meta.isDup;
                 return true;
             });
@@ -5198,7 +5235,7 @@
                     ).join('') + '</div>';
                     return;
                 }
-                const hasActiveFilters = Boolean(query || catFilter || state.showOnlyDead || state.showOnlyParked || state.showOnlyUnscanned || !state.showDuplicates);
+                const hasActiveFilters = Boolean(query || catFilter || state.showOnlyDead || state.showOnlyParked || !state.showDuplicates);
                 let extraHint = '';
                 if (state.items.length === 0) {
                     extraHint = '<br><br><small style="opacity:0.7;">אם הרשימה ריקה, לחץ על לחצן הענן (☁️) למעלה לטעינה מחדש.</small>';
@@ -5206,14 +5243,25 @@
                     extraHint = '<br><br><small style="opacity:0.85; color:var(--accent-green);">🎉 מעולה! לא נמצאו קישורים לא זמינים או עם שגיאת שרת.</small>';
                 } else if (state.showOnlyParked) {
                     extraHint = '<br><br><small style="opacity:0.85; color:var(--accent-green);">🎉 לא נמצאו דומיינים בחניה.</small>';
-                } else if (state.showOnlyUnscanned) {
-                    extraHint = '<br><br><small style="opacity:0.85; color:var(--accent-green);">🎉 מעולה! כל הפריטים כבר סרוקים ומאומתים.</small>';
                 }
                 const resetBtnHtml = hasActiveFilters
                     ? `<div style="margin-top:14px;"><button type="button" id="resetFiltersEmptyBtn" class="btn-action-sm" style="margin:0 auto; padding:8px 16px; font-size:0.88rem;">🔄 נקה חיפוש וסינונים</button></div>`
                     : '';
                 container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--text-secondary); font-size:1.1rem;">לא נמצאו תוצאות 🔍${extraHint}${resetBtnHtml}</div>`;
-                container.querySelector('#resetFiltersEmptyBtn')?.addEventListener('click', resetAllFilters);
+                container.querySelector('#resetFiltersEmptyBtn')?.addEventListener('click', () => {
+                    const sEl = document.getElementById('searchInput');
+                    const cEl = document.getElementById('categoryFilter');
+                    if (sEl) sEl.value = '';
+                    if (cEl) cEl.value = '';
+                    state.showOnlyDead = false;
+                    state.showOnlyParked = false;
+                    state.showDuplicates = true;
+                    document.getElementById('toggleDeadBtn')?.classList.remove('dead-active');
+                    document.getElementById('toggleParkedBtn')?.classList.remove('parked-active');
+                    document.getElementById('toggleDuplicatesBtn')?.classList.remove('dup-active');
+                    saveUiSettings();
+                    renderList();
+                });
                 return;
             }
 
@@ -5236,14 +5284,13 @@
                     if (isolateDuplicatesMode) cat = '⚠️ כפולים';
                     else if (state.showOnlyDead) cat = '🔴 אתרים לא זמינים / תקלות שרת';
                     else if (state.showOnlyParked) cat = '🟠 דומיינים בחניה / למכירה';
-                    else if (state.showOnlyUnscanned) cat = '❔ ממתינים לסריקה / אבחון';
                     if (!groups[cat]) groups[cat] = [];
                     groups[cat].push(i);
                 });
 
                 Object.keys(groups).sort((a, b) => {
-                    if (a.startsWith('⚠️') || a.startsWith('🔴') || a.startsWith('🟠') || a.startsWith('❔')) return -1;
-                    if (b.startsWith('⚠️') || b.startsWith('🔴') || b.startsWith('🟠') || b.startsWith('❔')) return 1;
+                    if (a.startsWith('⚠️') || a.startsWith('🔴') || a.startsWith('🟠')) return -1;
+                    if (b.startsWith('⚠️') || b.startsWith('🔴') || b.startsWith('🟠')) return 1;
                     return a.localeCompare(b);
                 }).forEach(cat => {
                     sections.push({ title: cat, isPinned: false, items: groups[cat] });
@@ -5294,17 +5341,8 @@
             const safeContent = escapeHtml(item.content);
             const rawHref = String(item.content || '').trim().replace(/^[\/\\]+/, '');
             const safeHref = escapeHtml(/^https?:\/\//i.test(rawHref) ? rawHref : 'https://' + rawHref);
-            let faviconHtml = '';
-            if (item.type === 'link') {
-                try {
-                    const host = new URL(/^https?:\/\//i.test(rawHref) ? rawHref : 'https://' + rawHref).hostname.toLowerCase();
-                    if (host && host.includes('.') && !/^(?:localhost|\d+\.\d+\.\d+\.\d+)$/.test(host)) {
-                        faviconHtml = `<img class="card-favicon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32" alt="" width="16" height="16" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.style.display='none'">`;
-                    }
-                } catch (_) {}
-            }
             const contentHtml = item.type === 'link'
-                ? `<div class="card-link-wrap">${faviconHtml}<a href="${safeHref}" class="card-link" target="_blank" rel="noopener noreferrer">${safeContent}</a></div>`
+                ? `<a href="${safeHref}" class="card-link" target="_blank" rel="noopener noreferrer">${safeContent}</a>`
                 : `<div class="card-text-content">${safeContent}</div>`;
             const noteHtml = item.note ? `<div class="card-note">📝 ${escapeHtml(item.note)}</div>` : '';
 
@@ -5454,137 +5492,17 @@
             return div;
         }
 
-        let multiAddManualChoice = false;
-
-        function updateMultiAddDetector(fromCheckbox = false) {
-            const area = document.getElementById('itemContent');
-            const notice = document.getElementById('multiAddNotice');
-            const cb = document.getElementById('addMultiLineCb');
-            const lbl = document.getElementById('multiAddLabel');
-            const submitBtn = document.getElementById('addSubmitBtn');
-            if (!area || !notice || !cb) return;
-
-            const lines = area.value.split(/\r?\n/).map(s => s.trim().replace(/^[\/\\]+/, '')).filter(Boolean);
-            if (lines.length < 2) {
-                notice.classList.remove('visible');
-                cb.checked = false;
-                multiAddManualChoice = false;
-                if (submitBtn) submitBtn.textContent = 'הוסף למאגר';
-                return;
-            }
-
-            const urlLines = lines.filter(l => URL_REGEX.test(l)).length;
-            if (!fromCheckbox && !multiAddManualChoice) {
-                cb.checked = urlLines >= 2 && urlLines >= Math.ceil(lines.length / 2);
-            }
-            notice.classList.add('visible');
-            if (lbl) lbl.textContent = `הוסף כל שורה כפריט נפרד (${lines.length} שורות)`;
-            if (submitBtn) submitBtn.textContent = cb.checked ? `הוסף ${lines.length} פריטים למאגר` : 'הוסף למאגר';
-        }
-
         async function handleAdd(e) {
             e.preventDefault();
-            const rawInput = document.getElementById('itemContent').value.trim();
-            if (!rawInput) return;
+            let content = document.getElementById('itemContent').value.trim();
+            content = content.replace(/^[\/\\]+/, '');
+            if (!content) return;
 
-            const description = document.getElementById('itemDescription').value.trim();
-            const category = document.getElementById('itemCategory').value.trim() || 'כללי';
-            const note = document.getElementById('itemNote').value.trim();
-            const multiChecked = Boolean(document.getElementById('addMultiLineCb')?.checked);
-            const rawLines = rawInput.split(/\r?\n/).map(s => s.trim().replace(/^[\/\\]+/, '')).filter(Boolean);
-
-            // הוספה מרובה (2+ שורות כשהתיבה מסומנת)
-            if (rawLines.length >= 2 && multiChecked && state.user) {
-                const uid = state.user.uid;
-                const existingKeys = new Set(state.items.map(i => normalizeContentKey(i.content)).filter(Boolean));
-                const seenBatch = new Set();
-                const usedIds = new Set(state.items.map(i => String(i.id)));
-                const baseNow = Date.now();
-                const newItems = [];
-                let skipped = 0;
-
-                rawLines.forEach((line, idx) => {
-                    const key = normalizeContentKey(line);
-                    if (!key || existingKeys.has(key) || seenBatch.has(key)) {
-                        skipped++;
-                        return;
-                    }
-                    seenBatch.add(key);
-                    let id = baseNow + idx;
-                    while (usedIds.has(String(id))) id++;
-                    usedIds.add(String(id));
-                    const stamp = new Date(baseNow + idx).toISOString();
-                    newItems.push({
-                        id,
-                        content: line,
-                        description,
-                        category,
-                        note,
-                        date: stamp,
-                        createdAt: stamp,
-                        updatedAt: stamp,
-                        type: URL_REGEX.test(line) ? 'link' : 'text',
-                        isPinned: false
-                    });
-                });
-
-                e.target.reset();
-                multiAddManualChoice = false;
-                updateMultiAddDetector(false);
-                const details = document.querySelector('details');
-                if (details) details.open = false;
-
-                if (!newItems.length) {
-                    showToast('ℹ️ כל הקישורים שהודבקו כבר קיימים במאגר.', null, 3500);
-                    return;
-                }
-
-                if (!navigator.onLine || state.isOffline) {
-                    for (const it of newItems) {
-                        state.items.unshift(it);
-                        await mhFastCache.enqueueOp(uid, { type: 'upsert', itemId: it.id, item: it, clearAi: false });
-                    }
-                    invalidateItemsMeta();
-                    await mhFastCache.set(uid, state.items);
-                    const pending = await mhFastCache.countPendingOps(uid);
-                    updateCategoryDropdowns();
-                    renderList();
-                    updateSyncStatus('offline', `מקומי (${state.items.length}) • ${pending} ממתינים`);
-                    showToast(`💾 נוספו ${newItems.length} פריטים מקומית${skipped ? ` (${skipped} כפולים דולגו)` : ''}`);
-                    return;
-                }
-
-                try {
-                    const count = await runAdaptiveCloudBatch({
-                        items: newItems,
-                        writesPerItem: 1,
-                        progressToastId: 'multi-add-toast',
-                        progressLabel: '➕ מוסיף פריטים לענן',
-                        applyToBatch: (batch, it) => {
-                            batch.set(doc(db, 'users', uid, 'items', String(it.id)), it, { merge: true });
-                        }
-                    });
-                    const existingIds = new Set(state.items.map(x => String(x.id)));
-                    newItems.forEach(it => { if (!existingIds.has(String(it.id))) state.items.unshift(it); });
-                    invalidateItemsMeta();
-                    mhFastCache.scheduleSave(uid, state.items);
-                    updateCategoryDropdowns();
-                    renderList();
-                    updateSyncStatus('online', formatSyncedLabel());
-                    showToast(`✅ נוספו ${count} פריטים למאגר${skipped ? ` (${skipped} כפולים דולגו)` : ''}`, null, 4500);
-                } catch (err) {
-                    showToast('❌ ההוספה המרובה נכשלה: ' + err.message, null, 5000, null, true);
-                }
-                return;
-            }
-
-            // הוספת פריט בודד
-            const content = rawInput.replace(/^[\/\\]+/, '');
             const normNew = normalizeContentKey(content);
             const existingItem = state.items.find(i => normalizeContentKey(i.content) === normNew);
             if (existingItem) {
                 const addAnyway = confirm(`⚠️ הפריט כבר קיים תחת "${existingItem.category}".\n\nהאם להוסיף כפילות?`);
-                if (!addAnyway) { e.target.reset(); multiAddManualChoice = false; updateMultiAddDetector(false); return; }
+                if (!addAnyway) { e.target.reset(); return; }
             }
 
             const now = nowIso();
@@ -5593,9 +5511,9 @@
             const newItem = {
                 id: newId,
                 content,
-                description,
-                category,
-                note,
+                description: document.getElementById('itemDescription').value.trim(),
+                category: document.getElementById('itemCategory').value.trim() || 'כללי',
+                note: document.getElementById('itemNote').value.trim(),
                 date: now,
                 createdAt: now,
                 updatedAt: now,
@@ -5604,8 +5522,6 @@
             };
 
             e.target.reset();
-            multiAddManualChoice = false;
-            updateMultiAddDetector(false);
             const details = document.querySelector('details');
             if (details) details.open = false;
 
@@ -5616,22 +5532,21 @@
                     const uid = state.user?.uid;
                     if (!uid) return;
                     if (!navigator.onLine || state.isOffline) {
+                        state.items = state.items.filter(x => String(x.id) !== String(newItem.id));
+                        invalidateItemsMeta();
                         await mhFastCache.enqueueOp(uid, { type: 'delete_item', itemId: newItem.id });
+                        await mhFastCache.set(uid, state.items);
+                        updateCategoryDropdowns();
+                        renderList();
                     } else {
                         await deleteDoc(doc(db, 'users', uid, 'items', newItem.id.toString()));
                     }
-                    state.items = state.items.filter(x => String(x.id) !== String(newItem.id));
-                    invalidateItemsMeta();
-                    mhFastCache.scheduleSave(uid, state.items);
-                    updateCategoryDropdowns();
-                    renderList();
-                    if (navigator.onLine) updateSyncStatus('online', formatSyncedLabel());
                     showToast('↩️ ההוספה בוטלה והפריט נמחק');
                 } catch(err) { console.error(err); }
             }, 7000);
 
             const settings = getAiSettings();
-            if (settings.autoScan && navigator.onLine) {
+            if (settings.autoScan) {
                 setTimeout(() => scanSingleItem(newItem.id, null, false), 500);
             }
         }
@@ -7897,110 +7812,13 @@ STRICT RULES:
             document.querySelectorAll('.drop-trigger.active').forEach(el => el.classList.remove('active'));
             const ai = document.getElementById('aiFloatingMenu'); if (ai) ai.style.display = 'none';
         }
-        function syncSearchClearBtn() {
-            const sEl = document.getElementById('searchInput');
-            const cBtn = document.getElementById('clearSearchBtn');
-            if (cBtn) cBtn.classList.toggle('visible', Boolean(sEl?.value));
-        }
-
-        function resetAllFilters() {
-            const sEl = document.getElementById('searchInput');
-            const cEl = document.getElementById('categoryFilter');
-            if (sEl) sEl.value = '';
-            if (cEl) cEl.value = '';
-            pendingCategoryFilter = '';
-            state.showOnlyDead = false;
-            state.showOnlyParked = false;
-            state.showOnlyUnscanned = false;
-            state.showDuplicates = true;
-            document.getElementById('toggleDeadBtn')?.classList.remove('dead-active');
-            document.getElementById('toggleParkedBtn')?.classList.remove('parked-active');
-            document.getElementById('toggleUnscannedBtn')?.classList.remove('unscanned-active');
-            document.getElementById('toggleDuplicatesBtn')?.classList.remove('dup-active');
-            syncSearchClearBtn();
-            saveUiSettings();
-            renderList();
-        }
-
-        function renderActiveFiltersBar() {
-            const bar = document.getElementById('activeFiltersBar');
-            if (!bar) return;
-            const query = document.getElementById('searchInput')?.value.trim() || '';
-            const cat = document.getElementById('categoryFilter')?.value || '';
-            const chips = [];
-
-            if (query) {
-                chips.push({
-                    label: `🔍 "${query.length > 26 ? query.slice(0, 26) + '…' : query}"`,
-                    clear: () => {
-                        const sEl = document.getElementById('searchInput');
-                        if (sEl) sEl.value = '';
-                        syncSearchClearBtn();
-                        renderList();
-                    }
-                });
-            }
-            if (cat) {
-                chips.push({
-                    label: `📂 ${cat}`,
-                    clear: () => {
-                        const cEl = document.getElementById('categoryFilter');
-                        if (cEl) cEl.value = '';
-                        pendingCategoryFilter = '';
-                        saveUiSettings();
-                        renderList();
-                    }
-                });
-            }
-            if (state.showOnlyDead) {
-                chips.push({ label: '🔴 לא זמינים בלבד', clear: toggleDeadFilter });
-            }
-            if (state.showOnlyParked) {
-                chips.push({ label: '🟠 דומיינים בחניה', clear: toggleParkedFilter });
-            }
-            if (state.showOnlyUnscanned) {
-                chips.push({ label: '❔ לא נסרקו', clear: toggleUnscannedFilter });
-            }
-            if (!state.showDuplicates) {
-                chips.push({ label: '👥 כפילויות בלבד', clear: toggleDuplicates });
-            }
-
-            bar.innerHTML = '';
-            if (!chips.length) {
-                bar.classList.remove('visible');
-                return;
-            }
-            bar.classList.add('visible');
-            chips.forEach(ch => {
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'active-filter-pill';
-                btn.title = 'לחץ להסרת סינון זה';
-                btn.innerHTML = `<span>${escapeHtml(ch.label)}</span><span style="opacity:0.75;">✖</span>`;
-                btn.addEventListener('click', ch.clear);
-                bar.appendChild(btn);
-            });
-            const clearAll = document.createElement('button');
-            clearAll.type = 'button';
-            clearAll.className = 'active-filters-clear-all';
-            clearAll.textContent = '✖ נקה הכל';
-            clearAll.addEventListener('click', resetAllFilters);
-            bar.appendChild(clearAll);
-        }
-
         function updateCategoryDropdowns() {
-            const catCounts = new Map();
-            state.items.forEach(x => {
-                const c = String(x.category || 'כללי').trim() || 'כללי';
-                catCounts.set(c, (catCounts.get(c) || 0) + 1);
-            });
-            const values = [...catCounts.keys()].sort((a, b) => a.localeCompare(b, 'he'));
+            const values = [...new Set(state.items.map(x => String(x.category || 'כללי').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'he'));
             const filter = document.getElementById('categoryFilter');
             const data = document.getElementById('categoriesDatalist');
             const desired = filter?.value || pendingCategoryFilter || '';
             if (filter) {
-                filter.innerHTML = `<option value="">📂 כל הקטגוריות (${state.items.length})</option>` +
-                    values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)} (${catCounts.get(v)})</option>`).join('');
+                filter.innerHTML = '<option value="">📂 כל הקטגוריות</option>' + values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
                 if (desired && values.includes(desired)) {
                     filter.value = desired;
                     pendingCategoryFilter = '';
@@ -8010,152 +7828,22 @@ STRICT RULES:
                 }
             }
             if (data) data.innerHTML = values.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
-            if (document.getElementById('categoryManagerModal')?.style.display === 'flex') {
-                renderCategoryManagerModal();
-            }
         }
-
-        function renderCategoryManagerModal() {
-            const host = document.getElementById('categoryManagerList');
-            if (!host) return;
-            const catCounts = new Map();
-            state.items.forEach(x => {
-                const c = String(x.category || 'כללי').trim() || 'כללי';
-                catCounts.set(c, (catCounts.get(c) || 0) + 1);
-            });
-            const sorted = [...catCounts.entries()].sort((a, b) => a[0].localeCompare(b[0], 'he'));
-            host.innerHTML = '';
-            if (!sorted.length) {
-                host.innerHTML = '<div style="text-align:center; padding:18px; color:var(--text-secondary);">אין עדיין קטגוריות במאגר.</div>';
-                return;
-            }
-            sorted.forEach(([catName, count]) => {
-                const row = document.createElement('div');
-                row.className = 'cat-mgr-row';
-
-                const nameBtn = document.createElement('button');
-                nameBtn.type = 'button';
-                nameBtn.className = 'cat-mgr-name-btn';
-                nameBtn.title = `סנן לפי "${catName}"`;
-                nameBtn.innerHTML = `<span style="overflow-wrap:anywhere;">📂 ${escapeHtml(catName)}</span><span class="category-badge">${count}</span>`;
-                nameBtn.addEventListener('click', () => {
-                    const cf = document.getElementById('categoryFilter');
-                    if (cf) cf.value = catName;
-                    pendingCategoryFilter = catName;
-                    saveUiSettings();
-                    renderList();
-                    document.getElementById('categoryManagerModal').style.display = 'none';
-                });
-
-                const renameBtn = document.createElement('button');
-                renameBtn.type = 'button';
-                renameBtn.className = 'btn-action-sm';
-                renameBtn.textContent = '✏️ שנה שם / אחד';
-                renameBtn.addEventListener('click', () => renameOrMergeCategory(catName));
-
-                row.append(nameBtn, renameBtn);
-                host.appendChild(row);
-            });
-        }
-
-        function openCategoryManagerModal() {
-            closeAllMenus();
-            renderCategoryManagerModal();
-            const modal = document.getElementById('categoryManagerModal');
-            if (modal) modal.style.display = 'flex';
-        }
-
-        async function renameOrMergeCategory(oldCategory) {
-            if (!state.user) return;
-            const rawNew = prompt(`הזן שם חדש עבור הקטגוריה "${oldCategory}" (אם הקטגוריה כבר קיימת, הפריטים יאוחדו לתוכה):`, oldCategory);
-            if (rawNew === null) return;
-            const targetCat = rawNew.trim();
-            if (!targetCat || targetCat === oldCategory) return;
-
-            const affected = state.items.filter(x => (String(x.category || 'כללי').trim() || 'כללי') === oldCategory);
-            if (!affected.length) return;
-
-            const targetExistsCount = state.items.filter(x => (String(x.category || 'כללי').trim() || 'כללי') === targetCat).length;
-            if (targetExistsCount > 0) {
-                const okMerge = confirm(`הקטגוריה "${targetCat}" כבר קיימת (${targetExistsCount} פריטים).\nלאחד לתוכה את כל ${affected.length} הפריטים מ-"${oldCategory}"?`);
-                if (!okMerge) return;
-            }
-
-            const uid = state.user.uid;
-            const stamp = nowIso();
-
-            if (!navigator.onLine || state.isOffline) {
-                for (const it of affected) {
-                    it.category = targetCat;
-                    it.updatedAt = stamp;
-                    const clean = JSON.parse(JSON.stringify(it));
-                    delete clean.isScanning;
-                    delete clean._keepExpanded;
-                    await mhFastCache.enqueueOp(uid, { type: 'upsert', itemId: it.id, item: clean, clearAi: false });
-                }
-                invalidateItemsMeta();
-                await mhFastCache.set(uid, state.items);
-                const cf = document.getElementById('categoryFilter');
-                if (cf && cf.value === oldCategory) { cf.value = targetCat; pendingCategoryFilter = targetCat; saveUiSettings(); }
-                updateCategoryDropdowns();
-                renderList();
-                const pending = await mhFastCache.countPendingOps(uid);
-                updateSyncStatus('offline', `מקומי (${state.items.length}) • ${pending} ממתינים`);
-                showToast(`💾 ${affected.length} פריטים עודכנו מקומית ל-"${targetCat}"`);
-                return;
-            }
-
-            try {
-                const count = await runAdaptiveCloudBatch({
-                    items: affected,
-                    writesPerItem: 1,
-                    progressToastId: 'cat-rename-toast',
-                    progressLabel: targetExistsCount > 0 ? `🔀 מאחד לתוך "${targetCat}"` : `🏷️ משנה שם ל-"${targetCat}"`,
-                    applyToBatch: (batch, it) => {
-                        batch.set(doc(db, 'users', uid, 'items', String(it.id)), { category: targetCat, updatedAt: stamp }, { merge: true });
-                    }
-                });
-                affected.forEach(it => { it.category = targetCat; it.updatedAt = stamp; });
-                invalidateItemsMeta();
-                mhFastCache.scheduleSave(uid, state.items);
-                const cf = document.getElementById('categoryFilter');
-                if (cf && cf.value === oldCategory) { cf.value = targetCat; pendingCategoryFilter = targetCat; saveUiSettings(); }
-                updateCategoryDropdowns();
-                renderList();
-                updateSyncStatus('online', formatSyncedLabel());
-                showToast(targetExistsCount > 0
-                    ? `🔀 אוחדו ${count} פריטים מ-"${oldCategory}" אל "${targetCat}"`
-                    : `🏷️ שונה שם הקטגוריה ל-"${targetCat}" (${count} פריטים)`
-                );
-            } catch (err) {
-                showToast('❌ עדכון הקטגוריה נכשל: ' + err.message, null, 5000, null, true);
-            }
-        }
-
         function toggleDuplicates() {
             state.showDuplicates = !state.showDuplicates;
             document.getElementById('toggleDuplicatesBtn')?.classList.toggle('dup-active', !state.showDuplicates);
             saveUiSettings(); renderList();
         }
         function toggleDeadFilter() {
-            state.showOnlyDead = !state.showOnlyDead; state.showOnlyParked = false; state.showOnlyUnscanned = false;
+            state.showOnlyDead = !state.showOnlyDead; state.showOnlyParked = false;
             document.getElementById('toggleDeadBtn')?.classList.toggle('dead-active', state.showOnlyDead);
             document.getElementById('toggleParkedBtn')?.classList.remove('parked-active');
-            document.getElementById('toggleUnscannedBtn')?.classList.remove('unscanned-active');
             saveUiSettings(); renderList();
         }
         function toggleParkedFilter() {
-            state.showOnlyParked = !state.showOnlyParked; state.showOnlyDead = false; state.showOnlyUnscanned = false;
+            state.showOnlyParked = !state.showOnlyParked; state.showOnlyDead = false;
             document.getElementById('toggleParkedBtn')?.classList.toggle('parked-active', state.showOnlyParked);
             document.getElementById('toggleDeadBtn')?.classList.remove('dead-active');
-            document.getElementById('toggleUnscannedBtn')?.classList.remove('unscanned-active');
-            saveUiSettings(); renderList();
-        }
-        function toggleUnscannedFilter() {
-            state.showOnlyUnscanned = !state.showOnlyUnscanned; state.showOnlyDead = false; state.showOnlyParked = false;
-            document.getElementById('toggleUnscannedBtn')?.classList.toggle('unscanned-active', state.showOnlyUnscanned);
-            document.getElementById('toggleDeadBtn')?.classList.remove('dead-active');
-            document.getElementById('toggleParkedBtn')?.classList.remove('parked-active');
             saveUiSettings(); renderList();
         }
         function initTheme() {
@@ -8293,15 +7981,6 @@ STRICT RULES:
                 batch.set(doc(db, 'users', uid, 'trash', String(id)), trashItem);
                 batch.delete(doc(db, 'users', uid, 'items', String(id)));
                 await commitBatch(batch);
-
-                state.items = state.items.filter(x => String(x.id) !== String(id));
-                state.trash = [trashItem, ...state.trash.filter(x => String(x.id) !== String(id))];
-                invalidateItemsMeta();
-                mhFastCache.scheduleSave(uid, state.items);
-                updateCategoryDropdowns();
-                renderList();
-                updateSyncStatus('online', formatSyncedLabel());
-
                 showToast('🗑️ הועבר לסל המחזור', async () => {
                     if (!navigator.onLine || state.isOffline) {
                         state.items.unshift(clean);
@@ -8317,13 +7996,6 @@ STRICT RULES:
                     undoBatch.set(doc(db, 'users', uid, 'items', String(id)), clean);
                     undoBatch.delete(doc(db, 'users', uid, 'trash', String(id)));
                     await commitBatch(undoBatch);
-                    if (!state.items.some(x => String(x.id) === String(id))) state.items.unshift(clean);
-                    state.trash = state.trash.filter(x => String(x.id) !== String(id));
-                    invalidateItemsMeta();
-                    mhFastCache.scheduleSave(uid, state.items);
-                    updateCategoryDropdowns();
-                    renderList();
-                    updateSyncStatus('online', formatSyncedLabel());
                 });
             } catch (e) {
                 if (isNetworkLikeError(e)) {
@@ -8336,14 +8008,12 @@ STRICT RULES:
         function openTrashModal() {
             const modal=document.getElementById('trashModal'), list=document.getElementById('trashList'); if(!modal||!list)return;
             modal.classList.add('open'); list.innerHTML='';
-            if (!isTrashLoaded && state.user) {
-                list.innerHTML = '<div style="text-align:center; padding:18px; color:var(--text-secondary);">⏳ טוען סל מחזור...</div>';
-                ensureTrashSubscription(state.user).then(() => {
-                    if (modal.classList.contains('open')) openTrashModal();
-                });
+            if (!state.unsubTrash && state.user) {
+                list.textContent = 'טוען סל מחזור...';
+                ensureTrashSubscription(state.user);
                 return;
             }
-            if(!state.trash.length){list.innerHTML='<div style="text-align:center; padding:18px; color:var(--text-secondary);">סל המחזור ריק.</div>';return;}
+            if(!state.trash.length){list.textContent='סל המחזור ריק.';return;}
             state.trash.forEach(item=>{
                 const row=document.createElement('div');
                 row.className='trash-item';
@@ -8370,37 +8040,16 @@ STRICT RULES:
         function closeTrashModal(){document.getElementById('trashModal')?.classList.remove('open');}
         async function restoreTrashItem(item){
             if (!state.user) return;
-            const uid = state.user.uid;
-            const clean = JSON.parse(JSON.stringify(item));
-            delete clean.deletedAt;
-            delete clean.isScanning;
-            delete clean._keepExpanded;
-
-            if (!navigator.onLine || state.isOffline) {
-                if (!state.items.some(x => String(x.id) === String(item.id))) state.items.unshift(clean);
-                state.trash = state.trash.filter(x => String(x.id) !== String(item.id));
-                invalidateItemsMeta();
-                await mhFastCache.enqueueOp(uid, { type: 'restore_from_trash', itemId: item.id, item: clean });
-                await mhFastCache.set(uid, state.items);
-                updateCategoryDropdowns();
-                renderList();
-                if (document.getElementById('trashModal')?.classList.contains('open')) openTrashModal();
-                showToast('♻️ שוחזר מקומית (יסונכרן בחיבור הבא)');
-                return;
-            }
+            if (!navigator.onLine) { showToast('❌ אין חיבור לאינטרנט — לא ניתן לשחזר כעת.', null, 3500, null, true); return; }
             try {
+                const clean = JSON.parse(JSON.stringify(item));
+                delete clean.deletedAt;
+                delete clean.isScanning;
+                delete clean._keepExpanded;
                 const batch = writeBatch(db);
-                batch.set(doc(db, 'users', uid, 'items', String(item.id)), clean, { merge: true });
-                batch.delete(doc(db, 'users', uid, 'trash', String(item.id)));
+                batch.set(doc(db, 'users', state.user.uid, 'items', String(item.id)), clean, { merge: true });
+                batch.delete(doc(db, 'users', state.user.uid, 'trash', String(item.id)));
                 await commitBatch(batch);
-                if (!state.items.some(x => String(x.id) === String(item.id))) state.items.unshift(clean);
-                state.trash = state.trash.filter(x => String(x.id) !== String(item.id));
-                invalidateItemsMeta();
-                mhFastCache.scheduleSave(uid, state.items);
-                updateCategoryDropdowns();
-                renderList();
-                updateSyncStatus('online', formatSyncedLabel());
-                if (document.getElementById('trashModal')?.classList.contains('open')) openTrashModal();
                 showToast('♻️ הפריט שוחזר');
             } catch (e) {
                 showToast('❌ השחזור נכשל: ' + e.message, null, 3500, null, true);
@@ -8412,8 +8061,6 @@ STRICT RULES:
             if (!confirm('למחוק את הפריט לצמיתות?')) return;
             try {
                 await deleteDoc(doc(db, 'users', state.user.uid, 'trash', String(item.id)));
-                state.trash = state.trash.filter(x => String(x.id) !== String(item.id));
-                if (document.getElementById('trashModal')?.classList.contains('open')) openTrashModal();
                 showToast('הפריט נמחק לצמיתות');
             } catch (e) {
                 showToast('❌ המחיקה נכשלה: ' + e.message, null, 3500, null, true);
@@ -8605,18 +8252,6 @@ STRICT RULES:
                         batch.delete(doc(db, 'users', uid, 'trash', String(item.id)));
                     }
                 });
-                const existingIds = new Set(state.items.map(x => String(x.id)));
-                list.forEach(it => {
-                    const clean = { ...it }; delete clean.deletedAt;
-                    if (!existingIds.has(String(clean.id))) state.items.unshift(clean);
-                });
-                state.trash = [];
-                invalidateItemsMeta();
-                mhFastCache.scheduleSave(uid, state.items);
-                updateCategoryDropdowns();
-                renderList();
-                updateSyncStatus('online', formatSyncedLabel());
-                if (document.getElementById('trashModal')?.classList.contains('open')) openTrashModal();
                 showToast(`♻️ שוחזרו ${count} פריטים`);
             } catch (e) {
                 showToast('❌ השחזור נכשל: ' + e.message, null, 4000, null, true);
@@ -8637,8 +8272,6 @@ STRICT RULES:
                         batch.delete(doc(db, 'users', uid, 'trash', String(x.id)));
                     }
                 });
-                state.trash = [];
-                if (document.getElementById('trashModal')?.classList.contains('open')) openTrashModal();
                 showToast(`🧹 סל המחזור רוקן (${count} פריטים נמחקו)`);
             }catch(e){showToast('❌ לא ניתן לרוקן את הסל: '+e.message,null,4000,null,true);}
         }
@@ -8821,13 +8454,11 @@ STRICT RULES:
                 state.showDuplicates = true;
                 state.showOnlyDead = false;
                 state.showOnlyParked = false;
-                state.showOnlyUnscanned = false;
                 if (ui.expandAllCards !== undefined) state.expandAllCards = Boolean(ui.expandAllCards);
 
                 document.getElementById('toggleDuplicatesBtn')?.classList.remove('dup-active');
                 document.getElementById('toggleDeadBtn')?.classList.remove('dead-active');
                 document.getElementById('toggleParkedBtn')?.classList.remove('parked-active');
-                document.getElementById('toggleUnscannedBtn')?.classList.remove('unscanned-active');
                 document.getElementById('expandAllBtn')?.classList.toggle('expand-all-active', state.expandAllCards);
 
                 const hasExistingUserPrefs = Boolean(state.user?.uid && localStorage.getItem(getUiSettingsKey(state.user.uid)));
@@ -9431,14 +9062,13 @@ STRICT RULES:
                 if (cb) cb.checked = isSel;
             });
         }
-        function enterSelectionMode(id){state.isSelectionMode=true;document.body.classList.add('selection-mode-active');document.getElementById('toggleSelectionModeBtn')?.classList.add('select-mode-active');if(id!=null)state.selectedIds.add(id);updateBulkActionBar();syncRenderedSelectionUI();}
-        function toggleSelection(id){if(state.selectedIds.has(id))state.selectedIds.delete(id);else state.selectedIds.add(id);state.isSelectionMode=state.selectedIds.size>0;document.body.classList.toggle('selection-mode-active',state.isSelectionMode);document.getElementById('toggleSelectionModeBtn')?.classList.toggle('select-mode-active',state.isSelectionMode);updateBulkActionBar();const card=document.querySelector(`.card[data-id="${id}"]`);card?.classList.toggle('selected',state.selectedIds.has(id));const cb=card?.querySelector('.card-checkbox');if(cb)cb.checked=state.selectedIds.has(id);}
-        function updateBulkActionBar(){const bar=document.getElementById('bulkActionBar');if(!bar)return;bar.classList.toggle('visible',state.isSelectionMode);document.getElementById('toggleSelectionModeBtn')?.classList.toggle('select-mode-active',state.isSelectionMode);document.getElementById('selectedCount').textContent=`${state.selectedIds.size} נבחרו`;const all=document.getElementById('selectAllCheckbox');if(all)all.checked=state.filteredItems.length>0&&state.filteredItems.every(x=>state.selectedIds.has(x.id));}
+        function enterSelectionMode(id){state.isSelectionMode=true;document.body.classList.add('selection-mode-active');if(id!=null)state.selectedIds.add(id);updateBulkActionBar();syncRenderedSelectionUI();}
+        function toggleSelection(id){if(state.selectedIds.has(id))state.selectedIds.delete(id);else state.selectedIds.add(id);state.isSelectionMode=state.selectedIds.size>0;document.body.classList.toggle('selection-mode-active',state.isSelectionMode);updateBulkActionBar();const card=document.querySelector(`.card[data-id="${id}"]`);card?.classList.toggle('selected',state.selectedIds.has(id));const cb=card?.querySelector('.card-checkbox');if(cb)cb.checked=state.selectedIds.has(id);}
+        function updateBulkActionBar(){const bar=document.getElementById('bulkActionBar');if(!bar)return;bar.classList.toggle('visible',state.isSelectionMode);document.getElementById('selectedCount').textContent=`${state.selectedIds.size} נבחרו`;const all=document.getElementById('selectAllCheckbox');if(all)all.checked=state.filteredItems.length>0&&state.filteredItems.every(x=>state.selectedIds.has(x.id));}
         function exitSelectionMode(){
             state.selectedIds.clear();
             state.isSelectionMode=false;
             document.body.classList.remove('selection-mode-active');
-            document.getElementById('toggleSelectionModeBtn')?.classList.remove('select-mode-active');
             updateBulkActionBar();
             syncRenderedSelectionUI();
         }
@@ -9461,13 +9091,6 @@ STRICT RULES:
                         batch.set(doc(db, 'users', uid, 'items', String(id)), { category: cleanCat, updatedAt: stamp }, { merge: true });
                     }
                 });
-                const idSet = new Set(ids.map(String));
-                state.items.forEach(it => { if (idSet.has(String(it.id))) { it.category = cleanCat; it.updatedAt = stamp; } });
-                invalidateItemsMeta();
-                mhFastCache.scheduleSave(uid, state.items);
-                updateCategoryDropdowns();
-                renderList();
-                updateSyncStatus('online', formatSyncedLabel());
                 showToast(`📂 ${count} פריטים הועברו ל-"${cleanCat}"`);
             } catch (e) {
                 showToast('❌ ההעברה נכשלה: ' + e.message, null, 4000, null, true);
@@ -9506,17 +9129,6 @@ STRICT RULES:
                         batch.delete(doc(db, 'users', uid, 'items', String(id)));
                     }
                 });
-                const idSet = new Set(ids.map(String));
-                if (!permanentDelete) {
-                    const moved = state.items.filter(it => idSet.has(String(it.id))).map(it => normalizeRecordForCloud(it, it.id, it, true));
-                    state.trash = [...moved, ...state.trash.filter(t => !idSet.has(String(t.id)))];
-                }
-                state.items = state.items.filter(it => !idSet.has(String(it.id)));
-                invalidateItemsMeta();
-                mhFastCache.scheduleSave(uid, state.items);
-                updateCategoryDropdowns();
-                renderList();
-                updateSyncStatus('online', formatSyncedLabel());
                 showToast(permanentDelete ? `🗑️ ${count} פריטים נמחקו לצמיתות` : `🗑️ ${count} פריטים הועברו לסל המחזור`);
             }catch(e){
                 showToast('❌ המחיקה נכשלה: '+e.message,null,4000,null,true);
@@ -9538,17 +9150,6 @@ STRICT RULES:
                         batch.set(doc(db, 'users', uid, 'items', String(id)), { ...aiClearPatch(), updatedAt: stamp }, { merge: true });
                     }
                 });
-                const idSet = new Set(ids.map(String));
-                state.items.forEach(it => {
-                    if (idSet.has(String(it.id))) {
-                        delete it.aiSummary; delete it.aiTags; delete it.aiModel; delete it.siteStatus; delete it.httpCode;
-                        it.updatedAt = stamp;
-                    }
-                });
-                invalidateItemsMeta();
-                mhFastCache.scheduleSave(uid, state.items);
-                updateStatusBadges(false);
-                renderList();
                 showToast(`🧹 ניתוחי AI נוקו (${count} פריטים)`);
             }catch(e){showToast('❌ הניקוי נכשל: '+e.message,null,4000,null,true);}
         }
@@ -9556,7 +9157,11 @@ STRICT RULES:
             document.getElementById('restoreAllBtn')?.addEventListener('click',restoreAllTrash);document.getElementById('emptyTrashBtn')?.addEventListener('click',emptyTrash);
             document.getElementById('fixBadScansBtn')?.addEventListener('click', () => {
                 closeAllMenus();
-                const bad = state.items.filter(isItemUnscanned);
+                const bad = state.items.filter(i =>
+                    !i.aiSummary ||
+                    isBadOrGuessedSummary(i.aiSummary) ||
+                    i.siteStatus === 'unknown'
+                );
                 if (bad.length === 0) {
                     showToast('🎉 כל הכרטיסים כבר מתוקנים ומדויקים!', null, 3500);
                     return;
