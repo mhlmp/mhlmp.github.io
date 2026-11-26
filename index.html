@@ -1921,6 +1921,21 @@
 
     <div id="protectedContent" class="auth-required locked">
         <div id="controlsArea" class="glass-panel">
+            <div class="search-container">
+                <input type="search" id="searchInput" placeholder="🔍 חפש קישור, תיאור, #תגית או #מספר... (Ctrl+K)">
+                <button type="button" id="clearSearchBtn" class="search-clear-btn" title="נקה חיפוש (Esc)" aria-label="נקה חיפוש">✖</button>
+            </div>
+            <div class="filters-container">
+                <select id="categoryFilter" autocomplete="off"><option value="">📂 כל הקטגוריות</option></select>
+                <button type="button" id="openCategoryManagerBtn" class="filter-icon-btn" title="ניהול, שינוי שם ואיחוד קטגוריות">🏷️</button>
+                <select id="sortOrder" autocomplete="off">
+                    <option value="date-new" selected>📅 חדש לישן</option>
+                    <option value="date-old">📅 ישן לחדש</option>
+                    <option value="name">🔤 שם (א-ת)</option>
+                    <option value="index-asc">🔢 מספר (עולה)</option>
+                    <option value="index-desc">🔢 מספר (יורד)</option>
+                </select>
+            </div>
             <div class="actions-container">
                 <div class="dropdown">
                     <button class="action-btn btn-json drop-trigger" data-target="jsonMenu">📂 JSON ▼</button>
@@ -1985,9 +2000,6 @@
                     <span id="parkedCountBadge" class="status-count-badge parked-badge zero-items">0</span>
                 </button>
                 <button id="toggleDuplicatesBtn" class="action-btn btn-toggle" title="הצג כפילויות בלבד">
-
-        <div id="listContainer"></div>
-    </div>
 
     <!-- חלון סריקה צף (Scan Dock) עם מזעור, השהייה וביטול -->
     <div id="scanDock">
@@ -2331,6 +2343,15 @@
         }
 
         function isBadOrGuessedSummary(text) {
+            if (!text || typeof text !== 'string') return true;
+            const clean = text.trim();
+            if (clean.length < 12) return true;
+            return hasForbiddenSummaryPattern(clean);
+        }
+
+        function isItemUnscanned(item) {
+            return !item.aiSummary || isBadOrGuessedSummary(item.aiSummary) || item.siteStatus === 'unknown';
+        }
 
         function normalizeContentKey(raw) {
             const s = String(raw || '')
@@ -2403,6 +2424,14 @@
         let deferredPrompt;
         
         let state = {
+            items: [], trash: [], user: null, unsubItems: null, unsubTrash: null,
+            unsubAccess: null, unsubAdminUsers: null, allowedUsers: [], accessState: 'guest',
+            showDuplicates: true, showOnlyDead: false, showOnlyParked: false, showOnlyUnscanned: false,
+            expandAllCards: false,
+            isOffline: false,
+            selectedIds: new Set(), isSelectionMode: false,
+            filteredItems: []
+        };
 
         const scanController = {
             isRunning: false,
@@ -2487,7 +2516,6 @@
             }
             const chronologicalList = [...state.items].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
             const visualMetaMap = new Map();
-                const key = normalizeContentKey(item.content);
                 if (!key) {
                     visualMetaMap.set(item.id, { visualIndex, isDup: false, dupOfIndex: null, dupOfContent: '' });
                     continue;
@@ -3538,7 +3566,29 @@
                                 state.showOnlyDead = false;
                                 document.getElementById('toggleDeadBtn')?.classList.remove('dead-active');
                             }
-                            showToast(`🔎 מסנן לפי: ${filterValue}`, () => {
+                            if (state.showOnlyParked) {
+                                state.showOnlyParked = false;
+                                document.getElementById('toggleParkedBtn')?.classList.remove('parked-active');
+                            }
+                            if (state.showOnlyUnscanned) {
+                                state.showOnlyUnscanned = false;
+                                document.getElementById('toggleUnscannedBtn')?.classList.remove('unscanned-active');
+                            }
+                            if (!state.showDuplicates) {
+                                state.showDuplicates = true;
+                                document.getElementById('toggleDuplicatesBtn')?.classList.remove('dup-active');
+                            }
+                            searchEl.value = (searchEl.value.trim() === filterValue) ? '' : filterValue;
+                            syncSearchClearBtn();
+                            saveUiSettings();
+                            renderList();
+                            if (searchEl.value) {
+                                showToast(`🔎 מסנן לפי: ${filterValue}`, () => {
+                                    searchEl.value = '';
+                                    syncSearchClearBtn();
+                                    renderList();
+                                }, 3500, 'filter-chip-toast');
+                            }
                         }
                         return;
                     }
@@ -7847,7 +7897,267 @@ STRICT RULES:
             document.querySelectorAll('.drop-trigger.active').forEach(el => el.classList.remove('active'));
             const ai = document.getElementById('aiFloatingMenu'); if (ai) ai.style.display = 'none';
         }
+        function syncSearchClearBtn() {
+            const sEl = document.getElementById('searchInput');
+            const cBtn = document.getElementById('clearSearchBtn');
+            if (cBtn) cBtn.classList.toggle('visible', Boolean(sEl?.value));
+        }
+
+        function resetAllFilters() {
+            const sEl = document.getElementById('searchInput');
+            const cEl = document.getElementById('categoryFilter');
+            if (sEl) sEl.value = '';
+            if (cEl) cEl.value = '';
+            pendingCategoryFilter = '';
+            state.showOnlyDead = false;
+            state.showOnlyParked = false;
+            state.showOnlyUnscanned = false;
+            state.showDuplicates = true;
+            document.getElementById('toggleDeadBtn')?.classList.remove('dead-active');
+            document.getElementById('toggleParkedBtn')?.classList.remove('parked-active');
+            document.getElementById('toggleUnscannedBtn')?.classList.remove('unscanned-active');
+            document.getElementById('toggleDuplicatesBtn')?.classList.remove('dup-active');
+            syncSearchClearBtn();
+            saveUiSettings();
+            renderList();
+        }
+
+        function renderActiveFiltersBar() {
+            const bar = document.getElementById('activeFiltersBar');
+            if (!bar) return;
+            const query = document.getElementById('searchInput')?.value.trim() || '';
+            const cat = document.getElementById('categoryFilter')?.value || '';
+            const chips = [];
+
+            if (query) {
+                chips.push({
+                    label: `🔍 "${query.length > 26 ? query.slice(0, 26) + '…' : query}"`,
+                    clear: () => {
+                        const sEl = document.getElementById('searchInput');
+                        if (sEl) sEl.value = '';
+                        syncSearchClearBtn();
+                        renderList();
+                    }
+                });
+            }
+            if (cat) {
+                chips.push({
+                    label: `📂 ${cat}`,
+                    clear: () => {
+                        const cEl = document.getElementById('categoryFilter');
+                        if (cEl) cEl.value = '';
+                        pendingCategoryFilter = '';
+                        saveUiSettings();
+                        renderList();
+                    }
+                });
+            }
+            if (state.showOnlyDead) {
+                chips.push({ label: '🔴 לא זמינים בלבד', clear: toggleDeadFilter });
+            }
+            if (state.showOnlyParked) {
+                chips.push({ label: '🟠 דומיינים בחניה', clear: toggleParkedFilter });
+            }
+            if (state.showOnlyUnscanned) {
+                chips.push({ label: '❔ לא נסרקו', clear: toggleUnscannedFilter });
+            }
+            if (!state.showDuplicates) {
+                chips.push({ label: '👥 כפילויות בלבד', clear: toggleDuplicates });
+            }
+
+            bar.innerHTML = '';
+            if (!chips.length) {
+                bar.classList.remove('visible');
+                return;
+            }
+            bar.classList.add('visible');
+            chips.forEach(ch => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'active-filter-pill';
+                btn.title = 'לחץ להסרת סינון זה';
+                btn.innerHTML = `<span>${escapeHtml(ch.label)}</span><span style="opacity:0.75;">✖</span>`;
+                btn.addEventListener('click', ch.clear);
+                bar.appendChild(btn);
+            });
+            const clearAll = document.createElement('button');
+            clearAll.type = 'button';
+            clearAll.className = 'active-filters-clear-all';
+            clearAll.textContent = '✖ נקה הכל';
+            clearAll.addEventListener('click', resetAllFilters);
+            bar.appendChild(clearAll);
+        }
+
         function updateCategoryDropdowns() {
+            const catCounts = new Map();
+            state.items.forEach(x => {
+                const c = String(x.category || 'כללי').trim() || 'כללי';
+                catCounts.set(c, (catCounts.get(c) || 0) + 1);
+            });
+            const values = [...catCounts.keys()].sort((a, b) => a.localeCompare(b, 'he'));
+            const filter = document.getElementById('categoryFilter');
+            const data = document.getElementById('categoriesDatalist');
+            const desired = filter?.value || pendingCategoryFilter || '';
+            if (filter) {
+                filter.innerHTML = `<option value="">📂 כל הקטגוריות (${state.items.length})</option>` +
+                    values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)} (${catCounts.get(v)})</option>`).join('');
+                if (desired && values.includes(desired)) {
+                    filter.value = desired;
+                    pendingCategoryFilter = '';
+                } else {
+                    filter.value = '';
+                    if (isServerDataArrived) pendingCategoryFilter = '';
+                }
+            }
+            if (data) data.innerHTML = values.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
+            if (document.getElementById('categoryManagerModal')?.style.display === 'flex') {
+                renderCategoryManagerModal();
+            }
+        }
+
+        function renderCategoryManagerModal() {
+            const host = document.getElementById('categoryManagerList');
+            if (!host) return;
+            const catCounts = new Map();
+            state.items.forEach(x => {
+                const c = String(x.category || 'כללי').trim() || 'כללי';
+                catCounts.set(c, (catCounts.get(c) || 0) + 1);
+            });
+            const sorted = [...catCounts.entries()].sort((a, b) => a[0].localeCompare(b[0], 'he'));
+            host.innerHTML = '';
+            if (!sorted.length) {
+                host.innerHTML = '<div style="text-align:center; padding:18px; color:var(--text-secondary);">אין עדיין קטגוריות במאגר.</div>';
+                return;
+            }
+            sorted.forEach(([catName, count]) => {
+                const row = document.createElement('div');
+                row.className = 'cat-mgr-row';
+
+                const nameBtn = document.createElement('button');
+                nameBtn.type = 'button';
+                nameBtn.className = 'cat-mgr-name-btn';
+                nameBtn.title = `סנן לפי "${catName}"`;
+                nameBtn.innerHTML = `<span style="overflow-wrap:anywhere;">📂 ${escapeHtml(catName)}</span><span class="category-badge">${count}</span>`;
+                nameBtn.addEventListener('click', () => {
+                    const cf = document.getElementById('categoryFilter');
+                    if (cf) cf.value = catName;
+                    pendingCategoryFilter = catName;
+                    saveUiSettings();
+                    renderList();
+                    document.getElementById('categoryManagerModal').style.display = 'none';
+                });
+
+                const renameBtn = document.createElement('button');
+                renameBtn.type = 'button';
+                renameBtn.className = 'btn-action-sm';
+                renameBtn.textContent = '✏️ שנה שם / אחד';
+                renameBtn.addEventListener('click', () => renameOrMergeCategory(catName));
+
+                row.append(nameBtn, renameBtn);
+                host.appendChild(row);
+            });
+        }
+
+        function openCategoryManagerModal() {
+            closeAllMenus();
+            renderCategoryManagerModal();
+            const modal = document.getElementById('categoryManagerModal');
+            if (modal) modal.style.display = 'flex';
+        }
+
+        async function renameOrMergeCategory(oldCategory) {
+            if (!state.user) return;
+            const rawNew = prompt(`הזן שם חדש עבור הקטגוריה "${oldCategory}" (אם הקטגוריה כבר קיימת, הפריטים יאוחדו לתוכה):`, oldCategory);
+            if (rawNew === null) return;
+            const targetCat = rawNew.trim();
+            if (!targetCat || targetCat === oldCategory) return;
+
+            const affected = state.items.filter(x => (String(x.category || 'כללי').trim() || 'כללי') === oldCategory);
+            if (!affected.length) return;
+
+            const targetExistsCount = state.items.filter(x => (String(x.category || 'כללי').trim() || 'כללי') === targetCat).length;
+            if (targetExistsCount > 0) {
+                const okMerge = confirm(`הקטגוריה "${targetCat}" כבר קיימת (${targetExistsCount} פריטים).\nלאחד לתוכה את כל ${affected.length} הפריטים מ-"${oldCategory}"?`);
+                if (!okMerge) return;
+            }
+
+            const uid = state.user.uid;
+            const stamp = nowIso();
+
+            if (!navigator.onLine || state.isOffline) {
+                for (const it of affected) {
+                    it.category = targetCat;
+                    it.updatedAt = stamp;
+                    const clean = JSON.parse(JSON.stringify(it));
+                    delete clean.isScanning;
+                    delete clean._keepExpanded;
+                    await mhFastCache.enqueueOp(uid, { type: 'upsert', itemId: it.id, item: clean, clearAi: false });
+                }
+                invalidateItemsMeta();
+                await mhFastCache.set(uid, state.items);
+                const cf = document.getElementById('categoryFilter');
+                if (cf && cf.value === oldCategory) { cf.value = targetCat; pendingCategoryFilter = targetCat; saveUiSettings(); }
+                updateCategoryDropdowns();
+                renderList();
+                const pending = await mhFastCache.countPendingOps(uid);
+                updateSyncStatus('offline', `מקומי (${state.items.length}) • ${pending} ממתינים`);
+                showToast(`💾 ${affected.length} פריטים עודכנו מקומית ל-"${targetCat}"`);
+                return;
+            }
+
+            try {
+                const count = await runAdaptiveCloudBatch({
+                    items: affected,
+                    writesPerItem: 1,
+                    progressToastId: 'cat-rename-toast',
+                    progressLabel: targetExistsCount > 0 ? `🔀 מאחד לתוך "${targetCat}"` : `🏷️ משנה שם ל-"${targetCat}"`,
+                    applyToBatch: (batch, it) => {
+                        batch.set(doc(db, 'users', uid, 'items', String(it.id)), { category: targetCat, updatedAt: stamp }, { merge: true });
+                    }
+                });
+                affected.forEach(it => { it.category = targetCat; it.updatedAt = stamp; });
+                invalidateItemsMeta();
+                mhFastCache.scheduleSave(uid, state.items);
+                const cf = document.getElementById('categoryFilter');
+                if (cf && cf.value === oldCategory) { cf.value = targetCat; pendingCategoryFilter = targetCat; saveUiSettings(); }
+                updateCategoryDropdowns();
+                renderList();
+                updateSyncStatus('online', formatSyncedLabel());
+                showToast(targetExistsCount > 0
+                    ? `🔀 אוחדו ${count} פריטים מ-"${oldCategory}" אל "${targetCat}"`
+                    : `🏷️ שונה שם הקטגוריה ל-"${targetCat}" (${count} פריטים)`
+                );
+            } catch (err) {
+                showToast('❌ עדכון הקטגוריה נכשל: ' + err.message, null, 5000, null, true);
+            }
+        }
+
+        function toggleDuplicates() {
+            state.showDuplicates = !state.showDuplicates;
+            document.getElementById('toggleDuplicatesBtn')?.classList.toggle('dup-active', !state.showDuplicates);
+            saveUiSettings(); renderList();
+        }
+        function toggleDeadFilter() {
+            state.showOnlyDead = !state.showOnlyDead; state.showOnlyParked = false; state.showOnlyUnscanned = false;
+            document.getElementById('toggleDeadBtn')?.classList.toggle('dead-active', state.showOnlyDead);
+            document.getElementById('toggleParkedBtn')?.classList.remove('parked-active');
+            document.getElementById('toggleUnscannedBtn')?.classList.remove('unscanned-active');
+            saveUiSettings(); renderList();
+        }
+        function toggleParkedFilter() {
+            state.showOnlyParked = !state.showOnlyParked; state.showOnlyDead = false; state.showOnlyUnscanned = false;
+            document.getElementById('toggleParkedBtn')?.classList.toggle('parked-active', state.showOnlyParked);
+            document.getElementById('toggleDeadBtn')?.classList.remove('dead-active');
+            document.getElementById('toggleUnscannedBtn')?.classList.remove('unscanned-active');
+            saveUiSettings(); renderList();
+        }
+        function toggleUnscannedFilter() {
+            state.showOnlyUnscanned = !state.showOnlyUnscanned; state.showOnlyDead = false; state.showOnlyParked = false;
+            document.getElementById('toggleUnscannedBtn')?.classList.toggle('unscanned-active', state.showOnlyUnscanned);
+            document.getElementById('toggleDeadBtn')?.classList.remove('dead-active');
+            document.getElementById('toggleParkedBtn')?.classList.remove('parked-active');
+            saveUiSettings(); renderList();
+        }
         function initTheme() {
             const saved = localStorage.getItem('mh_theme');
             document.body.classList.toggle('dark-mode', saved ? saved === 'dark' : true);
@@ -8509,6 +8819,15 @@ STRICT RULES:
                 const ui = settingsPayload.uiSettings;
                 // משחזר העדפות תצוגה (מיון/הרחבה) מבלי להפעיל מסננים מסתירים שעלולים להציג רשימה ריקה
                 state.showDuplicates = true;
+                state.showOnlyDead = false;
+                state.showOnlyParked = false;
+                state.showOnlyUnscanned = false;
+                if (ui.expandAllCards !== undefined) state.expandAllCards = Boolean(ui.expandAllCards);
+
+                document.getElementById('toggleDuplicatesBtn')?.classList.remove('dup-active');
+                document.getElementById('toggleDeadBtn')?.classList.remove('dead-active');
+                document.getElementById('toggleParkedBtn')?.classList.remove('parked-active');
+                document.getElementById('toggleUnscannedBtn')?.classList.remove('unscanned-active');
                 document.getElementById('expandAllBtn')?.classList.toggle('expand-all-active', state.expandAllCards);
 
                 const hasExistingUserPrefs = Boolean(state.user?.uid && localStorage.getItem(getUiSettingsKey(state.user.uid)));
