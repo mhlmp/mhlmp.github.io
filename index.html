@@ -2891,27 +2891,42 @@
             }
         }
 
-        // מטמון Snapshot מהיר במפתח יחיד (Single-Blob IndexedDB):
-        // טוען את כל 731+ הקישורים תוך ~15ms ברענון, ונמחק פיזית לחלוטין ביציאה / החלפת חשבון / שלילת הרשאה
+        // מטמון Snapshot מהיר + תור כתיבות אופליין עמיד (IndexedDB v2):
+        // טוען את כל הקישורים תוך ~15ms, שומר שינויי אופליין גם אחרי סגירת דפדפן, ונמחק פיזית לחלוטין ביציאה/שלילת הרשאה
         const mhFastCache = {
             dbName: 'mh_fast_snapshot_v1',
+            dbVersion: 2,
             storeName: 'snapshots',
+            opsStoreName: 'pendingOps',
             saveTimer: null,
             open() {
                 return new Promise((resolve) => {
                     if (typeof indexedDB === 'undefined') return resolve(null);
+                    let settled = false;
+                    const done = (val) => { if (!settled) { settled = true; resolve(val); } };
+                    const guard = setTimeout(() => done(null), 1200);
                     try {
-                        const req = indexedDB.open(this.dbName, 1);
+                        const req = indexedDB.open(this.dbName, this.dbVersion);
                         req.onupgradeneeded = () => {
                             const idb = req.result;
                             if (!idb.objectStoreNames.contains(this.storeName)) {
                                 idb.createObjectStore(this.storeName);
                             }
+                            if (!idb.objectStoreNames.contains(this.opsStoreName)) {
+                                idb.createObjectStore(this.opsStoreName, { keyPath: 'key' });
+                            }
                         };
-                        req.onsuccess = () => resolve(req.result);
-                        req.onerror = () => resolve(null);
+                        req.onsuccess = () => {
+                            clearTimeout(guard);
+                            const idb = req.result;
+                            idb.onversionchange = () => { try { idb.close(); } catch (_) {} };
+                            done(idb);
+                        };
+                        req.onerror = () => { clearTimeout(guard); done(null); };
+                        req.onblocked = () => { clearTimeout(guard); done(null); };
                     } catch (_) {
-                        resolve(null);
+                        clearTimeout(guard);
+                        done(null);
                     }
                 });
             },
@@ -2964,6 +2979,68 @@
                     }
                 });
             },
+            async enqueueOp(uid, op) {
+                if (!uid || !op || op.itemId === undefined || op.itemId === null) return false;
+                const idb = await this.open();
+                if (!idb) return false;
+                const record = {
+                    ...op,
+                    uid: String(uid),
+                    key: `${uid}:${op.itemId}`,
+                    queuedAt: Date.now()
+                };
+                return new Promise((resolve) => {
+                    try {
+                        const tx = idb.transaction(this.opsStoreName, 'readwrite');
+                        tx.objectStore(this.opsStoreName).put(record);
+                        tx.oncomplete = () => { idb.close(); resolve(true); };
+                        tx.onerror = () => { idb.close(); resolve(false); };
+                    } catch (_) {
+                        try { idb.close(); } catch (__) {}
+                        resolve(false);
+                    }
+                });
+            },
+            async getPendingOps(uid) {
+                if (!uid) return [];
+                const idb = await this.open();
+                if (!idb) return [];
+                return new Promise((resolve) => {
+                    try {
+                        const tx = idb.transaction(this.opsStoreName, 'readonly');
+                        const req = tx.objectStore(this.opsStoreName).getAll();
+                        req.onsuccess = () => {
+                            idb.close();
+                            const all = Array.isArray(req.result) ? req.result : [];
+                            resolve(all.filter(x => x.uid === String(uid)).sort((a, b) => (a.queuedAt || 0) - (b.queuedAt || 0)));
+                        };
+                        req.onerror = () => { idb.close(); resolve([]); };
+                    } catch (_) {
+                        try { idb.close(); } catch (__) {}
+                        resolve([]);
+                    }
+                });
+            },
+            async removePendingOp(key) {
+                if (!key) return;
+                const idb = await this.open();
+                if (!idb) return;
+                return new Promise((resolve) => {
+                    try {
+                        const tx = idb.transaction(this.opsStoreName, 'readwrite');
+                        tx.objectStore(this.opsStoreName).delete(String(key));
+                        tx.oncomplete = () => { idb.close(); resolve(); };
+                        tx.onerror = () => { idb.close(); resolve(); };
+                    } catch (_) {
+                        try { idb.close(); } catch (__) {}
+                        resolve();
+                    }
+                });
+            },
+            async countPendingOps(uid) {
+                const ops = await this.getPendingOps(uid);
+                return ops.length;
+            },
             async wipeAll() {
                 if (this.saveTimer) { clearTimeout(this.saveTimer); this.saveTimer = null; }
                 return new Promise((resolve) => {
@@ -2979,11 +3056,115 @@
             }
         };
 
+        function isNetworkLikeError(err) {
+            if (!navigator.onLine) return true;
+            const code = String(err?.code || '').toLowerCase();
+            const msg = String(err?.message || '').toLowerCase();
+            return ['unavailable', 'deadline-exceeded', 'aborted'].includes(code) ||
+                /network|offline|failed to fetch|timeout|internet/i.test(msg);
+        }
+
+        function applyPendingOpsLocally(baseItems, ops) {
+            if (!Array.isArray(ops) || ops.length === 0) return Array.isArray(baseItems) ? [...baseItems] : [];
+            const map = new Map();
+            (baseItems || []).forEach(it => map.set(String(it.id), { ...it }));
+            ops.forEach(op => {
+                const k = String(op.itemId);
+                if (op.type === 'upsert' && op.item) {
+                    const next = { ...(map.get(k) || {}), ...op.item };
+                    if (op.clearAi) {
+                        delete next.aiSummary; delete next.aiTags; delete next.aiModel; delete next.siteStatus; delete next.httpCode;
+                    }
+                    map.set(k, next);
+                } else if (op.type === 'restore_from_trash' && op.item) {
+                    map.set(k, { ...op.item });
+                } else if (op.type === 'move_to_trash' || op.type === 'delete_item') {
+                    map.delete(k);
+                }
+            });
+            return [...map.values()];
+        }
+
+        let offlineFlushPromise = null;
+        async function flushOfflineQueue(user = state.user, { showSummaryToast = false } = {}) {
+            if (!user || !db || !navigator.onLine) return { synced: 0, remaining: user ? await mhFastCache.countPendingOps(user.uid) : 0 };
+            if (offlineFlushPromise) return offlineFlushPromise;
+
+            offlineFlushPromise = (async () => {
+                const uid = user.uid;
+                const ops = await mhFastCache.getPendingOps(uid);
+                if (!ops.length) return { synced: 0, remaining: 0 };
+
+                let synced = 0;
+                for (const op of ops) {
+                    if (!navigator.onLine || state.user?.uid !== uid) break;
+                    try {
+                        if (op.type === 'upsert' && op.item) {
+                            const payload = op.clearAi ? { ...op.item, ...aiClearPatch() } : op.item;
+                            await setDoc(doc(db, 'users', uid, 'items', String(op.itemId)), payload, { merge: true });
+                        } else if (op.type === 'move_to_trash' && op.trashItem) {
+                            const batch = writeBatch(db);
+                            batch.set(doc(db, 'users', uid, 'trash', String(op.itemId)), op.trashItem);
+                            batch.delete(doc(db, 'users', uid, 'items', String(op.itemId)));
+                            await batch.commit();
+                        } else if (op.type === 'restore_from_trash' && op.item) {
+                            const batch = writeBatch(db);
+                            batch.set(doc(db, 'users', uid, 'items', String(op.itemId)), op.item, { merge: true });
+                            batch.delete(doc(db, 'users', uid, 'trash', String(op.itemId)));
+                            await batch.commit();
+                        } else if (op.type === 'delete_item') {
+                            await deleteDoc(doc(db, 'users', uid, 'items', String(op.itemId)));
+                        }
+                        await mhFastCache.removePendingOp(op.key);
+                        synced++;
+                    } catch (err) {
+                        console.warn('[OfflineFlush] Failed op:', op.type, op.itemId, err?.message);
+                        if (isNetworkLikeError(err)) break;
+                        if (err?.code === 'permission-denied') break;
+                    }
+                }
+                const remaining = await mhFastCache.countPendingOps(uid);
+                if (synced > 0 && showSummaryToast) {
+                    showToast(`☁️ ${synced} שינויים שנשמרו אופליין סונכרנו לענן ✓`, null, 3500);
+                }
+                return { synced, remaining };
+            })().finally(() => {
+                offlineFlushPromise = null;
+            });
+
+            return offlineFlushPromise;
+        }
+
+        async function ensurePendingChangesSyncedBeforeExit(actionLabel = 'יציאה') {
+            if (!state.user) return true;
+            let pendingCount = await mhFastCache.countPendingOps(state.user.uid);
+            if (navigator.onLine && db) {
+                if (pendingCount > 0) {
+                    showToast(`☁️ מעלה ${pendingCount} שינויים מקומיים לענן לפני ${actionLabel}...`, null, 0, 'exit-sync-toast');
+                    await flushOfflineQueue(state.user, { showSummaryToast: false });
+                    pendingCount = await mhFastCache.countPendingOps(state.user.uid);
+                } else {
+                    showToast(`☁️ מוודא שכל הנתונים נשמרו בענן לפני ${actionLabel}...`, null, 0, 'exit-sync-toast');
+                }
+                const syncedToServer = await waitForCloudSyncStrict(15000);
+                removeToast('exit-sync-toast');
+                if (pendingCount > 0 || !syncedToServer) {
+                    return confirm(`⚠️ יש עדיין ${pendingCount || 'חלק מ-'} שינויים שלא קיבלו אישור משרת הענן! ${actionLabel} כעת תמחק אותם מהמכשיר. להמשיך בכל זאת?`);
+                }
+                return true;
+            }
+            if (pendingCount > 0) {
+                return confirm(`⚠️ אין חיבור אינטרנט, ויש ${pendingCount} שינויים ששמורים מקומית בלבד!\n${actionLabel} כעת תמחק אותם מהמכשיר לצמיתות. להמשיך בכל זאת?`);
+            }
+            return true;
+        }
+
         const authBroadcast = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('mh_auth_sync') : null;
         if (authBroadcast) {
             authBroadcast.onmessage = async (ev) => {
                 if (ev.data === 'logout') {
                     stopAllCloudListeners();
+                    try { clearSessionFilters(); } catch (_) {}
                     try { localStorage.removeItem('mh_has_session'); localStorage.removeItem('mh_last_uid'); } catch (_) {}
                     try { await mhFastCache.wipeAll(); } catch (_) {}
                     try { if (db) await terminate(db); } catch (_) {}
@@ -2998,6 +3179,7 @@
             scanController.isRunning = false;
             window._mhApprovedBatchCap = null;
             stopAllCloudListeners();
+            try { clearSessionFilters(); } catch (_) {}
             try { localStorage.removeItem('mh_has_session'); localStorage.removeItem('mh_last_uid'); } catch (_) {}
             try { authBroadcast?.postMessage('logout'); } catch (_) {}
             try { await mhFastCache.wipeAll(); } catch (_) {}
@@ -3026,18 +3208,12 @@
                 return;
             }
             try {
-                if (navigator.onLine && db) {
-                    showToast('☁️ מוודא שכל הנתונים נשמרו בענן לפני החלפת חשבון...', null, 0, 'switch-sync-toast');
-                    const synced = await waitForCloudSyncStrict(30000);
-                    removeToast('switch-sync-toast');
-                    if (!synced && !confirm('⚠️ הסנכרון מול הענן עדיין לא הסתיים. החלפת חשבון כעת עלולה לאבד שינויים אחרונים שלא עלו. להמשיך בכל זאת?')) {
-                        return;
-                    }
-                }
+                const ok = await ensurePendingChangesSyncedBeforeExit('החלפת חשבון');
+                if (!ok) return;
                 showToast('מתנתק ומנקה נתונים מהמכשיר...', null, 1500);
                 await wipeDeviceCacheAndSignOut();
             } catch (e) {
-                removeToast('switch-sync-toast');
+                removeToast('exit-sync-toast');
                 showToast('❌ ' + e.message, null, 4000, null, true);
             }
         }
@@ -3241,22 +3417,47 @@
                 });
             });
 
-            window.addEventListener('offline', () => {
+            let lastTabHiddenAt = 0;
+
+            window.addEventListener('offline', async () => {
                 state.isOffline = true;
-                updateSyncStatus('offline', 'מקומי (אין רשת)');
-                showToast('⚠️ החיבור אבד. שינויים יישמרו ויסונכרנו כשהרשת תחזור.', null, 5000, null, true);
+                const pending = state.user ? await mhFastCache.countPendingOps(state.user.uid) : 0;
+                updateSyncStatus('offline', pending > 0 ? `מקומי (${state.items.length}) • ${pending} ממתינים` : `מקומי (${state.items.length})`);
+                showToast('⚠️ החיבור אבד. כל שינוי יישמר מקומית (גם אם תסגור את הדף) ויסונכרן אוטומטית כשהרשת תחזור.', null, 5500, null, true);
                 if (state.user && !isServerDataArrived) isServerDataArrived = true;
             });
 
-            window.addEventListener('online', () => {
+            window.addEventListener('online', async () => {
                 state.isOffline = false;
-                updateSyncStatus('syncing', 'מתחבר לענן...');
+                updateSyncStatus('syncing', 'מתחבר ומסנכרן לענן...');
                 showToast('🌐 החיבור חזר! מסנכרן עם הענן...', null, 3000);
+                if (!state.user) return;
+                try {
+                    await state.user.getIdToken(true).catch(() => {});
+                    await flushOfflineQueue(state.user, { showSummaryToast: true });
+                    if (state.accessState === 'approved') {
+                        if (!state.unsubItems || !isServerDataArrived) {
+                            startUserDataSubscriptions(state.user);
+                        } else {
+                            updateSyncStatus('online', formatSyncedLabel());
+                        }
+                    }
+                } catch (_) {}
             });
 
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible' && state.user && navigator.onLine && isServerDataArrived) {
-                    updateSyncStatus('online', formatSyncedLabel());
+            document.addEventListener('visibilitychange', async () => {
+                if (document.visibilityState === 'hidden') {
+                    lastTabHiddenAt = Date.now();
+                    return;
+                }
+                if (document.visibilityState === 'visible' && state.user && navigator.onLine) {
+                    if (lastTabHiddenAt && Date.now() - lastTabHiddenAt > 10 * 60 * 1000) {
+                        state.user.getIdToken(true).catch(() => {});
+                    }
+                    await flushOfflineQueue(state.user, { showSummaryToast: true });
+                    if (isServerDataArrived) {
+                        updateSyncStatus('online', formatSyncedLabel());
+                    }
                 }
             });
 
@@ -3868,6 +4069,9 @@
                             }
                         } catch (fbErr) {
                             console.warn('[ColdStart Fallback]', fbErr?.message);
+                            if (!isServerDataArrived && state.user?.uid === uid) {
+                                updateSyncStatus('error', 'חיבור איטי — לחץ ☁️ לניסיון נוסף');
+                            }
                         }
                     }, 5000);
                 }
@@ -3882,13 +4086,30 @@
             if (retryAttempt === 0) {
                 const bundle = startParallelUserPrefetch(user);
 
-                // מסלול א' (מטמון חם — ~15ms): מציג את כל הפריטים מיד ומסנכרן ברקע דרך חיבור יחיד
-                const cachedAll = await bundle.cachePromise;
+                // מסלול א' (מטמון חם + תור אופליין — ~15ms): מציג הכל מיד, מעלה שינויי אופליין אם קיימים, ואז פותח סנכרון חי
+                const [cachedAll, pendingOps] = await Promise.all([
+                    bundle.cachePromise,
+                    mhFastCache.getPendingOps(uid).catch(() => [])
+                ]);
                 if (state.user?.uid !== uid || state.accessState !== 'approved') return;
 
-                if (cachedAll && cachedAll.length > 0) {
-                    applyFullItems(cachedAll, { fromServer: !navigator.onLine, preserveScroll: false });
-                    updateSyncStatus(navigator.onLine ? 'syncing' : 'offline', navigator.onLine ? `מסנכרן עדכונים... (${cachedAll.length})` : `מקומי (${cachedAll.length})`);
+                const hasLocalData = (Array.isArray(cachedAll) && cachedAll.length > 0) || pendingOps.length > 0;
+                if (hasLocalData) {
+                    const mergedLocal = applyPendingOpsLocally(cachedAll || [], pendingOps);
+                    applyFullItems(mergedLocal, { fromServer: !navigator.onLine, preserveScroll: false });
+                    if (!navigator.onLine) {
+                        updateSyncStatus('offline', pendingOps.length > 0
+                            ? `מקומי (${mergedLocal.length}) • ${pendingOps.length} ממתינים`
+                            : `מקומי (${mergedLocal.length})`);
+                        return;
+                    }
+                    updateSyncStatus('syncing', pendingOps.length > 0
+                        ? `מסנכרן ${pendingOps.length} שינויים מקומיים...`
+                        : `מסנכרן עדכונים... (${mergedLocal.length})`);
+                    if (pendingOps.length > 0) {
+                        await flushOfflineQueue(user, { showSummaryToast: true });
+                        if (state.user?.uid !== uid || state.accessState !== 'approved') return;
+                    }
                     attachFullItemsListener();
                     return;
                 }
@@ -4121,11 +4342,23 @@
 
                     state.unsubAccess = onSnapshot(accessDocRef, { includeMetadataChanges: true }, async (snap) => {
                         if (!snap.exists()) {
-                            // לא מניחים שהחשבון לא מאושר על סמך מטמון ריק — ממתינים לתשובת השרת
-                            if (snap.metadata.fromCache && navigator.onLine) return;
+                            // לא מניחים שהחשבון לא מאושר על סמך מטמון ריק (memoryLocalCache)
+                            if (snap.metadata.fromCache) {
+                                if (navigator.onLine) return;
+                                if (hadSession && state.accessState !== 'approved') {
+                                    state.accessState = 'approved';
+                                    handleLockScreen(true, 'approved');
+                                    startUserDataSubscriptions(user);
+                                } else if (!hadSession) {
+                                    handleLockScreen(true, 'checking');
+                                    updateSyncStatus('offline', 'נדרש אינטרנט לאימות ראשוני');
+                                }
+                                return;
+                            }
 
                             stopUserDataListeners();
                             resetPrefetchState();
+                            clearSessionFilters();
                             mhFastCache.wipeAll();
                             try { localStorage.removeItem('mh_has_session'); } catch (_) {}
                             state.items = []; state.trash = [];
@@ -4182,6 +4415,7 @@
                         } else if (data.status === 'rejected') {
                             stopUserDataListeners();
                             resetPrefetchState();
+                            clearSessionFilters();
                             mhFastCache.wipeAll();
                             try { localStorage.removeItem('mh_has_session'); } catch (_) {}
                             state.items = []; state.trash = [];
@@ -4237,23 +4471,55 @@
             }
             return batch.commit();
         }
-        async function saveItemToCloud(item) {
-            if (!state.user) return;
-            try {
-                const itemRef = doc(db, 'users', state.user.uid, 'items', item.id.toString());
-                const cleanItem = JSON.parse(JSON.stringify(item)); // מסיר undefined
-                delete cleanItem.isScanning;
-                delete cleanItem._keepExpanded;
-                const writePromise = setDoc(itemRef, cleanItem, { merge: true });
-                if (!navigator.onLine || state.isOffline) {
-                    // Firestore שומר בתור מקומי וישלח כשהרשת תחזור; אין להמתין
-                    writePromise.catch(e => console.error('Offline save error:', e));
-                    return;
+        async function saveItemToCloud(item, { clearAi = false } = {}) {
+            if (!state.user) return { ok: false, queuedOffline: false };
+            const uid = state.user.uid;
+            const cleanItem = JSON.parse(JSON.stringify(item));
+            delete cleanItem.isScanning;
+            delete cleanItem._keepExpanded;
+
+            const queueLocally = async (showOfflineNotice = false) => {
+                const existingIdx = state.items.findIndex(x => String(x.id) === String(item.id));
+                const isNewLocal = existingIdx === -1;
+                if (isNewLocal) state.items.unshift({ ...cleanItem });
+                else state.items[existingIdx] = { ...state.items[existingIdx], ...cleanItem };
+                if (clearAi && !isNewLocal) {
+                    const target = state.items[existingIdx];
+                    delete target.aiSummary; delete target.aiTags; delete target.aiModel; delete target.siteStatus; delete target.httpCode;
                 }
-                await writePromise;
+                invalidateItemsMeta();
+                await mhFastCache.enqueueOp(uid, { type: 'upsert', itemId: item.id, item: cleanItem, clearAi });
+                await mhFastCache.set(uid, state.items);
+                const pending = await mhFastCache.countPendingOps(uid);
+                updateSyncStatus('offline', `מקומי (${state.items.length}) • ${pending} ממתינים`);
+                if (isNewLocal) {
+                    updateCategoryDropdowns();
+                    renderList();
+                } else {
+                    updateStatusBadges(false);
+                }
+                if (showOfflineNotice) {
+                    showToast('💾 נשמר מקומית — יסונכרן לענן אוטומטית כשהחיבור יחזור', null, 3500);
+                }
+                return { ok: true, queuedOffline: true };
+            };
+
+            if (!navigator.onLine || state.isOffline) {
+                return await queueLocally(false);
+            }
+
+            try {
+                const itemRef = doc(db, 'users', uid, 'items', String(item.id));
+                const payload = clearAi ? { ...cleanItem, ...aiClearPatch() } : cleanItem;
+                await setDoc(itemRef, payload, { merge: true });
+                return { ok: true, queuedOffline: false };
             } catch (e) {
+                if (isNetworkLikeError(e)) {
+                    return await queueLocally(true);
+                }
                 console.error('Error saving item:', e);
                 showToast('❌ השמירה לענן נכשלה: ' + e.message, null, 4000, null, true);
+                return { ok: false, queuedOffline: false };
             }
         }
 
@@ -4265,21 +4531,35 @@
             return uid ? `mh_ui_settings_${uid}` : 'mh_ui_settings';
         }
 
-        function applyUiSettingsObject(savedUi = {}) {
-            state.showDuplicates = savedUi.showDuplicates !== undefined ? Boolean(savedUi.showDuplicates) : true;
-            state.showOnlyDead = Boolean(savedUi.showOnlyDead);
-            state.showOnlyParked = Boolean(savedUi.showOnlyParked);
-            state.expandAllCards = Boolean(savedUi.expandAllCards);
+        function getSessionFiltersKey(uid = state.user?.uid) {
+            return uid ? `mh_session_filters_${uid}` : 'mh_session_filters';
+        }
+
+        function clearSessionFilters() {
+            try {
+                for (let i = sessionStorage.length - 1; i >= 0; i--) {
+                    const k = sessionStorage.key(i);
+                    if (k && k.startsWith('mh_session_filters')) sessionStorage.removeItem(k);
+                }
+            } catch (_) {}
+            pendingCategoryFilter = '';
+        }
+
+        function applyUiSettingsObject(persistentUi = {}, sessionUi = {}) {
+            state.showDuplicates = sessionUi.showDuplicates !== undefined ? Boolean(sessionUi.showDuplicates) : true;
+            state.showOnlyDead = Boolean(sessionUi.showOnlyDead);
+            state.showOnlyParked = Boolean(sessionUi.showOnlyParked);
+            state.expandAllCards = Boolean(persistentUi.expandAllCards);
 
             const so = document.getElementById('sortOrder');
             if (so) {
-                const validSort = savedUi.sortOrder && [...so.options].some(o => o.value === savedUi.sortOrder)
-                    ? savedUi.sortOrder
+                const validSort = persistentUi.sortOrder && [...so.options].some(o => o.value === persistentUi.sortOrder)
+                    ? persistentUi.sortOrder
                     : 'date-new';
                 so.value = validSort;
             }
 
-            pendingCategoryFilter = String(savedUi.categoryFilter || '');
+            pendingCategoryFilter = String(sessionUi.categoryFilter || '');
             const cf = document.getElementById('categoryFilter');
             if (cf) {
                 cf.value = [...cf.options].some(o => o.value === pendingCategoryFilter) ? pendingCategoryFilter : '';
@@ -4299,11 +4579,22 @@
                 if (!raw && localStorage.getItem('mh_last_uid') === uid) {
                     raw = localStorage.getItem('mh_ui_settings');
                 }
-                const savedUi = raw ? JSON.parse(raw) : {};
-                applyUiSettingsObject(savedUi);
+                const savedPersistent = raw ? JSON.parse(raw) : {};
+                let savedSession = {};
+                try {
+                    savedSession = JSON.parse(sessionStorage.getItem(getSessionFiltersKey(uid)) || '{}');
+                } catch (_) {}
+                applyUiSettingsObject(savedPersistent, savedSession);
+                // מנקה שדות ישנים/פרטיים מ-localStorage אם נשארו מגרסה קודמת
+                if (savedPersistent.categoryFilter || savedPersistent.showOnlyDead || savedPersistent.showOnlyParked || savedPersistent.showDuplicates === false) {
+                    localStorage.setItem(perUserKey, JSON.stringify({
+                        sortOrder: savedPersistent.sortOrder || 'date-new',
+                        expandAllCards: Boolean(savedPersistent.expandAllCards)
+                    }));
+                }
                 localStorage.setItem('mh_last_uid', String(uid));
             } catch (_) {
-                applyUiSettingsObject({});
+                applyUiSettingsObject({}, {});
             }
         }
 
@@ -4311,17 +4602,22 @@
             const uid = state.user?.uid;
             const cfEl = document.getElementById('categoryFilter');
             const activeCat = cfEl?.value || (!isInitialSnapshotRendered ? pendingCategoryFilter : '');
-            const payload = {
+            // רק העדפות תצוגה נקיות נשמרות קבוע (אפס דליפת שמות קטגוריות במחשב משותף)
+            const persistentPayload = {
+                expandAllCards: state.expandAllCards,
+                sortOrder: document.getElementById('sortOrder')?.value || 'date-new'
+            };
+            // מסננים פעילים נשמרים רק ל-sessionStorage של הטאב הנוכחי ונעלמים ביציאה/סגירה
+            const sessionPayload = {
                 showDuplicates: state.showDuplicates,
                 showOnlyDead: state.showOnlyDead,
                 showOnlyParked: state.showOnlyParked,
-                expandAllCards: state.expandAllCards,
-                sortOrder: document.getElementById('sortOrder')?.value || 'date-new',
                 categoryFilter: activeCat
             };
             try {
-                localStorage.setItem(getUiSettingsKey(uid), JSON.stringify(payload));
+                localStorage.setItem(getUiSettingsKey(uid), JSON.stringify(persistentPayload));
                 if (uid) localStorage.setItem('mh_last_uid', String(uid));
+                sessionStorage.setItem(getSessionFiltersKey(uid), JSON.stringify(sessionPayload));
             } catch (_) {}
         }
 
@@ -4408,14 +4704,8 @@
                 showToast('⏳ מתבצעת כרגע שמירה/ייבוא לענן — המתן לסיום ההודעה לפני יציאה.', null, 4500, null, true);
                 return;
             }
-            if (navigator.onLine && db) {
-                showToast('☁️ מוודא שכל הנתונים נשמרו בשרת הענן לפני יציאה...', null, 0, 'logout-sync-toast');
-                const syncedToServer = await waitForCloudSyncStrict(30000);
-                removeToast('logout-sync-toast');
-                if (!syncedToServer && !confirm('⚠️ חלק מהשינויים עדיין לא קיבלו אישור משרת הענן! יציאה כעת עלולה לאבד אותם. להמשיך בכל זאת?')) {
-                    return;
-                }
-            }
+            const ok = await ensurePendingChangesSyncedBeforeExit('יציאה');
+            if (!ok) return;
             await wipeDeviceCacheAndSignOut();
         }
 
@@ -5025,11 +5315,22 @@
             const details = document.querySelector('details');
             if (details) details.open = false;
 
-            await saveItemToCloud(newItem);
+            const saveRes = await saveItemToCloud(newItem);
             
-            showToast('✅ פריט נוסף', async () => {
+            showToast(saveRes?.queuedOffline ? '💾 פריט נוסף מקומית (יסונכרן בחיבור הבא)' : '✅ פריט נוסף', async () => {
                 try {
-                    await deleteDoc(doc(db, 'users', state.user.uid, 'items', newItem.id.toString()));
+                    const uid = state.user?.uid;
+                    if (!uid) return;
+                    if (!navigator.onLine || state.isOffline) {
+                        state.items = state.items.filter(x => String(x.id) !== String(newItem.id));
+                        invalidateItemsMeta();
+                        await mhFastCache.enqueueOp(uid, { type: 'delete_item', itemId: newItem.id });
+                        await mhFastCache.set(uid, state.items);
+                        updateCategoryDropdowns();
+                        renderList();
+                    } else {
+                        await deleteDoc(doc(db, 'users', uid, 'items', newItem.id.toString()));
+                    }
                     showToast('↩️ ההוספה בוטלה והפריט נמחק');
                 } catch(err) { console.error(err); }
             }, 7000);
@@ -7398,29 +7699,7 @@ STRICT RULES:
                 updatedAt: nowIso()
             });
 
-            if (contentChanged) {
-                // הניתוח הישן שייך לקישור הקודם — מתעדכן בפעולת כתיבה אחת אטומית ללא מרוץ
-                delete item.aiSummary; delete item.aiTags; delete item.aiModel; delete item.siteStatus; delete item.httpCode;
-                if (state.user) {
-                    try {
-                        const itemRef = doc(db, 'users', state.user.uid, 'items', String(item.id));
-                        const cleanItem = JSON.parse(JSON.stringify(item));
-                        delete cleanItem.isScanning;
-                        delete cleanItem._keepExpanded;
-                        const writePromise = setDoc(itemRef, { ...cleanItem, ...aiClearPatch() }, { merge: true });
-                        if (!navigator.onLine || state.isOffline) {
-                            writePromise.catch(err => console.error('Offline edit save error:', err));
-                        } else {
-                            await writePromise;
-                        }
-                    } catch (err) {
-                        console.error('Error saving edited item:', err);
-                        showToast('❌ השמירה לענן נכשלה: ' + err.message, null, 4000, null, true);
-                    }
-                }
-            } else {
-                await saveItemToCloud(item);
-            }
+            // הניתוח הישן שייך לקישור הקודם — מתעדכן בפעולת כתיבה אחת אטומית ללא מרוץ
             document.getElementById('editModal').style.display = 'none';
             invalidateItemsMeta();
 
@@ -7447,21 +7726,68 @@ STRICT RULES:
         }
         async function togglePin(id) { const item=state.items.find(x=>x.id===id); if(!item)return; item.isPinned=!item.isPinned; item.updatedAt=nowIso(); await saveItemToCloud(item); renderList(); }
         async function moveToTrash(id) {
-            const item=state.items.find(x=>x.id===id); if(!item || !state.user)return;
-            const uid=state.user.uid;
-            const clean={...item}; delete clean.isScanning;
+            const item = state.items.find(x => x.id === id);
+            if (!item || !state.user) return;
+            const uid = state.user.uid;
+            const clean = JSON.parse(JSON.stringify(item));
+            delete clean.isScanning;
+            delete clean._keepExpanded;
+            const trashItem = { ...clean, deletedAt: nowIso() };
+
+            const moveOffline = async () => {
+                state.items = state.items.filter(x => String(x.id) !== String(id));
+                state.trash = [trashItem, ...state.trash.filter(x => String(x.id) !== String(id))];
+                invalidateItemsMeta();
+                await mhFastCache.enqueueOp(uid, { type: 'move_to_trash', itemId: id, trashItem });
+                await mhFastCache.set(uid, state.items);
+                const pending = await mhFastCache.countPendingOps(uid);
+                updateSyncStatus('offline', `מקומי (${state.items.length}) • ${pending} ממתינים`);
+                updateCategoryDropdowns();
+                renderList();
+                showToast('🗑️ הועבר לסל מקומית (יסונכרן בחיבור הבא)', async () => {
+                    state.items.unshift(clean);
+                    state.trash = state.trash.filter(x => String(x.id) !== String(id));
+                    invalidateItemsMeta();
+                    await mhFastCache.enqueueOp(uid, { type: 'restore_from_trash', itemId: id, item: clean });
+                    await mhFastCache.set(uid, state.items);
+                    updateCategoryDropdowns();
+                    renderList();
+                });
+            };
+
+            if (!navigator.onLine || state.isOffline) {
+                await moveOffline();
+                return;
+            }
+
             try {
-                const batch=writeBatch(db);
-                batch.set(doc(db,'users',uid,'trash',String(id)), JSON.parse(JSON.stringify({...clean, deletedAt:nowIso()})));
-                batch.delete(doc(db,'users',uid,'items',String(id)));
+                const batch = writeBatch(db);
+                batch.set(doc(db, 'users', uid, 'trash', String(id)), trashItem);
+                batch.delete(doc(db, 'users', uid, 'items', String(id)));
                 await commitBatch(batch);
-                showToast('🗑️ הועבר לסל המחזור', async()=>{
-                    const undoBatch=writeBatch(db);
-                    undoBatch.set(doc(db,'users',uid,'items',String(id)), JSON.parse(JSON.stringify(clean)));
-                    undoBatch.delete(doc(db,'users',uid,'trash',String(id)));
+                showToast('🗑️ הועבר לסל המחזור', async () => {
+                    if (!navigator.onLine || state.isOffline) {
+                        state.items.unshift(clean);
+                        state.trash = state.trash.filter(x => String(x.id) !== String(id));
+                        invalidateItemsMeta();
+                        await mhFastCache.enqueueOp(uid, { type: 'restore_from_trash', itemId: id, item: clean });
+                        await mhFastCache.set(uid, state.items);
+                        updateCategoryDropdowns();
+                        renderList();
+                        return;
+                    }
+                    const undoBatch = writeBatch(db);
+                    undoBatch.set(doc(db, 'users', uid, 'items', String(id)), clean);
+                    undoBatch.delete(doc(db, 'users', uid, 'trash', String(id)));
                     await commitBatch(undoBatch);
                 });
-            } catch(e){showToast('❌ המחיקה נכשלה: '+e.message,null,4000,null,true);}
+            } catch (e) {
+                if (isNetworkLikeError(e)) {
+                    await moveOffline();
+                    return;
+                }
+                showToast('❌ המחיקה נכשלה: ' + e.message, null, 4000, null, true);
+            }
         }
         function openTrashModal() {
             const modal=document.getElementById('trashModal'), list=document.getElementById('trashList'); if(!modal||!list)return;
@@ -8094,6 +8420,12 @@ STRICT RULES:
                     throw new Error('מבנה JSON לא מוכר');
                 }
 
+                if (state.user && isPartialHydration && fullSyncPromise) {
+                    showToast('☁️ מסיים לטעון את המאגר לפני ייבוא...', null, 0, 'import-wait-toast');
+                    await Promise.race([fullSyncPromise, new Promise(r => setTimeout(r, 8000))]);
+                    removeToast('import-wait-toast');
+                }
+
                 const validInFile = Array.isArray(list)
                     ? list.filter(x => x && typeof x === 'object' && String(x.content ?? x.url ?? '').trim() !== '').length
                     : 0;
@@ -8214,6 +8546,12 @@ STRICT RULES:
                     } else {
                         list = itemsText.split(/\r?\n/).map(x => x.trim()).filter(Boolean).map(content => ({ content, category: 'כללי' }));
                     }
+                }
+
+                if (state.user && isPartialHydration && fullSyncPromise) {
+                    showToast('☁️ מסיים לטעון את המאגר לפני מיזוג...', null, 0, 'import-wait-toast');
+                    await Promise.race([fullSyncPromise, new Promise(r => setTimeout(r, 8000))]);
+                    removeToast('import-wait-toast');
                 }
 
                 const existingByContent = new Map();
