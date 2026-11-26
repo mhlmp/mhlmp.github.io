@@ -2904,7 +2904,7 @@
                     if (typeof indexedDB === 'undefined') return resolve(null);
                     let settled = false;
                     const done = (val) => { if (!settled) { settled = true; resolve(val); } };
-                    const guard = setTimeout(() => done(null), 1200);
+                    const guard = setTimeout(() => done(null), 2500);
                     try {
                         const req = indexedDB.open(this.dbName, this.dbVersion);
                         req.onupgradeneeded = () => {
@@ -2931,21 +2931,39 @@
                 });
             },
             async get(uid) {
-                if (!uid) return null;
+                const b = await this.getBundle(uid);
+                return b.items;
+            },
+            async getBundle(uid) {
+                if (!uid) return { items: null, pendingOps: [] };
                 const idb = await this.open();
-                if (!idb) return null;
+                if (!idb) return { items: null, pendingOps: [] };
                 return new Promise((resolve) => {
+                    let doneFlag = false;
+                    const finish = (res) => { if (!doneFlag) { doneFlag = true; try { idb.close(); } catch (_) {} resolve(res); } };
                     try {
-                        const tx = idb.transaction(this.storeName, 'readonly');
-                        const req = tx.objectStore(this.storeName).get(String(uid));
-                        req.onsuccess = () => {
-                            idb.close();
-                            resolve(Array.isArray(req.result?.items) ? req.result.items : null);
+                        const stores = idb.objectStoreNames.contains(this.opsStoreName)
+                            ? [this.storeName, this.opsStoreName]
+                            : [this.storeName];
+                        const tx = idb.transaction(stores, 'readonly');
+                        let items = null;
+                        let pendingOps = [];
+                        const snapReq = tx.objectStore(this.storeName).get(String(uid));
+                        snapReq.onsuccess = () => {
+                            items = Array.isArray(snapReq.result?.items) ? snapReq.result.items : null;
                         };
-                        req.onerror = () => { idb.close(); resolve(null); };
+                        if (stores.length > 1) {
+                            const opsReq = tx.objectStore(this.opsStoreName).getAll();
+                            opsReq.onsuccess = () => {
+                                const all = Array.isArray(opsReq.result) ? opsReq.result : [];
+                                pendingOps = all.filter(x => x.uid === String(uid)).sort((a, b) => (a.queuedAt || 0) - (b.queuedAt || 0));
+                            };
+                        }
+                        tx.oncomplete = () => finish({ items, pendingOps });
+                        tx.onerror = () => finish({ items, pendingOps });
+                        tx.onabort = () => finish({ items, pendingOps });
                     } catch (_) {
-                        try { idb.close(); } catch (__) {}
-                        resolve(null);
+                        finish({ items: null, pendingOps: [] });
                     }
                 });
             },
@@ -3841,17 +3859,145 @@
             return true;
         }
 
-        // קריאה מקומית בלבד (~10ms) בלי להעמיס בקשות רשת לפני ש-allowedUsers מחזיר אישור
+        // =========================================================================
+        // מנוע טעינה ישיר ב-HTTP/2 (Firestore REST API v1)
+        // עוקף לחלוטין עיכובי WebChannel / LongPolling, מאובטח ב-100% תחת חוקי Firestore
+        // =========================================================================
+        const FIRESTORE_REST_BASE = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents`;
+
+        function fromFirestoreValue(v) {
+            if (!v || typeof v !== 'object') return null;
+            if ('stringValue' in v) return v.stringValue;
+            if ('booleanValue' in v) return Boolean(v.booleanValue);
+            if ('integerValue' in v) return Number(v.integerValue);
+            if ('doubleValue' in v) return Number(v.doubleValue);
+            if ('nullValue' in v) return null;
+            if ('timestampValue' in v) return v.timestampValue;
+            if ('arrayValue' in v) return Array.isArray(v.arrayValue?.values) ? v.arrayValue.values.map(fromFirestoreValue) : [];
+            if ('mapValue' in v) {
+                const obj = {};
+                const fields = v.mapValue?.fields || {};
+                for (const k of Object.keys(fields)) obj[k] = fromFirestoreValue(fields[k]);
+                return obj;
+            }
+            if ('bytesValue' in v) return v.bytesValue;
+            if ('referenceValue' in v) return v.referenceValue;
+            if ('geoPointValue' in v) return v.geoPointValue;
+            return null;
+        }
+
+        function fromFirestoreRestDoc(docObj) {
+            const data = {};
+            const fields = docObj?.fields || {};
+            for (const k of Object.keys(fields)) {
+                data[k] = fromFirestoreValue(fields[k]);
+            }
+            const docId = String(docObj?.name || '').split('/').pop();
+            if (data.id === undefined || data.id === null) {
+                data.id = Number.isFinite(Number(docId)) ? Number(docId) : docId;
+            }
+            return data;
+        }
+
+        async function firestoreRestFetch(user, pathAndQuery, { method = 'GET', body = null, timeoutMs = 12000, retryAuth = true } = {}) {
+            const token = await user.getIdToken();
+            const ctrl = new AbortController();
+            const tid = setTimeout(() => ctrl.abort(), timeoutMs);
+            try {
+                const res = await fetch(`${FIRESTORE_REST_BASE}${pathAndQuery}`, {
+                    method,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        ...(body ? { 'Content-Type': 'application/json' } : {})
+                    },
+                    body: body ? JSON.stringify(body) : undefined,
+                    signal: ctrl.signal
+                });
+                clearTimeout(tid);
+                if (res.status === 401 && retryAuth) {
+                    await user.getIdToken(true);
+                    return await firestoreRestFetch(user, pathAndQuery, { method, body, timeoutMs, retryAuth: false });
+                }
+                return res;
+            } catch (err) {
+                clearTimeout(tid);
+                throw err;
+            }
+        }
+
+        async function fetchAccessDocViaRest(user, email) {
+            if (!user || !email || !navigator.onLine) return null;
+            try {
+                const res = await firestoreRestFetch(user, `/allowedUsers/${encodeURIComponent(email)}`, { timeoutMs: 8000 });
+                if (res.status === 404) return { exists: false, data: null };
+                if (res.status === 403) return { error: 'permission-denied' };
+                if (!res.ok) return null;
+                const json = await res.json();
+                return { exists: true, data: fromFirestoreRestDoc(json) };
+            } catch (_) {
+                return null;
+            }
+        }
+
+        async function fetchFirstPageViaRest(user, limitCount = FIRST_PAGE_LIMIT) {
+            if (!user || !navigator.onLine) return null;
+            try {
+                const res = await firestoreRestFetch(user, `/users/${encodeURIComponent(user.uid)}:runQuery`, {
+                    method: 'POST',
+                    body: {
+                        structuredQuery: {
+                            from: [{ collectionId: 'items' }],
+                            orderBy: [{ field: { fieldPath: 'date' }, direction: 'DESCENDING' }],
+                            limit: limitCount
+                        }
+                    },
+                    timeoutMs: 9000
+                });
+                if (!res.ok) return null;
+                const rows = await res.json();
+                if (!Array.isArray(rows)) return null;
+                return rows.filter(r => r && r.document).map(r => fromFirestoreRestDoc(r.document));
+            } catch (_) {
+                return null;
+            }
+        }
+
+        async function fetchAllCollectionViaRest(user, collectionName = 'items', onPartialPage = null) {
+            if (!user || !navigator.onLine) return null;
+            const all = [];
+            let pageToken = '';
+            try {
+                for (let page = 0; page < 40; page++) {
+                    if (state.user?.uid !== user.uid) return null;
+                    const q = `?pageSize=300${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''}`;
+                    const res = await firestoreRestFetch(user, `/users/${encodeURIComponent(user.uid)}/${collectionName}${q}`, { timeoutMs: 12000 });
+                    if (res.status === 403) throw Object.assign(new Error('Permission denied'), { code: 'permission-denied' });
+                    if (!res.ok) return null;
+                    const json = await res.json();
+                    const docs = Array.isArray(json.documents) ? json.documents.map(fromFirestoreRestDoc) : [];
+                    all.push(...docs);
+                    pageToken = json.nextPageToken || '';
+                    if (page === 0 && pageToken && all.length > 0 && typeof onPartialPage === 'function') {
+                        onPartialPage([...all]);
+                    }
+                    if (!pageToken) break;
+                }
+                return all;
+            } catch (err) {
+                if (err?.code === 'permission-denied') throw err;
+                console.warn('[REST Load] Fallback to SDK:', err?.message);
+                return null;
+            }
+        }
+
+        // קריאה מקומית בלבד (טרנזקציה יחידה) בלי לעכב בדיקת הרשאות
         function startParallelUserPrefetch(user) {
             if (!user) return prefetchBundle;
             if (prefetchBundle.uid === user.uid && prefetchBundle.cachePromise) {
                 return prefetchBundle;
             }
             const uid = user.uid;
-            const cachePromise = Promise.race([
-                mhFastCache.get(uid).catch(() => null),
-                new Promise(r => setTimeout(() => r(null), 350))
-            ]);
+            const cachePromise = mhFastCache.getBundle(uid).catch(() => ({ items: null, pendingOps: [] }));
             prefetchBundle = { uid, cachePromise, firstPagePromise: null, fullServerPromise: null };
             return prefetchBundle;
         }
@@ -3928,7 +4074,6 @@
             const processItemsSnapshot = (snapshot) => {
                 if (state.user?.uid !== uid || state.accessState !== 'approved') return;
 
-                // בזמן ייבוא או פעולת המון — מדלג על עיבוד ביניים ומעדכן פעם אחת בסיום (חוסך ~97% CPU)
                 if (bulkUiHoldCount > 0) {
                     pendingBulkItemsHandler = () => processItemsSnapshot(snapshot);
                     return;
@@ -3953,7 +4098,7 @@
                 const wasPartial = isPartialHydration;
                 const nextItems = snapshot.docs.map((docSnap) => normalizeSnapDoc(docSnap));
 
-                // אם השרת מאשר את אותה רשימה שכבר הוצגה — אפס רינדור מחדש
+                // אם REST או המטמון כבר הציגו בדיוק את אותה רשימה — אפס רינדור מחדש
                 if (!snapshot.metadata.fromCache && !wasPartial && isInitialSnapshotRendered && areItemListsEquivalent(state.items, nextItems)) {
                     isServerDataArrived = true;
                     markFullSyncComplete();
@@ -4036,45 +4181,27 @@
             };
 
             const attachFullItemsListener = () => {
-                if (state.user?.uid !== uid || state.accessState !== 'approved') return;
+                if (state.user?.uid !== uid || state.accessState !== 'approved' || state.unsubItems) return;
 
                 state.unsubItems = onSnapshot(itemsRef, { includeMetadataChanges: true }, processItemsSnapshot, async (err) => {
                     console.error('[Sync] onSnapshot items error:', err);
                     if (state.user?.uid === uid && retryAttempt < 3) {
-                        updateSyncStatus('syncing', `מתחבר מחדש לענן (${retryAttempt + 1}/3)...`);
+                        if (!isServerDataArrived) updateSyncStatus('syncing', `מתחבר מחדש לענן (${retryAttempt + 1}/3)...`);
                         try { await user.getIdToken(true); } catch (_) {}
                         itemsRetryTimer = setTimeout(() => {
                             if (state.user?.uid === uid && state.accessState === 'approved') {
-                                startUserDataSubscriptions(user, retryAttempt + 1);
+                                state.unsubItems = null;
+                                attachFullItemsListener();
                             }
-                        }, 900 * (retryAttempt + 1));
+                        }, 1200 * (retryAttempt + 1));
                         return;
                     }
-                    markFullSyncComplete();
-                    updateSyncStatus('error', err.code === 'permission-denied' ? 'נדרש עדכון חוקי Firestore' : 'שגיאת חיבור');
-                    showToast('❌ שגיאה בטעינת הקישורים מהענן: ' + err.message, null, 5000, null, true);
+                    if (!isServerDataArrived) {
+                        markFullSyncComplete();
+                        updateSyncStatus('error', err.code === 'permission-denied' ? 'נדרש עדכון חוקי Firestore' : 'שגיאת חיבור');
+                        showToast('❌ שגיאה בטעינת הקישורים מהענן: ' + err.message, null, 5000, null, true);
+                    }
                 });
-
-                // רשת ביטחון למשתמש חדש: אם מאזין הענן לא ענה תוך 5 שניות, מושך ישירות מהשרת כדי שלעולם לא ייתקע
-                if (navigator.onLine && !isServerDataArrived) {
-                    coldStartFallbackTimer = setTimeout(async () => {
-                        coldStartFallbackTimer = null;
-                        if (isServerDataArrived || state.user?.uid !== uid || state.accessState !== 'approved') return;
-                        try {
-                            await user.getIdToken(true).catch(() => {});
-                            const fallbackSnap = await getDocsFromServer(itemsRef);
-                            if (!isServerDataArrived && state.user?.uid === uid && state.accessState === 'approved') {
-                                applyFullItems(fallbackSnap.docs.map(normalizeSnapDoc), { fromServer: true, preserveScroll: state.items.length > 0 });
-                                updateSyncStatus('online', formatSyncedLabel());
-                            }
-                        } catch (fbErr) {
-                            console.warn('[ColdStart Fallback]', fbErr?.message);
-                            if (!isServerDataArrived && state.user?.uid === uid) {
-                                updateSyncStatus('error', 'חיבור איטי — לחץ ☁️ לניסיון נוסף');
-                            }
-                        }
-                    }, 5000);
-                }
 
                 lazyBgTimers.push(setTimeout(() => {
                     if (state.user?.uid === uid && state.accessState === 'approved') {
@@ -4085,15 +4212,14 @@
 
             if (retryAttempt === 0) {
                 const bundle = startParallelUserPrefetch(user);
-
-                // מסלול א' (מטמון חם + תור אופליין — ~15ms): מציג הכל מיד, מעלה שינויי אופליין אם קיימים, ואז פותח סנכרון חי
-                const [cachedAll, pendingOps] = await Promise.all([
-                    bundle.cachePromise,
-                    mhFastCache.getPendingOps(uid).catch(() => [])
-                ]);
+                const localBundle = await bundle.cachePromise;
                 if (state.user?.uid !== uid || state.accessState !== 'approved') return;
 
+                const cachedAll = localBundle?.items || null;
+                const pendingOps = localBundle?.pendingOps || [];
                 const hasLocalData = (Array.isArray(cachedAll) && cachedAll.length > 0) || pendingOps.length > 0;
+
+                // מסלול א' (מטמון חם — ~15ms): מציג הכל מיד, מסנכרן שינויי אופליין ומרענן בשקט ב-HTTP/2
                 if (hasLocalData) {
                     const mergedLocal = applyPendingOpsLocally(cachedAll || [], pendingOps);
                     applyFullItems(mergedLocal, { fromServer: !navigator.onLine, preserveScroll: false });
@@ -4110,33 +4236,79 @@
                         await flushOfflineQueue(user, { showSummaryToast: true });
                         if (state.user?.uid !== uid || state.accessState !== 'approved') return;
                     }
+                    try {
+                        const freshRest = await fetchAllCollectionViaRest(user, 'items');
+                        if (state.user?.uid !== uid || state.accessState !== 'approved') return;
+                        if (Array.isArray(freshRest)) {
+                            applyFullItems(freshRest, { fromServer: true, preserveScroll: true });
+                            updateSyncStatus('online', formatSyncedLabel());
+                        }
+                    } catch (err) {
+                        if (err?.code === 'permission-denied') {
+                            updateSyncStatus('error', 'נדרש עדכון חוקי Firestore');
+                            return;
+                        }
+                    }
                     attachFullItemsListener();
                     return;
                 }
 
                 // מסלול ב' (כניסה קרה — משתמש חדש / מכשיר חדש / אחרי יציאה):
-                // פותח מיד את חיבור ה-onSnapshot היחיד (בזיכרון, ללא הורדה כפולה וללא נעילות IndexedDB)
-                // ובמקביל מביא 40 פריטים ראשונים לתצוגה מיידית אם המאגר גדול
-                if (navigator.onLine) {
-                    updateSyncStatus('syncing', 'טוען מהענן...');
-                    attachFullItemsListener();
-                    const fastQuery = query(itemsRef, orderBy('date', 'desc'), limit(FIRST_PAGE_LIMIT));
-                    getDocsFromServer(fastQuery).then((snap) => {
-                        if (isServerDataArrived || state.user?.uid !== uid || state.accessState !== 'approved') return;
-                        const firstPageDocs = snap.docs.map(normalizeSnapDoc);
-                        if (firstPageDocs.length > 0 && state.items.length === 0) {
-                            state.items = firstPageDocs;
-                            invalidateItemsMeta();
-                            isPartialHydration = firstPageDocs.length >= FIRST_PAGE_LIMIT;
-                            updateStatusBadges(false);
-                            scheduleFullRender(true);
-                            updateSyncStatus('syncing', isPartialHydration ? 'טוען את כל הקישורים...' : 'מסנכרן...');
-                        }
-                    }).catch(() => {});
+                // טעינה ישירה ומהירה ב-HTTP/2 REST API (בלי לחכות ל-WebChannel בכלל!)
+                if (!navigator.onLine) {
+                    isServerDataArrived = true;
+                    markFullSyncComplete();
+                    renderList();
+                    updateSyncStatus('offline', 'מקומי (אין רשת)');
                     return;
+                }
+
+                updateSyncStatus('syncing', 'טוען מהענן...');
+                let fullRestDone = false;
+
+                const showPartialIfNeeded = (docs) => {
+                    if (fullRestDone || isServerDataArrived || state.user?.uid !== uid || state.accessState !== 'approved') return;
+                    if (Array.isArray(docs) && docs.length > state.items.length) {
+                        state.items = docs;
+                        invalidateItemsMeta();
+                        isPartialHydration = true;
+                        updateStatusBadges(false);
+                        scheduleFullRender(true);
+                        updateSyncStatus('syncing', `טוען את שאר הקישורים... (${docs.length})`);
+                    }
+                };
+
+                // מריץ במקביל: 40 אחרונים (~200ms) + כל המאגר (~600ms) ב-HTTP/2 ישיר
+                fetchFirstPageViaRest(user, FIRST_PAGE_LIMIT).then((first40) => {
+                    if (first40 && first40.length > 0) showPartialIfNeeded(first40);
+                });
+
+                try {
+                    const allRestDocs = await fetchAllCollectionViaRest(user, 'items', (first300) => {
+                        showPartialIfNeeded(first300);
+                    });
+                    fullRestDone = true;
+                    if (state.user?.uid !== uid || state.accessState !== 'approved') return;
+
+                    if (Array.isArray(allRestDocs)) {
+                        applyFullItems(allRestDocs, { fromServer: true, preserveScroll: state.items.length > 0 });
+                        updateSyncStatus('online', formatSyncedLabel());
+                        // רק אחרי שהכל כבר מוצג על המסך — מחבר מאזין חי ברקע לעדכונים עתידיים
+                        attachFullItemsListener();
+                        return;
+                    }
+                } catch (err) {
+                    fullRestDone = true;
+                    if (err?.code === 'permission-denied') {
+                        markFullSyncComplete();
+                        updateSyncStatus('error', 'נדרש עדכון חוקי Firestore');
+                        showToast('❌ אין הרשאת גישה ב-Firestore Rules.', null, 5000, null, true);
+                        return;
+                    }
                 }
             }
 
+            // גיבוי אוטומטי ל-SDK רק אם ה-REST נכשל מסיבה חריגה
             attachFullItemsListener();
         }
         function updateAdminUsersBadge() {
@@ -4334,11 +4506,26 @@
                         handleLockScreen(true, 'checking');
                     }
 
-                    // רץ במקביל ל-allowedUsers: אם המשתמש מאושר, גם 40 הראשונים וגם כל המאגר כבר בדרך בבת אחת; אם לא — Firestore חוסם בשקט
                     startParallelUserPrefetch(user);
 
                     const accessDocRef = doc(db, 'allowedUsers', email);
                     let requestSentOnce = false;
+
+                    // אימות הרשאה מהיר ב-HTTP/2 (~150ms) כדי שמשתמש מאושר ייכנס מיד בלי לחכות ל-WebChannel
+                    if (navigator.onLine) {
+                        fetchAccessDocViaRest(user, email).then((fastAccess) => {
+                            if (!fastAccess || state.user?.uid !== user.uid) return;
+                            if (fastAccess.exists && fastAccess.data?.status === 'approved' && state.accessState !== 'approved') {
+                                state.accessState = 'approved';
+                                try { localStorage.setItem('mh_has_session', '1'); } catch (_) {}
+                                handleLockScreen(true, 'approved');
+                                startUserDataSubscriptions(user);
+                                if (!hadSession) {
+                                    showToast('✅ החשבון מאושר! נטען המאגר האישי שלך.', null, 3500);
+                                }
+                            }
+                        }).catch(() => {});
+                    }
 
                     state.unsubAccess = onSnapshot(accessDocRef, { includeMetadataChanges: true }, async (snap) => {
                         if (!snap.exists()) {
@@ -4512,6 +4699,22 @@
                 const itemRef = doc(db, 'users', uid, 'items', String(item.id));
                 const payload = clearAi ? { ...cleanItem, ...aiClearPatch() } : cleanItem;
                 await setDoc(itemRef, payload, { merge: true });
+                const idx = state.items.findIndex(x => String(x.id) === String(item.id));
+                if (idx === -1) {
+                    state.items.unshift({ ...cleanItem });
+                    invalidateItemsMeta();
+                    updateCategoryDropdowns();
+                    renderList();
+                } else {
+                    state.items[idx] = { ...state.items[idx], ...cleanItem };
+                    if (clearAi) {
+                        delete state.items[idx].aiSummary; delete state.items[idx].aiTags;
+                        delete state.items[idx].aiModel; delete state.items[idx].siteStatus; delete state.items[idx].httpCode;
+                    }
+                    invalidateItemsMeta();
+                }
+                mhFastCache.scheduleSave(uid, state.items);
+                updateSyncStatus('online', formatSyncedLabel());
                 return { ok: true, queuedOffline: false };
             } catch (e) {
                 if (isNetworkLikeError(e)) {
@@ -4723,19 +4926,26 @@
             const btn = document.getElementById('forceReloadBtn');
             if (btn) btn.classList.add('spinning');
             try {
-                const [itemsSnap, trashSnap] = await Promise.all([
-                    getDocsFromServer(collection(db, 'users', state.user.uid, 'items')),
-                    getDocsFromServer(collection(db, 'users', state.user.uid, 'trash')).catch(() => null)
-                ]);
-                state.items = itemsSnap.docs.map(normalizeSnapDoc);
-                if (trashSnap) state.trash = trashSnap.docs.map(normalizeSnapDoc);
+                await flushOfflineQueue(state.user, { showSummaryToast: false });
+                let restItems = await fetchAllCollectionViaRest(state.user, 'items');
+                let restTrash = await fetchAllCollectionViaRest(state.user, 'trash').catch(() => null);
+                if (!Array.isArray(restItems)) {
+                    const [itemsSnap, trashSnap] = await Promise.all([
+                        getDocsFromServer(collection(db, 'users', state.user.uid, 'items')),
+                        getDocsFromServer(collection(db, 'users', state.user.uid, 'trash')).catch(() => null)
+                    ]);
+                    restItems = itemsSnap.docs.map(normalizeSnapDoc);
+                    if (trashSnap) restTrash = trashSnap.docs.map(normalizeSnapDoc);
+                }
+                state.items = restItems;
+                if (Array.isArray(restTrash)) state.trash = restTrash;
                 invalidateItemsMeta();
                 isServerDataArrived = true;
                 markFullSyncComplete();
                 mhFastCache.set(state.user.uid, state.items);
                 updateCategoryDropdowns();
                 renderList();
-                updateSyncStatus('online', `מחובר ומסונכרן ✓ (${state.items.length})`);
+                updateSyncStatus('online', formatSyncedLabel());
                 if (!silent) showToast(`☁️ נטענו ${state.items.length} פריטים ישירות מהענן`);
             } catch (err) {
                 updateSyncStatus('error', 'שגיאת קריאה מהענן');
@@ -7699,7 +7909,13 @@ STRICT RULES:
                 updatedAt: nowIso()
             });
 
-            // הניתוח הישן שייך לקישור הקודם — מתעדכן בפעולת כתיבה אחת אטומית ללא מרוץ
+            if (contentChanged) {
+                // הניתוח הישן שייך לקישור הקודם — מתעדכן אטומית (עובד גם באופליין)
+                delete item.aiSummary; delete item.aiTags; delete item.aiModel; delete item.siteStatus; delete item.httpCode;
+                await saveItemToCloud(item, { clearAi: true });
+            } else {
+                await saveItemToCloud(item);
+            }
             document.getElementById('editModal').style.display = 'none';
             invalidateItemsMeta();
 
